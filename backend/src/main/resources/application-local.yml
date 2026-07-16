@@ -1,0 +1,8 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+logging:
+  level:
+    pe.gob.reniec.certificados.cancelacion: ${LOG_LEVEL_APP:DEBUG}

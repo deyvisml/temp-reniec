@@ -1,0 +1,12 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+
+server:
+  port: 0
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:WARN}
+    pe.gob.reniec.certificados.cancelacion: ${LOG_LEVEL_APP:WARN}
