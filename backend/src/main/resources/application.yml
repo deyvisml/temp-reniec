@@ -1,6 +1,18 @@
 spring:
   application:
     name: ${APP_NAME:cancelacion-certificados-backend}
+  flyway:
+    clean-disabled: true
+    enabled: true
+    validate-on-migrate: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
   mvc:
     throw-exception-if-no-handler-found: true
   web:
@@ -16,6 +28,9 @@ server:
     include-exception: false
 
 management:
+  health:
+    db:
+      enabled: true
   endpoints:
     web:
       exposure:

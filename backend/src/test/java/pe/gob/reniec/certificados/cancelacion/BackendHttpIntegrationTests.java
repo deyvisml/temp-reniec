@@ -18,7 +18,14 @@ import org.springframework.test.context.ActiveProfiles;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "debug=false")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+		"debug=false",
+		"spring.autoconfigure.exclude="
+				+ "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
+				+ "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
+				+ "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration,"
+				+ "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration"
+})
 @ActiveProfiles("test")
 class BackendHttpIntegrationTests {
 

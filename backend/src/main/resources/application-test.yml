@@ -2,9 +2,19 @@ spring:
   config:
     activate:
       on-profile: test
+  datasource:
+    hikari:
+      connection-timeout: 1000
+      validation-timeout: 1000
 
 server:
   port: 0
+
+management:
+  endpoint:
+    health:
+      cache:
+        time-to-live: 0
 
 logging:
   level:
