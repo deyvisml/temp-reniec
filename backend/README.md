@@ -1,6 +1,6 @@
 # Backend de cancelación de certificados digitales
 
-Backend técnico construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye el modelo persistente de solicitudes de cancelación, pero todavía no implementa endpoints ni casos de uso del flujo ciudadano.
+Backend técnico construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia y una API técnica versionada; todavía no implementa casos de uso del flujo ciudadano.
 
 ## Requisitos previos
 
@@ -64,6 +64,14 @@ Invoke-RestMethod http://localhost:8080/actuator/health
 
 El estado es `UP` cuando la aplicación y MySQL están disponibles. Solo se expone `health` y no muestra detalles internos.
 
+La comprobación consumible por el frontend ejecuta `SELECT 1` contra MySQL y devuelve un contrato saneado:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/api/v1/system/status -Headers @{ "X-Correlation-ID" = "local-check" }
+```
+
+OpenAPI está habilitado únicamente con los perfiles `local` y `test` en `http://localhost:8080/v3/api-docs`. El documento contiene solo `/api/v1/**`; no incluye Actuator, rutas de prueba ni Swagger UI.
+
 ## Variables de entorno
 
 | Variable | Predeterminado | Propósito |
@@ -79,6 +87,7 @@ El estado es `UP` cuando la aplicación y MySQL están disponibles. Solo se expo
 | `DB_USERNAME` | Obligatoria | Usuario MySQL; disponible en la plantilla local. |
 | `DB_PASSWORD` | Obligatoria | Contraseña MySQL; disponible en la plantilla local. |
 | `MYSQL_ROOT_PASSWORD` | Solo Compose | Contraseña root para inicialización y healthcheck local. |
+| `CORS_ALLOWED_ORIGINS` | Vacía (`http://localhost:3000` en local/test) | Lista separada por comas de orígenes frontend exactos. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
 
@@ -94,7 +103,7 @@ Desde `/backend`, en Windows:
 .\mvnw.cmd clean verify
 ```
 
-- `test` ejecuta siete pruebas técnicas rápidas sin MySQL ni Docker.
+- `test` ejecuta las pruebas técnicas rápidas sin MySQL ni Docker.
 - `clean verify` ejecuta además las pruebas `*IT`. Testcontainers inicia MySQL 8.4.0, Flyway construye una base vacía, Hibernate valida el esquema y el contenedor se elimina al finalizar.
 - `clean` evita conservar recursos compilados obsoletos en `target` después de sustituir una migración.
 - El artefacto queda en `target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar`.
@@ -115,6 +124,14 @@ Flyway es el único propietario del esquema y usa `src/main/resources/db/migrati
 - `test`: puerto aleatorio; las pruebas rápidas excluyen persistencia y las `*IT` reciben MySQL efímero mediante Testcontainers.
 
 La configuración de producción permanece diferida.
+
+## API técnica, CORS y correlación
+
+- `GET /api/v1/system/status` responde `200` con `status`, `database` y `timestamp` cuando backend y MySQL están disponibles.
+- Una falla de MySQL responde `503` con el `ApiError` común y código `DEPENDENCY_UNAVAILABLE`, sin detalles JDBC o SQL.
+- Toda respuesta incluye `X-Correlation-ID`; un valor cliente válido se conserva y uno ausente o inválido se reemplaza.
+- CORS se aplica solo a `/api/**`, permite exactamente los orígenes configurados, `GET`, `POST`, `OPTIONS`, los headers mínimos y credenciales futuras. Nunca usa comodines.
+- OpenAPI se publica en `/v3/api-docs` bajo `local` y `test` para sincronizar el contrato del frontend.
 
 ## Detener y reiniciar MySQL local
 
@@ -141,7 +158,7 @@ Nunca ejecutes el reinicio destructivo contra una base compartida o con informac
 
 ## Sustitución de la V1
 
-SPEC-04R reemplazó la V1 provisional de dos tablas. Una base local que ya ejecutó `V1__create_cancellation_persistence.sql` tendrá un checksum incompatible y debe recrearse desde vacío.
+La simplificación del modelo reemplaza la V1 anterior conservando siete tablas, pero cambia sus identificadores y columnas. Una base local que ya ejecutó una versión anterior de V1 tendrá un checksum incompatible y debe recrearse desde vacío si sus datos son desechables.
 
 Si el volumen local solo contiene datos desechables:
 
@@ -157,7 +174,7 @@ Nunca limpies, repares o recrees automáticamente una base compartida o con dato
 
 El esquema contiene siete conceptos: solicitud, elegibilidad, identidad, sesiones, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
 
-La persistencia recibe DNI y descripciones ya cifrados, HMAC de búsqueda y hashes de sesión. No almacena DNI completo, texto sensible, tokens, biometría, payloads externos completos ni PDF. No deben registrarse esos valores, sus referencias, últimos cuatro dígitos, credenciales, cuerpos, headers sensibles ni query strings con datos personales.
+La solicitud guarda el DNI directamente como ocho dígitos y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. MySQL no almacena tokens, credenciales, biometría, payloads externos completos ni archivos PDF. La referencia de sesión no es una credencial y los identificadores numéricos internos no se expondrán como referencias públicas.
 
 ## Fuera de alcance
 

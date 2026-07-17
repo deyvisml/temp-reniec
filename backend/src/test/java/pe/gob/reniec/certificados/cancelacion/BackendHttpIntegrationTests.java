@@ -15,8 +15,10 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
 		"debug=false",
@@ -28,6 +30,9 @@ import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
 })
 @ActiveProfiles("test")
 class BackendHttpIntegrationTests {
+
+	@MockitoBean
+	SystemStatusService systemStatusService;
 
 	private final HttpClient httpClient = HttpClient.newHttpClient();
 

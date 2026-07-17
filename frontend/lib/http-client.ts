@@ -1,5 +1,6 @@
 const DEFAULT_BACKEND_URL = "http://localhost:8080";
-const CORRELATION_HEADER = "X-Correlation-ID";
+export const CORRELATION_HEADER = "X-Correlation-ID";
+export const DEFAULT_TIMEOUT_MS = 8_000;
 
 type BackendErrorPayload = {
   code?: unknown;
@@ -8,8 +9,12 @@ type BackendErrorPayload = {
 };
 
 export type HttpResult<T> = {
-  data: T;
+  data: T | undefined;
   correlationId?: string;
+};
+
+export type RequestJsonOptions = {
+  timeoutMs?: number;
 };
 
 export class HttpClientError extends Error {
@@ -29,75 +34,104 @@ export class HttpClientError extends Error {
   }
 }
 
-export async function requestJson<T>(path: string, init: RequestInit = {}): Promise<HttpResult<T>> {
-  const baseUrl = process.env.BACKEND_URL?.trim() || DEFAULT_BACKEND_URL;
+export function resolveBackendUrl(
+  runtime: "server" | "browser" = typeof window === "undefined" ? "server" : "browser",
+): string {
+  const configured =
+    runtime === "browser"
+      ? process.env.NEXT_PUBLIC_BACKEND_URL
+      : process.env.BACKEND_URL ?? process.env.NEXT_PUBLIC_BACKEND_URL;
+  return configured?.trim() || DEFAULT_BACKEND_URL;
+}
+
+export async function requestJson<T>(
+  path: string,
+  init: RequestInit = {},
+  options: RequestJsonOptions = {},
+): Promise<HttpResult<T>> {
+  const baseUrl = resolveBackendUrl();
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   const headers = new Headers(init.headers);
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  if (!headers.has(CORRELATION_HEADER)) headers.set(CORRELATION_HEADER, crypto.randomUUID());
 
-  if (!headers.has("Accept")) {
-    headers.set("Accept", "application/json");
+  if (init.signal?.aborted) {
+    throw clientError("REQUEST_ABORTED", "La solicitud fue cancelada.");
   }
 
-  let response: Response;
+  const controller = new AbortController();
+  let timeoutReached = false;
+  const abortFromCaller = () => controller.abort(init.signal?.reason);
+  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => {
+    timeoutReached = true;
+    controller.abort();
+  }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 
+  let response: Response;
   try {
     response = await fetch(url, {
       ...init,
       headers,
       credentials: "include",
+      signal: controller.signal,
     });
   } catch {
-    throw new HttpClientError("No fue posible conectar con el servicio.", {
-      code: "NETWORK_ERROR",
-    });
+    if (timeoutReached) {
+      throw clientError("TIMEOUT", "El servicio tardó demasiado en responder.");
+    }
+    if (init.signal?.aborted) {
+      throw clientError("REQUEST_ABORTED", "La solicitud fue cancelada.");
+    }
+    throw clientError("NETWORK_ERROR", "No fue posible conectar con el servicio.");
+  } finally {
+    clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", abortFromCaller);
   }
 
-  const headerCorrelationId = response.headers.get(CORRELATION_HEADER) ?? undefined;
-  let payload: unknown;
+  const correlationId = response.headers.get(CORRELATION_HEADER) ?? undefined;
+  const body = await response.text();
+  if (!body.trim()) {
+    if (response.ok) return { data: undefined, correlationId };
+    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
+  }
 
+  let payload: unknown;
   try {
-    payload = await response.json();
+    payload = JSON.parse(body);
   } catch {
     if (response.ok) {
-      throw new HttpClientError("El servicio devolvió una respuesta no válida.", {
-        code: "INVALID_RESPONSE",
-        status: response.status,
-        correlationId: headerCorrelationId,
-      });
+      throw clientError(
+        "INVALID_RESPONSE",
+        "El servicio devolvió una respuesta no válida.",
+        response.status,
+        correlationId,
+      );
     }
-
-    throw new HttpClientError("No fue posible completar la solicitud.", {
-      code: "HTTP_ERROR",
-      status: response.status,
-      correlationId: headerCorrelationId,
-    });
+    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
   }
 
   if (!response.ok) {
     const backendError = asBackendError(payload);
-    const correlationId = headerCorrelationId ?? stringValue(backendError?.correlationId);
-
-    throw new HttpClientError(
+    throw clientError(
+      stringValue(backendError?.code) ?? "HTTP_ERROR",
       stringValue(backendError?.message) ?? "No fue posible completar la solicitud.",
-      {
-        code: stringValue(backendError?.code) ?? "HTTP_ERROR",
-        status: response.status,
-        correlationId,
-      },
+      response.status,
+      correlationId ?? stringValue(backendError?.correlationId),
     );
   }
 
-  return {
-    data: payload as T,
-    correlationId: headerCorrelationId,
-  };
+  return { data: payload as T, correlationId };
+}
+
+function clientError(code: string, message: string, status?: number, correlationId?: string) {
+  return new HttpClientError(message, { code, status, correlationId });
 }
 
 function asBackendError(value: unknown): BackendErrorPayload | undefined {
-  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    return value as BackendErrorPayload;
-  }
-  return undefined;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as BackendErrorPayload)
+    : undefined;
 }
 
 function stringValue(value: unknown): string | undefined {

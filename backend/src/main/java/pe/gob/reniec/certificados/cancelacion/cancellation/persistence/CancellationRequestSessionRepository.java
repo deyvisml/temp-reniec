@@ -3,14 +3,13 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface CancellationRequestSessionRepository extends JpaRepository<CancellationRequestSessionEntity, UUID> {
+public interface CancellationRequestSessionRepository extends JpaRepository<CancellationRequestSessionEntity, Long> {
 
-	Optional<CancellationRequestSessionEntity> findBySessionReferenceHash(String sessionReferenceHash);
+	Optional<CancellationRequestSessionEntity> findBySessionReference(String sessionReference);
 
 	List<CancellationRequestSessionEntity> findByRequest_IdAndInvalidatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
-			UUID requestId, Instant cutoff);
+			Long requestId, Instant cutoff);
 }

@@ -3,6 +3,9 @@ package pe.gob.reniec.certificados.cancelacion;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
 @SpringBootTest(properties = {
 		"debug=false",
@@ -14,6 +17,9 @@ import org.springframework.test.context.ActiveProfiles;
 })
 @ActiveProfiles("test")
 class CancelacionCertificadosBackendApplicationTests {
+
+	@MockitoBean
+	SystemStatusService systemStatusService;
 
 	@Test
 	void contextLoads() {

@@ -17,7 +17,8 @@ describe("base application rendering", () => {
 
     expect(html).toContain("Cancelación de certificados digitales");
     expect(html).toContain("Proyecto en preparación");
-    expect(html).toContain("Base técnica operativa");
+    expect(html).toContain("Estado técnico");
+    expect(html).toContain("Comprobando integración");
     expect(html).toContain(">test<");
     expect(html).not.toContain("<form");
     expect(html).not.toContain("<input");

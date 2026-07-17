@@ -1,3 +1,5 @@
+import { IntegrationStatusIndicator } from "@/components/integration-status";
+
 export default function HomePage() {
   const environment = process.env.NEXT_PUBLIC_APP_ENV ?? "local";
 
@@ -23,10 +25,7 @@ export default function HomePage() {
       </div>
 
       <div className="border-t border-slate-200 bg-slate-50 p-6 md:border-l md:border-t-0 md:p-8">
-        <p className="flex items-center gap-2 text-sm font-bold text-emerald-800">
-          <span className="size-2.5 rounded-full bg-emerald-600" aria-hidden="true" />
-          Base técnica operativa
-        </p>
+        <p className="text-sm font-bold uppercase tracking-[0.12em] text-slate-500">Estado técnico</p>
 
         <dl className="mt-7 grid gap-5 text-sm">
           <div>
@@ -37,11 +36,9 @@ export default function HomePage() {
             <dt className="font-semibold text-slate-500">Ambiente</dt>
             <dd className="mt-1 font-bold text-slate-900">{environment}</dd>
           </div>
-          <div>
-            <dt className="font-semibold text-slate-500">Integración</dt>
-            <dd className="mt-1 leading-6 text-slate-700">Preparada para una tarea posterior</dd>
-          </div>
         </dl>
+
+        <IntegrationStatusIndicator />
       </div>
     </section>
   );

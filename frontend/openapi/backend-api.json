@@ -1,0 +1,102 @@
+{
+  "components": {
+    "schemas": {
+      "ApiError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SystemStatusResponse": {
+        "description": "Estado técnico del backend y su conexión con MySQL",
+        "properties": {
+          "database": {
+            "example": "UP",
+            "type": "string"
+          },
+          "status": {
+            "example": "UP",
+            "type": "string"
+          },
+          "timestamp": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Contrato técnico versionado del sistema",
+    "title": "API de cancelación de certificados digitales",
+    "version": "v1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/system/status": {
+      "get": {
+        "operationId": "getStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusResponse"
+                }
+              }
+            },
+            "description": "Backend y base de datos disponibles",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación de la solicitud",
+                "style": "simple"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Dependencia técnica no disponible",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación de la solicitud",
+                "style": "simple"
+              }
+            }
+          }
+        },
+        "summary": "Comprueba la disponibilidad del backend y MySQL",
+        "tags": [
+          "Estado técnico"
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Generated server url",
+      "url": "http://localhost:18080"
+    }
+  ]
+}

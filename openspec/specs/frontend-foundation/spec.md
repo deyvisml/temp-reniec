@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the minimal, executable, maintainable, and deliberately non-functional frontend foundation for the citizen certificate-cancellation system.
+Define the minimal, executable, maintainable, accessible, and non-functional technical foundation for the system frontend.
 
 ## Requirements
 
@@ -18,11 +18,11 @@ The repository SHALL contain a private single-package npm project at `/frontend`
 - **THEN** Next.js starts the production build and serves the application successfully without the backend running
 
 ### Requirement: Minimal dependency and folder set
-The frontend SHALL have only `next`, `react`, and `react-dom` as direct production dependencies and only the TypeScript/types, Tailwind/PostCSS, and Vitest tooling required by this change as direct development dependencies. It MUST NOT add UI kits, icon libraries, HTTP libraries, form libraries, validation libraries, state managers, DOM test environments, E2E tools, or preventive dependencies. Every committed source directory SHALL contain code used by this change.
+The frontend SHALL retain only `next`, `react`, and `react-dom` as direct production dependencies and SHALL have only the TypeScript/types, Tailwind/PostCSS, Vitest, and `openapi-typescript` development tooling required by the implemented foundation and API contract synchronization. It MUST NOT add UI kits, icon libraries, HTTP libraries, form libraries, runtime validation libraries, state managers, DOM test environments, E2E tools, SDK generators, or preventive dependencies. Every committed source directory and contract artifact SHALL have a current purpose.
 
 #### Scenario: Dependency and source tree are reviewed
 - **WHEN** `package.json` and the source tree are inspected
-- **THEN** every dependency and directory has a current purpose and no empty `features`, `styles`, `public`, future-route, or speculative layer exists
+- **THEN** every dependency and directory supports the current shell, technical integration, OpenAPI type synchronization, or tests and no empty feature, future-route, or speculative layer exists
 
 ### Requirement: App Router root shell
 The frontend SHALL use App Router with a root layout that declares Spanish as the document language and renders a skip link, textual institutional header, main content landmark with a stable target, polite global-message region, adaptive container, and minimal footer. The layout SHALL define base title and description metadata and MUST NOT reproduce the complete reference designs.
@@ -32,11 +32,15 @@ The frontend SHALL use App Router with a root layout that declares Spanish as th
 - **THEN** the HTML contains `lang="es"`, semantic header/main/footer landmarks, a skip target, base metadata configuration, and the supplied child content
 
 ### Requirement: Temporary non-functional home page
-The `/` route SHALL render a temporary Server Component identifying the provisional system, stating that the project is in preparation, showing a technical readiness state and the public environment label. It MUST NOT contain a DNI form, certificate lookup, stepper, identity verification, cancellation reason, confirmation, revocation, receipt, or functional backend request.
+The `/` route SHALL continue identifying the provisional system and public environment label and SHALL include a temporary client-side technical indicator that checks the versioned backend status API and reports backend and database availability. It MUST NOT contain a DNI form, certificate lookup, stepper, identity verification, cancellation reason, confirmation, revocation, receipt, session behavior, or other citizen-flow control.
 
-#### Scenario: Temporary home page is rendered
-- **WHEN** a visitor opens `/`
-- **THEN** the page returns a successful response with preparation and technical-status content and no citizen-flow control
+#### Scenario: Temporary home page is rendered with the stack available
+- **WHEN** a visitor opens `/` while the local backend and MySQL are operational
+- **THEN** the page reports technical integration availability and contains no citizen-flow control
+
+#### Scenario: Temporary home page is rendered without the backend
+- **WHEN** the backend request fails or reaches timeout
+- **THEN** the page remains usable, reports technical unavailability safely, and offers a manual retry
 
 ### Requirement: Minimal Tailwind and global styling baseline
 The frontend SHALL use Tailwind CSS 4.3.2 through `@tailwindcss/postcss` and a single global CSS import. Global styles SHALL provide box sizing, readable provisional colors, coherent spacing, a system sans-serif font stack, an adaptive content width, and a clearly visible `:focus-visible` treatment. The change MUST NOT define a complete design system, extensive tokens, component variants, or definitive institutional colors.
@@ -68,48 +72,76 @@ The frontend SHALL provide `loading.tsx`, `not-found.tsx`, `error.tsx`, and `glo
 - **THEN** a neutral Spanish loading message is exposed with `role="status"`
 
 ### Requirement: Explicit server and public environment variables
-The frontend SHALL document `BACKEND_URL` as server-only with safe local default `http://localhost:8080` and `NEXT_PUBLIC_APP_ENV` as a non-sensitive public environment label. `.env.example` SHALL contain only these variables, `.env.local` SHALL be ignored, and documentation SHALL state that browser-exposed variables MUST NOT contain secrets. The change MUST NOT define a public backend URL or production secret.
+The frontend SHALL document `BACKEND_URL` as the server-only backend base URL, `NEXT_PUBLIC_BACKEND_URL` as the non-sensitive browser-visible backend base URL, and `NEXT_PUBLIC_APP_ENV` as a non-sensitive public environment label, with safe local values `http://localhost:8080`, `http://localhost:8080`, and `local`. `.env.example` SHALL contain only these variables, `.env.local` SHALL be ignored, and documentation SHALL state that browser-exposed variables are embedded at build time and MUST NOT contain secrets.
 
 #### Scenario: Local environment is configured
 - **WHEN** a contributor copies `.env.example` to `.env.local` without changes
-- **THEN** server code resolves the existing backend's local URL and the temporary page displays the `local` public label without exposing a secret
+- **THEN** server code and browser code resolve the local backend URL, the page displays the `local` label, and no secret is exposed
+
+#### Scenario: Browser bundle is reviewed
+- **WHEN** frontend browser configuration is inspected
+- **THEN** it contains only the public backend address and environment label and no credential, token, database value, or server-only secret
 
 ### Requirement: Native JSON HTTP client foundation
-The frontend SHALL provide a small fetch-based `requestJson<T>` client and typed `HttpClientError`. The client SHALL resolve relative paths against server-only `BACKEND_URL`, request JSON, preserve caller options and headers, set `credentials: "include"`, and return parsed data with any `X-Correlation-ID`. It SHALL defensively interpret the backend error shape, expose status/code/correlation, and use generic public messages for invalid bodies or network failures. It MUST NOT implement authorization, JWT, refresh, interceptors, automatic retries, session storage, cookies, or real functional requests.
+The frontend SHALL provide one small fetch-based `requestJson<T>` client and typed `HttpClientError`. The client SHALL resolve relative API paths against server-only `BACKEND_URL` on the server and `NEXT_PUBLIC_BACKEND_URL` in the browser; preserve caller options and headers; request JSON; use `credentials: "include"`; generate and send a valid `X-Correlation-ID` unless the caller supplies one; return parsed or empty success data with the response correlation; enforce an 8-second default timeout; and respect caller cancellation. It SHALL defensively interpret the generated backend error shape and expose public status, code, message, and correlation for HTTP, network, timeout, aborted, and invalid-response failures. It MUST NOT implement authorization, JWT, refresh, interceptors, automatic retries, session storage, body logging, cookie management, or a third-party HTTP library.
 
 #### Scenario: Successful JSON response contains correlation
 - **WHEN** fetch returns an OK JSON response with `X-Correlation-ID`
 - **THEN** the client returns the typed data and the same correlation identifier
+
+#### Scenario: Missing caller correlation is generated and sent
+- **WHEN** the caller does not provide `X-Correlation-ID`
+- **THEN** the client sends a valid generated identifier and accepts the backend-selected identifier in the response
 
 #### Scenario: Backend returns a structured error
 - **WHEN** fetch returns a non-success JSON response using the backend error contract
 - **THEN** the client throws `HttpClientError` with the public code, message, status, and correlation identifier
 
 #### Scenario: Network request fails
-- **WHEN** native fetch rejects before receiving a response
+- **WHEN** native fetch rejects before receiving a response for a reason other than timeout or caller cancellation
 - **THEN** the client throws `HttpClientError` with code `NETWORK_ERROR` and a generic Spanish message without exposing the native exception text
 
+#### Scenario: Request reaches timeout
+- **WHEN** the request does not complete within eight seconds
+- **THEN** the client aborts it and throws `HttpClientError` with code `TIMEOUT` and a generic Spanish message
+
+#### Scenario: Caller cancels request
+- **WHEN** the caller-provided abort signal triggers before completion
+- **THEN** the client throws `HttpClientError` with code `REQUEST_ABORTED` and does not misclassify it as timeout
+
 #### Scenario: Successful response is not valid JSON
-- **WHEN** fetch returns success but the body cannot be parsed as JSON
+- **WHEN** fetch declares or requires JSON success but the body cannot be parsed as JSON
 - **THEN** the client throws `HttpClientError` with code `INVALID_RESPONSE` and a generic Spanish message
+
+#### Scenario: Successful response is empty
+- **WHEN** a future API returns a successful response with no content
+- **THEN** the client completes without attempting to parse an absent JSON body
 
 #### Scenario: Future cookie transport remains possible
 - **WHEN** the client invokes native fetch
 - **THEN** the request uses `credentials: "include"` without creating session, JWT, cookie, or storage logic
 
 ### Requirement: Fast infrastructure-free baseline tests
-The frontend SHALL use Vitest 4.1.10 in Node environment and React static rendering to verify the temporary page, root layout, not-found page, and HTTP client success/error behavior. Tests MUST NOT use jsdom, Testing Library, Playwright, a running backend, MySQL, browser automation, or external network services.
+The frontend SHALL retain Vitest in Node environment and React static rendering for its default `npm test` suite. Baseline tests SHALL verify the temporary page and integration-indicator states, root layout, not-found page, generated-contract aliases, and HTTP client success, correlation, timeout, cancellation, invalid-response, and error behavior using controlled fetch doubles. They MUST NOT require jsdom, Testing Library, Playwright, a running backend, MySQL, browser automation, or external network services. Real backend communication SHALL run only through the separately documented integration command.
 
 #### Scenario: Baseline suite is executed
 - **WHEN** a contributor runs `npm test`
-- **THEN** all rendering and HTTP client tests pass using only the local Node process
+- **THEN** all rendering, contract, indicator, and HTTP client unit tests pass using only the local Node process
+
+#### Scenario: Real integration suite is selected
+- **WHEN** a contributor runs the separate integration-test command
+- **THEN** only the explicitly marked live tests use the configured running backend and they are not silently included in `npm test`
 
 ### Requirement: Concise frontend operation documentation
-The frontend SHALL include a concise README covering Node.js 24 LTS, dependency installation, development, type-check, tests, production build/start, environment setup, server/public variable distinction, and the future connection to the backend at port 8080. It SHALL state that the current page and styles are temporary and production deployment is deferred.
+The frontend SHALL include a concise README covering Node.js 24 LTS, dependency installation, development, type-check, unit tests, real integration tests, production build/start, server/public environment setup, backend and MySQL prerequisites, CORS origin, versioned API base, OpenAPI location, contract synchronization/check commands, generated-file policy, and the temporary integration indicator. It SHALL state that the current page and styles remain temporary, public variables contain no secrets, and production deployment is deferred.
 
-#### Scenario: New contributor follows frontend documentation
-- **WHEN** a contributor follows the README from a clean checkout
-- **THEN** the contributor can install, test, build, start, and open the temporary frontend without undocumented infrastructure
+#### Scenario: New contributor follows frontend documentation without backend
+- **WHEN** a contributor follows the default frontend instructions from a clean checkout without starting backend or MySQL
+- **THEN** the contributor can install, unit-test, build, start, and open the frontend with a safe unavailable technical state
+
+#### Scenario: New contributor follows full-stack documentation
+- **WHEN** a contributor follows the documented local integration sequence
+- **THEN** the contributor can start MySQL and backend, synchronize and check OpenAPI types, run the real integration suite, start the frontend, and observe backend and database availability without undocumented configuration
 
 ### Requirement: Frontend-foundation-only boundary
 The change MUST NOT modify UI reference images or implement the DNI page, certificate lookup, stepper, ID Perú, cancellation reasons, review, confirmation, revocation, receipt, JWT, refresh tokens, progress recovery, MySQL persistence, external integrations, complete responsive views, notification system, administrative modules, or production deployment. It MUST NOT add Redux, Zustand, another global store, `localStorage` session data, a full design system, unused routes, or overly generic components.

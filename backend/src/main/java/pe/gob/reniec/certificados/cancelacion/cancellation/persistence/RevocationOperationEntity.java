@@ -2,13 +2,14 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -16,22 +17,22 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "revocation_operation")
 public class RevocationOperationEntity {
 
-	@Id @UuidGenerator
-	@Column(name = "id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
-	private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "id", nullable = false, updatable = false)
+	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "request_id", nullable = false, updatable = false)
 	private CertificateCancellationRequestEntity request;
 
-	@Column(name = "idempotency_key", nullable = false, unique = true, updatable = false, columnDefinition = "BINARY(16)")
-	private UUID idempotencyKey;
+	@Column(name = "idempotency_key", nullable = false, unique = true, updatable = false, length = 64)
+	private String idempotencyKey;
 
 	@Column(name = "attempt_number", nullable = false, updatable = false)
 	private int attemptNumber;
@@ -59,11 +60,8 @@ public class RevocationOperationEntity {
 	@Column(name = "normalized_result", length = 40)
 	private RevocationResult normalizedResult;
 
-	@Column(name = "technical_error_code", length = 64)
-	private String technicalErrorCode;
-
-	@Column(name = "next_status_check_at")
-	private Instant nextStatusCheckAt;
+	@Column(name = "error_code", length = 64)
+	private String errorCode;
 
 	@Column(name = "correlation_id", nullable = false, updatable = false, length = 64)
 	private String correlationId;
@@ -80,16 +78,15 @@ public class RevocationOperationEntity {
 
 	protected RevocationOperationEntity() { }
 
-	public RevocationOperationEntity(CertificateCancellationRequestEntity request, UUID idempotencyKey,
+	public RevocationOperationEntity(CertificateCancellationRequestEntity request, String idempotencyKey,
 			int attemptNumber, Instant preparedAt, String correlationId) {
 		this.request = Objects.requireNonNull(request, "request");
-		this.idempotencyKey = Objects.requireNonNull(idempotencyKey, "idempotencyKey");
+		this.idempotencyKey = requireBoundedText(idempotencyKey, "idempotencyKey", 64);
 		if (attemptNumber < 1) throw new IllegalArgumentException("attemptNumber must be positive");
 		this.attemptNumber = attemptNumber;
 		this.preparedAt = Objects.requireNonNull(preparedAt, "preparedAt");
-		if (correlationId == null || correlationId.isBlank()) throw new IllegalArgumentException("correlationId must not be blank");
-		this.correlationId = correlationId;
-		this.operationStatus = RevocationOperationStatus.PREPARED;
+		this.correlationId = requireBoundedText(correlationId, "correlationId", 64);
+		operationStatus = RevocationOperationStatus.PREPARED;
 	}
 
 	public void markSubmitted(Instant at, String externalReference) {
@@ -99,7 +96,7 @@ public class RevocationOperationEntity {
 	}
 
 	public void complete(RevocationOperationStatus status, RevocationResult result, Instant responseTime,
-			Instant completionTime, String errorCode, Instant nextStatusCheckAt) {
+			Instant completionTime, String errorCode) {
 		if (status == RevocationOperationStatus.PREPARED || status == RevocationOperationStatus.SUBMITTED) {
 			throw new IllegalArgumentException("Completion requires a terminal or uncertain status");
 		}
@@ -107,8 +104,7 @@ public class RevocationOperationEntity {
 		normalizedResult = Objects.requireNonNull(result, "result");
 		respondedAt = responseTime;
 		completedAt = completionTime;
-		technicalErrorCode = errorCode;
-		this.nextStatusCheckAt = nextStatusCheckAt;
+		this.errorCode = errorCode;
 	}
 
 	@PrePersist
@@ -128,10 +124,16 @@ public class RevocationOperationEntity {
 		if (completedAt != null && completedAt.isBefore(preparedAt)) throw new IllegalStateException("Completion cannot precede preparation");
 	}
 
+	private static String requireBoundedText(String value, String name, int maxLength) {
+		if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+		if (value.length() > maxLength) throw new IllegalArgumentException(name + " is too long");
+		return value;
+	}
+
 	public boolean isSucceeded() { return operationStatus == RevocationOperationStatus.SUCCEEDED; }
-	public UUID getId() { return id; }
+	public Long getId() { return id; }
 	public CertificateCancellationRequestEntity getRequest() { return request; }
-	public UUID getIdempotencyKey() { return idempotencyKey; }
+	public String getIdempotencyKey() { return idempotencyKey; }
 	public int getAttemptNumber() { return attemptNumber; }
 	public RevocationOperationStatus getOperationStatus() { return operationStatus; }
 	public String getExternalReference() { return externalReference; }
@@ -140,8 +142,7 @@ public class RevocationOperationEntity {
 	public Instant getRespondedAt() { return respondedAt; }
 	public Instant getCompletedAt() { return completedAt; }
 	public RevocationResult getNormalizedResult() { return normalizedResult; }
-	public String getTechnicalErrorCode() { return technicalErrorCode; }
-	public Instant getNextStatusCheckAt() { return nextStatusCheckAt; }
+	public String getErrorCode() { return errorCode; }
 	public String getCorrelationId() { return correlationId; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }

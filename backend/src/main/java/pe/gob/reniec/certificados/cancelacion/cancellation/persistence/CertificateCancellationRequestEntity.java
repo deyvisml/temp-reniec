@@ -1,56 +1,42 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PostLoad;
 import jakarta.persistence.PostPersist;
+import jakarta.persistence.PostUpdate;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.Version;
-import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "certificate_cancellation_request")
 public class CertificateCancellationRequestEntity {
 
-	private static final Pattern HASH = Pattern.compile("[0-9a-f]{64}");
-	private static final Pattern LAST_FOUR = Pattern.compile("[0-9]{4}");
+	private static final Pattern DNI = Pattern.compile("[0-9]{8}");
 
 	@Id
-	@UuidGenerator
-	@Column(name = "id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
-	private UUID id;
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "id", nullable = false, updatable = false)
+	private Long id;
 
-	@Column(name = "dni_lookup_hash", nullable = false, updatable = false, length = 64)
-	private String dniLookupHash;
-
-	@Column(name = "dni_ciphertext", nullable = false, length = 512)
-	private byte[] dniCiphertext;
-
-	@Column(name = "dni_key_version", nullable = false, length = 64)
-	private String dniKeyVersion;
-
-	@Column(name = "dni_last_four", nullable = false, length = 4)
-	private String dniLastFour;
+	@Column(name = "dni", nullable = false, updatable = false, length = 8)
+	private String dni;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "request_status", nullable = false, length = 48)
 	private CancellationRequestStatus requestStatus;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "lifecycle_status", nullable = false, length = 16)
-	private RequestLifecycleStatus lifecycleStatus;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "eligibility_result", nullable = false, length = 24)
@@ -60,14 +46,11 @@ public class CertificateCancellationRequestEntity {
 	@Column(name = "reason_code", length = 40)
 	private CancellationReasonCode reasonCode;
 
-	@Column(name = "other_reason_ciphertext", length = 1024)
-	private byte[] otherReasonCiphertext;
+	@Column(name = "other_reason", length = 300)
+	private String otherReason;
 
-	@Column(name = "other_reason_key_version", length = 64)
-	private String otherReasonKeyVersion;
-
-	@Column(name = "consent_text_version", length = 64)
-	private String consentTextVersion;
+	@Column(name = "consent_version", length = 64)
+	private String consentVersion;
 
 	@Column(name = "confirmed_at")
 	private Instant confirmedAt;
@@ -96,21 +79,19 @@ public class CertificateCancellationRequestEntity {
 	private CancellationReasonCode persistedReason;
 
 	@Transient
-	private byte[] persistedOtherReason;
+	private String persistedOtherReason;
+
+	@Transient
+	private Instant persistedConfirmedAt;
 
 	protected CertificateCancellationRequestEntity() {
 	}
 
-	public CertificateCancellationRequestEntity(String dniLookupHash, byte[] dniCiphertext,
-			String dniKeyVersion, String dniLastFour, Instant recoverableUntil, Instant expiresAt) {
-		this.dniLookupHash = requireHash(dniLookupHash, "dniLookupHash");
-		this.dniCiphertext = copyRequired(dniCiphertext, "dniCiphertext");
-		this.dniKeyVersion = requireText(dniKeyVersion, "dniKeyVersion");
-		this.dniLastFour = requirePattern(dniLastFour, LAST_FOUR, "dniLastFour");
+	public CertificateCancellationRequestEntity(String dni, Instant recoverableUntil, Instant expiresAt) {
+		this.dni = requireDni(dni);
 		this.recoverableUntil = recoverableUntil;
 		this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
 		this.requestStatus = CancellationRequestStatus.STARTED;
-		this.lifecycleStatus = RequestLifecycleStatus.ACTIVE;
 		this.eligibilityResult = CurrentEligibilityResult.NOT_CHECKED;
 	}
 
@@ -119,143 +100,103 @@ public class CertificateCancellationRequestEntity {
 		requestStatus = Objects.requireNonNull(status, "status");
 	}
 
-	public void registerReason(CancellationReasonCode reason, byte[] protectedDescription, String keyVersion) {
-		if (confirmedAt != null) {
-			throw new IllegalStateException("A confirmed request cannot change its reason");
-		}
+	public void registerReason(CancellationReasonCode reason, String description) {
+		ensureReasonMutable();
 		reasonCode = Objects.requireNonNull(reason, "reason");
 		if (reason == CancellationReasonCode.OTHER) {
-			otherReasonCiphertext = copyRequired(protectedDescription, "protectedDescription");
-			otherReasonKeyVersion = requireText(keyVersion, "keyVersion");
+			otherReason = requireBoundedText(description, "otherReason", 300);
 		}
 		else {
-			if (protectedDescription != null || keyVersion != null) {
-				throw new IllegalArgumentException("Protected description is only valid for OTHER");
-			}
-			otherReasonCiphertext = null;
-			otherReasonKeyVersion = null;
+			if (description != null) throw new IllegalArgumentException("otherReason is only valid for OTHER");
+			otherReason = null;
 		}
 		requestStatus = CancellationRequestStatus.REASON_REGISTERED;
 	}
 
-	public void confirm(String textVersion, Instant confirmationTime) {
-		if (reasonCode == null) {
-			throw new IllegalStateException("A reason is required before confirmation");
-		}
-		consentTextVersion = requireText(textVersion, "textVersion");
-		confirmedAt = Objects.requireNonNull(confirmationTime, "confirmationTime");
+	public void confirm(String consentVersion, Instant confirmedAt) {
+		if (reasonCode == null) throw new IllegalStateException("A reason is required before confirmation");
+		this.consentVersion = requireText(consentVersion, "consentVersion");
+		this.confirmedAt = Objects.requireNonNull(confirmedAt, "confirmedAt");
 		requestStatus = CancellationRequestStatus.CONFIRMED;
 	}
 
-	public void transitionTo(CancellationRequestStatus status, RequestLifecycleStatus lifecycle,
-			CancellationFinalOutcome outcome) {
+	public void transitionTo(CancellationRequestStatus status, CancellationFinalOutcome outcome) {
 		requestStatus = Objects.requireNonNull(status, "status");
-		lifecycleStatus = Objects.requireNonNull(lifecycle, "lifecycle");
 		finalOutcome = outcome;
 	}
 
 	@PrePersist
-	void initializeAndValidate() {
+	void initialize() {
 		Instant now = Instant.now();
-		if (createdAt == null) {
-			createdAt = now;
-		}
+		if (createdAt == null) createdAt = now;
 		updatedAt = now;
-		validateState();
+		validate();
+	}
+
+	@PostPersist
+	@PostLoad
+	@PostUpdate
+	void rememberReason() {
+		persistedReason = reasonCode;
+		persistedOtherReason = otherReason;
+		persistedConfirmedAt = confirmedAt;
 	}
 
 	@PreUpdate
-	void updateAndValidate() {
-		if (confirmedAt != null && persistedReason != null
-				&& (persistedReason != reasonCode || !Arrays.equals(persistedOtherReason, otherReasonCiphertext))) {
-			throw new IllegalStateException("A confirmed request cannot change its reason");
+	void update() {
+		if (persistedConfirmedAt != null
+				&& (persistedReason != reasonCode || !Objects.equals(persistedOtherReason, otherReason))) {
+			throw new IllegalStateException("A confirmed reason cannot be changed");
 		}
 		updatedAt = Instant.now();
-		validateState();
+		validate();
 	}
 
-	@PostLoad
-	@PostPersist
-	void rememberPersistedReason() {
-		persistedReason = reasonCode;
-		persistedOtherReason = copy(otherReasonCiphertext);
-	}
-
-	private void validateState() {
-		requireHash(dniLookupHash, "dniLookupHash");
-		copyRequired(dniCiphertext, "dniCiphertext");
-		requireText(dniKeyVersion, "dniKeyVersion");
-		requirePattern(dniLastFour, LAST_FOUR, "dniLastFour");
-		Objects.requireNonNull(requestStatus, "requestStatus");
-		Objects.requireNonNull(lifecycleStatus, "lifecycleStatus");
-		Objects.requireNonNull(eligibilityResult, "eligibilityResult");
-		if (reasonCode == CancellationReasonCode.OTHER) {
-			copyRequired(otherReasonCiphertext, "otherReasonCiphertext");
-			requireText(otherReasonKeyVersion, "otherReasonKeyVersion");
-		}
-		else if (otherReasonCiphertext != null || otherReasonKeyVersion != null) {
-			throw new IllegalStateException("Only OTHER can retain a protected description");
-		}
-		if ((consentTextVersion == null) != (confirmedAt == null)) {
-			throw new IllegalStateException("Consent version and confirmation time must be stored together");
-		}
-		if (confirmedAt != null && reasonCode == null) {
-			throw new IllegalStateException("A confirmed request requires a reason");
-		}
-		if (expiresAt == null || !expiresAt.isAfter(createdAt)) {
-			throw new IllegalStateException("Request expiry must be after creation");
-		}
+	private void validate() {
+		requireDni(dni);
+		if (!expiresAt.isAfter(createdAt)) throw new IllegalStateException("Expiry must be after creation");
 		if (recoverableUntil != null && recoverableUntil.isBefore(createdAt)) {
-			throw new IllegalStateException("Recovery deadline cannot precede creation");
+			throw new IllegalStateException("Recovery cannot end before creation");
 		}
-		if (confirmedAt != null && confirmedAt.isBefore(createdAt)) {
-			throw new IllegalStateException("Confirmation cannot precede creation");
+		if (confirmedAt != null) {
+			if (reasonCode == null || consentVersion == null) {
+				throw new IllegalStateException("Confirmation requires reason and consent version");
+			}
+			if (confirmedAt.isBefore(createdAt)) throw new IllegalStateException("Confirmation cannot precede creation");
 		}
+		if (reasonCode == CancellationReasonCode.OTHER) requireBoundedText(otherReason, "otherReason", 300);
+		else if (otherReason != null) throw new IllegalStateException("otherReason is only valid for OTHER");
 	}
 
-	private static String requireHash(String value, String name) {
-		return requirePattern(value, HASH, name);
+	private void ensureReasonMutable() {
+		if (confirmedAt != null) throw new IllegalStateException("A confirmed reason cannot be changed");
 	}
 
-	private static String requirePattern(String value, Pattern pattern, String name) {
-		String checked = Objects.requireNonNull(value, name);
-		if (!pattern.matcher(checked).matches()) {
-			throw new IllegalArgumentException(name + " has an invalid format");
+	private static String requireDni(String value) {
+		if (value == null || !DNI.matcher(value).matches()) {
+			throw new IllegalArgumentException("dni must contain exactly eight digits");
 		}
-		return checked;
+		return value;
 	}
 
 	private static String requireText(String value, String name) {
-		String checked = Objects.requireNonNull(value, name);
-		if (checked.isBlank()) {
-			throw new IllegalArgumentException(name + " must not be blank");
-		}
-		return checked;
+		if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
+		return value;
 	}
 
-	private static byte[] copyRequired(byte[] value, String name) {
-		if (value == null || value.length == 0) {
-			throw new IllegalArgumentException(name + " must not be empty");
-		}
-		return value.clone();
+	private static String requireBoundedText(String value, String name, int maxLength) {
+		String text = requireText(value, name);
+		if (text.length() > maxLength) throw new IllegalArgumentException(name + " is too long");
+		return text;
 	}
 
-	private static byte[] copy(byte[] value) {
-		return value == null ? null : value.clone();
-	}
-
-	public UUID getId() { return id; }
-	public String getDniLookupHash() { return dniLookupHash; }
-	public byte[] getDniCiphertext() { return copy(dniCiphertext); }
-	public String getDniKeyVersion() { return dniKeyVersion; }
-	public String getDniLastFour() { return dniLastFour; }
+	public Long getId() { return id; }
+	public String getDni() { return dni; }
 	public CancellationRequestStatus getRequestStatus() { return requestStatus; }
-	public RequestLifecycleStatus getLifecycleStatus() { return lifecycleStatus; }
 	public CurrentEligibilityResult getEligibilityResult() { return eligibilityResult; }
 	public CancellationReasonCode getReasonCode() { return reasonCode; }
-	public byte[] getOtherReasonCiphertext() { return copy(otherReasonCiphertext); }
-	public String getOtherReasonKeyVersion() { return otherReasonKeyVersion; }
-	public String getConsentTextVersion() { return consentTextVersion; }
+	public String getOtherReason() { return otherReason; }
+	public String getConsentVersion() { return consentVersion; }
 	public Instant getConfirmedAt() { return confirmedAt; }
 	public CancellationFinalOutcome getFinalOutcome() { return finalOutcome; }
 	public Instant getRecoverableUntil() { return recoverableUntil; }

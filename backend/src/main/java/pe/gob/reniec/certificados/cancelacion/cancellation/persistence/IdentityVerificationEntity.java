@@ -2,30 +2,28 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
-import java.util.regex.Pattern;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "identity_verification")
 public class IdentityVerificationEntity {
 
-	private static final Pattern HASH = Pattern.compile("[0-9a-f]{64}");
-
-	@Id @UuidGenerator
-	@Column(name = "id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
-	private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "id", nullable = false, updatable = false)
+	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "request_id", nullable = false, updatable = false)
@@ -43,9 +41,6 @@ public class IdentityVerificationEntity {
 
 	@Column(name = "external_reference", length = 128)
 	private String externalReference;
-
-	@Column(name = "verified_identity_hash", length = 64)
-	private String verifiedIdentityHash;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "dni_match_result", nullable = false, length = 16)
@@ -76,24 +71,19 @@ public class IdentityVerificationEntity {
 		this.provider = requireText(provider, "provider");
 		this.startedAt = Objects.requireNonNull(startedAt, "startedAt");
 		this.correlationId = requireText(correlationId, "correlationId");
-		this.verificationStatus = IdentityVerificationStatus.STARTED;
-		this.dniMatchResult = IdentityMatchResult.NOT_EVALUATED;
+		verificationStatus = IdentityVerificationStatus.STARTED;
+		dniMatchResult = IdentityMatchResult.NOT_EVALUATED;
 	}
 
 	public void finish(IdentityVerificationStatus status, IdentityMatchResult matchResult,
-			Instant completionTime, String externalReference, String verifiedIdentityHash,
-			String errorOrCancellationCode) {
+			Instant completionTime, String externalReference, String errorOrCancellationCode) {
 		if (status == IdentityVerificationStatus.STARTED) {
 			throw new IllegalArgumentException("A completed verification cannot remain STARTED");
 		}
-		if (verifiedIdentityHash != null && !HASH.matcher(verifiedIdentityHash).matches()) {
-			throw new IllegalArgumentException("verifiedIdentityHash has an invalid format");
-		}
-		this.verificationStatus = Objects.requireNonNull(status, "status");
-		this.dniMatchResult = Objects.requireNonNull(matchResult, "matchResult");
-		this.completedAt = Objects.requireNonNull(completionTime, "completionTime");
+		verificationStatus = Objects.requireNonNull(status, "status");
+		dniMatchResult = Objects.requireNonNull(matchResult, "matchResult");
+		completedAt = Objects.requireNonNull(completionTime, "completionTime");
 		this.externalReference = externalReference;
-		this.verifiedIdentityHash = verifiedIdentityHash;
 		this.errorOrCancellationCode = errorOrCancellationCode;
 	}
 
@@ -110,13 +100,12 @@ public class IdentityVerificationEntity {
 		return value;
 	}
 
-	public UUID getId() { return id; }
+	public Long getId() { return id; }
 	public CertificateCancellationRequestEntity getRequest() { return request; }
 	public int getAttemptNumber() { return attemptNumber; }
 	public String getProvider() { return provider; }
 	public IdentityVerificationStatus getVerificationStatus() { return verificationStatus; }
 	public String getExternalReference() { return externalReference; }
-	public String getVerifiedIdentityHash() { return verifiedIdentityHash; }
 	public IdentityMatchResult getDniMatchResult() { return dniMatchResult; }
 	public Instant getStartedAt() { return startedAt; }
 	public Instant getCompletedAt() { return completedAt; }

@@ -17,6 +17,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.system.DependencyUnavailableException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -45,6 +46,14 @@ public final class GlobalExceptionHandler {
 	@ExceptionHandler({ NoHandlerFoundException.class, NoResourceFoundException.class })
 	ResponseEntity<ApiError> handleNotFound(Exception exception, HttpServletRequest request) {
 		return respond(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "No se encontró el recurso solicitado.", request);
+	}
+
+	@ExceptionHandler(DependencyUnavailableException.class)
+	ResponseEntity<ApiError> handleDependencyUnavailable(DependencyUnavailableException exception,
+			HttpServletRequest request) {
+		LOGGER.warn("Technical dependency unavailable path={}", request.getRequestURI());
+		return respond(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
+				"El servicio no está disponible temporalmente.", request);
 	}
 
 	@ExceptionHandler(Exception.class)

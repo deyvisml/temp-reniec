@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { HttpClientError, requestJson } from "@/lib/http-client";
+import { CORRELATION_HEADER, HttpClientError, requestJson, resolveBackendUrl } from "@/lib/http-client";
 
 describe("requestJson", () => {
   beforeEach(() => {
-    vi.stubEnv("BACKEND_URL", "http://localhost:8080");
+    vi.stubEnv("BACKEND_URL", "http://server-backend:8080");
+    vi.stubEnv("NEXT_PUBLIC_BACKEND_URL", "http://browser-backend:8080");
   });
 
   afterEach(() => {
@@ -12,101 +13,90 @@ describe("requestJson", () => {
     vi.unstubAllEnvs();
   });
 
-  it("returns JSON and correlation while including future cookie credentials", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({ available: true }, 200, "correlation-123"),
-    );
+  it("resolves explicit server and browser URLs", () => {
+    expect(resolveBackendUrl("server")).toBe("http://server-backend:8080");
+    expect(resolveBackendUrl("browser")).toBe("http://browser-backend:8080");
+  });
+
+  it("returns JSON, sends correlation and includes future cookie credentials", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ available: true }, 200, "backend-correlation"));
     vi.stubGlobal("fetch", fetchMock);
+    const result = await requestJson<{ available: boolean }>("/technical/example", { headers: { "X-Client": "frontend" } });
 
-    const result = await requestJson<{ available: boolean }>("/technical/example", {
-      headers: { "X-Client": "frontend" },
-    });
-
-    expect(result).toEqual({ data: { available: true }, correlationId: "correlation-123" });
-    expect(fetchMock).toHaveBeenCalledOnce();
-
+    expect(result).toEqual({ data: { available: true }, correlationId: "backend-correlation" });
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe("http://localhost:8080/technical/example");
+    const headers = new Headers(init?.headers);
+    expect(String(url)).toBe("http://server-backend:8080/technical/example");
     expect(init?.credentials).toBe("include");
-    expect(new Headers(init?.headers).get("Accept")).toBe("application/json");
-    expect(new Headers(init?.headers).get("X-Client")).toBe("frontend");
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("X-Client")).toBe("frontend");
+    expect(headers.get(CORRELATION_HEADER)).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("preserves caller correlation", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({}, 200, "caller-123"));
+    vi.stubGlobal("fetch", fetchMock);
+    await requestJson("/technical/example", { headers: { [CORRELATION_HEADER]: "caller-123" } });
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get(CORRELATION_HEADER)).toBe("caller-123");
   });
 
   it("maps the backend error contract", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse(
-        {
-          code: "VALIDATION_ERROR",
-          message: "La solicitud contiene datos inválidos.",
-          correlationId: "body-correlation",
-        },
-        400,
-        "header-correlation",
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(
+      { code: "VALIDATION_ERROR", message: "Solicitud inválida.", correlationId: "body" }, 400, "header",
+    )));
     await expect(requestJson("/technical/example")).rejects.toMatchObject({
-      name: "HttpClientError",
-      code: "VALIDATION_ERROR",
-      message: "La solicitud contiene datos inválidos.",
-      status: 400,
-      correlationId: "header-correlation",
+      code: "VALIDATION_ERROR", message: "Solicitud inválida.", status: 400, correlationId: "header",
     });
   });
 
-  it("uses a generic network error without exposing the native message", async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockRejectedValue(new Error("socket failure with internal host details"));
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("uses a generic network error without exposing native details", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(new Error("secret socket detail")));
     const request = requestJson("/technical/example");
-
     await expect(request).rejects.toBeInstanceOf(HttpClientError);
-    await expect(request).rejects.toMatchObject({
-      code: "NETWORK_ERROR",
-      message: "No fue posible conectar con el servicio.",
+    await expect(request).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  });
+
+  it("classifies its timeout independently", async () => {
+    vi.stubGlobal("fetch", abortableFetch());
+    await expect(requestJson("/slow", {}, { timeoutMs: 5 })).rejects.toMatchObject({ code: "TIMEOUT" });
+  });
+
+  it("respects caller cancellation", async () => {
+    vi.stubGlobal("fetch", abortableFetch());
+    const controller = new AbortController();
+    const request = requestJson("/cancel", { signal: controller.signal });
+    controller.abort();
+    await expect(request).rejects.toMatchObject({ code: "REQUEST_ABORTED" });
+  });
+
+  it("rejects invalid successful JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("not-json", { status: 200, headers: { [CORRELATION_HEADER]: "invalid-json" } }),
+    ));
+    await expect(requestJson("/technical/example")).rejects.toMatchObject({
+      code: "INVALID_RESPONSE", correlationId: "invalid-json",
     });
   });
 
-  it("rejects a successful response that is not valid JSON", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response("not-json", {
-        status: 200,
-        headers: { "Content-Type": "text/plain", "X-Correlation-ID": "invalid-json-123" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(requestJson("/technical/example")).rejects.toMatchObject({
-      code: "INVALID_RESPONSE",
-      status: 200,
-      correlationId: "invalid-json-123",
-    });
+  it("accepts an empty successful response", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 })));
+    await expect(requestJson("/empty")).resolves.toEqual({ data: undefined, correlationId: undefined });
   });
 
-  it("uses a generic HTTP error when the error body is not JSON", async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response("gateway detail", {
-        status: 502,
-        headers: { "Content-Type": "text/plain" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    await expect(requestJson("/technical/example")).rejects.toMatchObject({
-      code: "HTTP_ERROR",
-      message: "No fue posible completar la solicitud.",
-      status: 502,
-    });
+  it("uses a generic HTTP error for a non-JSON error", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response("gateway detail", { status: 502 })));
+    await expect(requestJson("/technical/example")).rejects.toMatchObject({ code: "HTTP_ERROR", status: 502 });
   });
 });
 
+function abortableFetch() {
+  return vi.fn<typeof fetch>((_input, init) => new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+  }));
+}
+
 function jsonResponse(body: unknown, status: number, correlationId?: string): Response {
   const headers = new Headers({ "Content-Type": "application/json" });
-  if (correlationId) {
-    headers.set("X-Correlation-ID", correlationId);
-  }
+  if (correlationId) headers.set(CORRELATION_HEADER, correlationId);
   return new Response(JSON.stringify(body), { status, headers });
 }

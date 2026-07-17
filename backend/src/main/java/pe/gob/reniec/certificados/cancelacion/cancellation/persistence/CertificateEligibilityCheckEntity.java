@@ -2,27 +2,28 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
 import java.time.Instant;
 import java.util.Objects;
-import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import org.hibernate.annotations.UuidGenerator;
 
 @Entity
 @Table(name = "certificate_eligibility_check")
 public class CertificateEligibilityCheckEntity {
 
-	@Id @UuidGenerator
-	@Column(name = "id", nullable = false, updatable = false, columnDefinition = "BINARY(16)")
-	private UUID id;
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	@Column(name = "id", nullable = false, updatable = false)
+	private Long id;
 
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "request_id", nullable = false, updatable = false)
@@ -48,8 +49,8 @@ public class CertificateEligibilityCheckEntity {
 	@Column(name = "responded_at")
 	private Instant respondedAt;
 
-	@Column(name = "technical_error_code", length = 64)
-	private String technicalErrorCode;
+	@Column(name = "error_code", length = 64)
+	private String errorCode;
 
 	@Column(name = "correlation_id", nullable = false, updatable = false, length = 64)
 	private String correlationId;
@@ -70,17 +71,18 @@ public class CertificateEligibilityCheckEntity {
 	}
 
 	public void complete(EligibilityCheckResult result, Instant responseTime, String externalReference) {
-		this.normalizedResult = Objects.requireNonNull(result, "result");
-		this.respondedAt = Objects.requireNonNull(responseTime, "responseTime");
+		normalizedResult = Objects.requireNonNull(result, "result");
+		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
 		this.externalReference = externalReference;
-		this.checkStatus = EligibilityCheckStatus.COMPLETED;
+		errorCode = null;
+		checkStatus = EligibilityCheckStatus.COMPLETED;
 	}
 
 	public void fail(EligibilityCheckResult result, Instant responseTime, String errorCode) {
-		this.normalizedResult = Objects.requireNonNull(result, "result");
-		this.respondedAt = Objects.requireNonNull(responseTime, "responseTime");
-		this.technicalErrorCode = requireText(errorCode, "errorCode");
-		this.checkStatus = EligibilityCheckStatus.FAILED;
+		normalizedResult = Objects.requireNonNull(result, "result");
+		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
+		this.errorCode = requireText(errorCode, "errorCode");
+		checkStatus = EligibilityCheckStatus.FAILED;
 	}
 
 	@PrePersist
@@ -96,7 +98,7 @@ public class CertificateEligibilityCheckEntity {
 		return value;
 	}
 
-	public UUID getId() { return id; }
+	public Long getId() { return id; }
 	public CertificateCancellationRequestEntity getRequest() { return request; }
 	public int getAttemptNumber() { return attemptNumber; }
 	public EligibilityCheckStatus getCheckStatus() { return checkStatus; }
@@ -104,7 +106,7 @@ public class CertificateEligibilityCheckEntity {
 	public String getExternalReference() { return externalReference; }
 	public Instant getRequestedAt() { return requestedAt; }
 	public Instant getRespondedAt() { return respondedAt; }
-	public String getTechnicalErrorCode() { return technicalErrorCode; }
+	public String getErrorCode() { return errorCode; }
 	public String getCorrelationId() { return correlationId; }
 	public Instant getCreatedAt() { return createdAt; }
 }
