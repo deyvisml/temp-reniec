@@ -6,6 +6,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator;
 
 @SpringBootTest(properties = {
 		"debug=false",
@@ -20,6 +21,9 @@ class CancelacionCertificadosBackendApplicationTests {
 
 	@MockitoBean
 	SystemStatusService systemStatusService;
+
+	@MockitoBean
+	EligibilityPersistenceCoordinator eligibilityPersistenceCoordinator;
 
 	@Test
 	void contextLoads() {

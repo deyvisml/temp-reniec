@@ -5,5 +5,6 @@ public enum CurrentEligibilityResult {
 	ELIGIBLE,
 	NOT_ELIGIBLE,
 	UNAVAILABLE,
-	INCONCLUSIVE
+	INCONCLUSIVE,
+	ERROR
 }

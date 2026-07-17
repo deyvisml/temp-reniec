@@ -31,16 +31,16 @@ The frontend SHALL use App Router with a root layout that declares Spanish as th
 - **WHEN** the root layout is rendered around page content
 - **THEN** the HTML contains `lang="es"`, semantic header/main/footer landmarks, a skip target, base metadata configuration, and the supplied child content
 
-### Requirement: Temporary non-functional home page
-The `/` route SHALL continue identifying the provisional system and public environment label and SHALL include a temporary client-side technical indicator that checks the versioned backend status API and reports backend and database availability. It MUST NOT contain a DNI form, certificate lookup, stepper, identity verification, cancellation reason, confirmation, revocation, receipt, session behavior, or other citizen-flow control.
+### Requirement: Functional citizen home page
+The `/` route SHALL render the real citizen-facing home and DNI eligibility form specified by `citizen-eligibility-entry`. It SHALL preserve the root App Router shell, semantic landmarks, Spanish language metadata, global error boundaries, keyboard access, responsive layout, and safe behavior when the backend is unavailable. It MUST NOT include identity verification, cancellation reason, confirmation, revocation, receipt, JWT session behavior, or later citizen-flow controls.
 
-#### Scenario: Temporary home page is rendered with the stack available
-- **WHEN** a visitor opens `/` while the local backend and MySQL are operational
-- **THEN** the page reports technical integration availability and contains no citizen-flow control
+#### Scenario: Citizen home is rendered
+- **WHEN** a visitor opens `/`
+- **THEN** the page renders the service explanation and accessible DNI form within the existing root shell, with no temporary project-preparation content
 
-#### Scenario: Temporary home page is rendered without the backend
-- **WHEN** the backend request fails or reaches timeout
-- **THEN** the page remains usable, reports technical unavailability safely, and offers a manual retry
+#### Scenario: Backend is unavailable
+- **WHEN** the visitor opens or uses the home page while the backend cannot be reached
+- **THEN** the page remains renderable and usable and reports communication failure only after a submitted consultation
 
 ### Requirement: Minimal Tailwind and global styling baseline
 The frontend SHALL use Tailwind CSS 4.3.2 through `@tailwindcss/postcss` and a single global CSS import. Global styles SHALL provide box sizing, readable provisional colors, coherent spacing, a system sans-serif font stack, an adaptive content width, and a clearly visible `:focus-visible` treatment. The change MUST NOT define a complete design system, extensive tokens, component variants, or definitive institutional colors.

@@ -14,6 +14,11 @@ springdoc:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  eligibility:
+    stale-attempt-threshold: 100ms
+    timeout: 100ms
+    mock:
+      simulated-timeout: 300ms
 
 server:
   port: 0

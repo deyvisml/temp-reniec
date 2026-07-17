@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -33,6 +34,9 @@ class BackendHttpIntegrationTests {
 
 	@MockitoBean
 	SystemStatusService systemStatusService;
+
+	@MockitoBean
+	EligibilityPersistenceCoordinator eligibilityPersistenceCoordinator;
 
 	private final HttpClient httpClient = HttpClient.newHttpClient();
 

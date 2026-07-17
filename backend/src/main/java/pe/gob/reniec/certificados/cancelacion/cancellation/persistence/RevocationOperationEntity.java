@@ -16,7 +16,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "revocation_operation")
@@ -71,10 +70,6 @@ public class RevocationOperationEntity {
 
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
-
-	@Version
-	@Column(name = "version", nullable = false)
-	private long version;
 
 	protected RevocationOperationEntity() { }
 
@@ -146,5 +141,4 @@ public class RevocationOperationEntity {
 	public String getCorrelationId() { return correlationId; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }
-	public long getVersion() { return version; }
 }

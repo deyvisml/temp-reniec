@@ -7,15 +7,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.OptimisticLockException;
-import jakarta.persistence.RollbackException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,8 +33,6 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Cancellat
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReasonCode;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestSessionEntity;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestSessionRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestRepository;
@@ -62,18 +57,15 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Revocatio
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
-	private static final Duration LIFETIME = Duration.ofHours(4);
 	private static final String CORRELATION = "persistence-test-correlation";
 
 	@Autowired CertificateCancellationRequestRepository requestRepository;
 	@Autowired CertificateEligibilityCheckRepository eligibilityRepository;
 	@Autowired IdentityVerificationRepository identityRepository;
-	@Autowired CancellationRequestSessionRepository sessionRepository;
 	@Autowired RevocationOperationRepository revocationRepository;
 	@Autowired CancellationReceiptRepository receiptRepository;
 	@Autowired CancellationAuditEventRepository auditRepository;
 	@Autowired JdbcTemplate jdbcTemplate;
-	@Autowired EntityManagerFactory entityManagerFactory;
 
 	@LocalServerPort int port;
 
@@ -82,14 +74,13 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM cancellation_audit_event");
 		jdbcTemplate.update("DELETE FROM cancellation_receipt");
 		jdbcTemplate.update("DELETE FROM revocation_operation");
-		jdbcTemplate.update("DELETE FROM cancellation_request_session");
 		jdbcTemplate.update("DELETE FROM identity_verification");
 		jdbcTemplate.update("DELETE FROM certificate_eligibility_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
 	}
 
 	@Test
-	void cleanDatabaseRunsFlywayCreatesOnlyTheSevenSimplifiedTablesAndReportsSafeHealth() throws Exception {
+	void cleanDatabaseRunsFlywayCreatesOnlyTheSixSimplifiedTablesAndReportsSafeHealth() throws Exception {
 		List<String> tables = jdbcTemplate.queryForList("""
 				SELECT table_name FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
@@ -97,13 +88,15 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				""", String.class);
 		List<String> obsoleteColumns = jdbcTemplate.queryForList("""
 				SELECT column_name FROM information_schema.columns
-				WHERE table_schema = DATABASE() AND column_name IN (
+				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
+				AND column_name IN (
 				 'dni_lookup_hash', 'dni_ciphertext', 'dni_key_version', 'dni_last_four',
 				 'other_reason_ciphertext', 'other_reason_key_version', 'lifecycle_status',
 				 'active_dni_guard', 'verified_identity_hash', 'session_reference_hash',
 				 'token_family_id', 'client_reference_hash', 'open_request_guard',
 				 'next_status_check_at', 'document_hash', 'template_version',
-				 'technical_code', 'technical_detail')
+				 'technical_code', 'technical_detail', 'public_reference', 'consent_version',
+				 'recoverable_until', 'expires_at', 'version', 'session_reference')
 				""", String.class);
 		Integer migrationCount = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class);
@@ -112,7 +105,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				HttpResponse.BodyHandlers.ofString());
 
 		assertThat(tables).containsExactly(
-				"cancellation_audit_event", "cancellation_receipt", "cancellation_request_session",
+				"cancellation_audit_event", "cancellation_receipt",
 				"certificate_cancellation_request", "certificate_eligibility_check",
 				"identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
@@ -123,12 +116,77 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void storesReadableRequestReasonConsentHistoryExpirationAndOptimisticConcurrency() {
-		Instant now = Instant.now();
-		CertificateCancellationRequestEntity request = saveRequest("12345678", now.plus(LIFETIME));
+	void initiatesEligibilityThroughHttpPersistsItAndRecoversConcurrentEligibleRequest() throws Exception {
+		String body = "{\"dni\":\"00000001\"}";
+		CountDownLatch start = new CountDownLatch(1);
+		try (var executor = Executors.newFixedThreadPool(2)) {
+			var first = executor.submit(() -> { start.await(); return postCancellation(body); });
+			var second = executor.submit(() -> { start.await(); return postCancellation(body); });
+			start.countDown();
+			HttpResponse<String> firstResponse = first.get();
+			HttpResponse<String> secondResponse = second.get();
+			assertThat(List.of(firstResponse.statusCode(), secondResponse.statusCode()))
+					.allMatch(status -> status == 200 || status == 409);
+			assertThat(firstResponse.body() + secondResponse.body())
+					.contains("ELIGIBLE", "IDENTITY_VERIFICATION", "******01")
+					.doesNotContain("00000001", "\"id\"");
+		}
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_cancellation_request WHERE dni='00000001'", Integer.class))
+				.isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(1);
+
+		jdbcTemplate.update("UPDATE certificate_cancellation_request SET created_at = '2000-01-01 00:00:00' WHERE dni='00000001'");
+		HttpResponse<String> recovered = postCancellation(body);
+		assertThat(recovered.statusCode()).isEqualTo(200);
+		assertThat(recovered.body()).contains("\"reused\":true", "\"requestId\":")
+				.doesNotContain("requestReference", "00000001");
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_cancellation_request WHERE dni='00000001'", Integer.class))
+				.isEqualTo(1);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
+	void rejectsInvalidDniWithoutPersistenceAndReturnsCorrelation() throws Exception {
+		HttpResponse<String> response = postCancellation("{\"dni\":\"1234\"}");
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(response.body()).contains("VALIDATION_ERROR", "correlationId")
+				.doesNotContain("1234");
+		assertThat(requestRepository.count()).isZero();
+		assertThat(eligibilityRepository.count()).isZero();
+	}
+
+	@Test
+	void persistsEveryDeterministicAlternativeOutcomeWithControlledHttpSemantics() throws Exception {
+		HttpResponse<String> notEligible = postCancellation("{\"dni\":\"00000002\"}");
+		HttpResponse<String> unavailable = postCancellation("{\"dni\":\"00000003\"}");
+		HttpResponse<String> inconclusive = postCancellation("{\"dni\":\"00000004\"}");
+		HttpResponse<String> technical = postCancellation("{\"dni\":\"00000005\"}");
+		HttpResponse<String> timeout = postCancellation("{\"dni\":\"00000006\"}");
+
+		assertThat(notEligible.statusCode()).isEqualTo(200);
+		assertThat(notEligible.body()).contains("NOT_ELIGIBLE").doesNotContain("00000002");
+		assertThat(unavailable.statusCode()).isEqualTo(503);
+		assertThat(unavailable.body()).contains("ELIGIBILITY_UNAVAILABLE").doesNotContain("00000003");
+		assertThat(inconclusive.statusCode()).isEqualTo(200);
+		assertThat(inconclusive.body()).contains("INCONCLUSIVE").doesNotContain("00000004");
+		assertThat(technical.statusCode()).isEqualTo(502);
+		assertThat(technical.body()).contains("ELIGIBILITY_PROVIDER_ERROR").doesNotContain("00000005");
+		assertThat(timeout.statusCode()).isEqualTo(504);
+		assertThat(timeout.body()).contains("ELIGIBILITY_TIMEOUT").doesNotContain("00000006");
+		assertThat(requestRepository.count()).isEqualTo(5);
+		assertThat(eligibilityRepository.count()).isEqualTo(5);
+	}
+
+	@Test
+	void storesReadableRequestReasonConfirmationAndTerminalHistoryWithoutExpiration() {
+		CertificateCancellationRequestEntity request = saveRequest("12345678");
 		request.recordEligibility(CurrentEligibilityResult.ELIGIBLE, CancellationRequestStatus.ELIGIBLE);
 		request.registerReason(CancellationReasonCode.OTHER, "Cambio de dispositivo personal");
-		request.confirm("consent-v1", Instant.now());
+		request.confirm(Instant.now());
 		requestRepository.saveAndFlush(request);
 
 		assertThat(requestRepository.findById(request.getId())).get().satisfies(found -> {
@@ -137,7 +195,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 			assertThat(found.getEligibilityResult()).isEqualTo(CurrentEligibilityResult.ELIGIBLE);
 			assertThat(found.getReasonCode()).isEqualTo(CancellationReasonCode.OTHER);
 			assertThat(found.getOtherReason()).isEqualTo("Cambio de dispositivo personal");
-			assertThat(found.getConsentVersion()).isEqualTo("consent-v1");
+			assertThat(found.getConfirmedAt()).isNotNull();
 		});
 		assertThatThrownBy(() -> request.registerReason(CancellationReasonCode.LOSS, null))
 				.isInstanceOf(IllegalStateException.class);
@@ -147,23 +205,17 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(requestRepository.findFirstByDniOrderByCreatedAtDesc("12345678")).get()
 				.extracting(CertificateCancellationRequestEntity::getId).isEqualTo(request.getId());
 
-		CertificateCancellationRequestEntity historical = saveRequest("12345678", now.plusSeconds(30));
+		CertificateCancellationRequestEntity historical = saveRequest("12345678");
 		historical.transitionTo(CancellationRequestStatus.ABANDONED, CancellationFinalOutcome.ABANDONED);
 		requestRepository.saveAndFlush(historical);
 		assertThat(requestRepository.count()).isEqualTo(2);
-		assertThat(requestRepository.findByRequestStatusInAndExpiresAtLessThanEqualOrderByExpiresAtAsc(
-				Set.of(CancellationRequestStatus.ABANDONED), now.plusSeconds(60)))
-				.extracting(CertificateCancellationRequestEntity::getId).containsExactly(historical.getId());
-
-		assertOptimisticRequestLock(request.getId());
-		assertThatThrownBy(() -> new CertificateCancellationRequestEntity(
-				"1234ABCD", Instant.now().plusSeconds(10), Instant.now().plusSeconds(20)))
+		assertThatThrownBy(() -> new CertificateCancellationRequestEntity("1234ABCD"))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
 	void recordsRepeatableEligibilityAndIdentityAttemptsAndFindsLatestValid() {
-		CertificateCancellationRequestEntity request = saveRequest("23456789", Instant.now().plus(LIFETIME));
+		CertificateCancellationRequestEntity request = saveRequest("23456789");
 		Instant now = Instant.now();
 		CertificateEligibilityCheckEntity eligibility1 = new CertificateEligibilityCheckEntity(
 				request, 1, EligibilityCheckStatus.SUBMITTED, now, CORRELATION);
@@ -198,30 +250,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void storesMultipleSessionsAndReturnsOnlyActiveOnesWithoutTokenFields() {
-		CertificateCancellationRequestEntity request = saveRequest("34567890", Instant.now().plus(LIFETIME));
-		Instant now = Instant.now();
-		CancellationRequestSessionEntity active = sessionRepository.saveAndFlush(
-				new CancellationRequestSessionEntity(request, "session-local-001", now.plusSeconds(120)));
-		CancellationRequestSessionEntity invalidated = sessionRepository.saveAndFlush(
-				new CancellationRequestSessionEntity(request, "session-local-002", now.plusSeconds(120)));
-		invalidated.invalidate(Instant.now(), "RECOVERED_ON_ANOTHER_DEVICE");
-		sessionRepository.saveAndFlush(invalidated);
-		CancellationRequestSessionEntity expired = sessionRepository.saveAndFlush(
-				new CancellationRequestSessionEntity(request, "session-local-003", now.plusMillis(500)));
-
-		assertThat(sessionRepository.findBySessionReference("session-local-001")).get()
-				.extracting(CancellationRequestSessionEntity::getId).isEqualTo(active.getId());
-		List<CancellationRequestSessionEntity> sessions = sessionRepository
-				.findByRequest_IdAndInvalidatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
-						request.getId(), now.plusSeconds(1));
-		assertThat(sessions).extracting(CancellationRequestSessionEntity::getId)
-				.containsExactly(active.getId()).doesNotContain(invalidated.getId(), expired.getId());
-	}
-
-	@Test
 	void keepsUncertainRevocationOnTheSameOperationAndEnforcesIdempotencyAndAttemptUniqueness() {
-		CertificateCancellationRequestEntity request = saveRequest("45678901", Instant.now().plus(LIFETIME));
+		CertificateCancellationRequestEntity request = saveRequest("45678901");
 		String key = "revoke-request-001";
 		Instant now = Instant.now();
 		RevocationOperationEntity uncertain = new RevocationOperationEntity(request, key, 1, now, CORRELATION);
@@ -241,12 +271,11 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThatThrownBy(() -> revocationRepository.saveAndFlush(
 				new RevocationOperationEntity(request, key, 2, now.plusSeconds(4), CORRELATION)))
 				.isInstanceOf(DataIntegrityViolationException.class);
-		assertOptimisticRevocationLock(uncertain.getId());
 	}
 
 	@Test
 	void associatesReceiptsWithSuccessfulRevocationAndKeepsReceiptFailureIndependent() {
-		CertificateCancellationRequestEntity request = saveRequest("56789012", Instant.now().plus(LIFETIME));
+		CertificateCancellationRequestEntity request = saveRequest("56789012");
 		Instant now = Instant.now();
 		RevocationOperationEntity operation = new RevocationOperationEntity(
 				request, "revoke-receipt-001", 1, now, CORRELATION);
@@ -276,7 +305,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 	@Test
 	void appendsOrderedMinimalAuditHistoryAndRejectsOrphanRows() {
-		CertificateCancellationRequestEntity request = saveRequest("67890123", Instant.now().plus(LIFETIME));
+		CertificateCancellationRequestEntity request = saveRequest("67890123");
 		Instant now = Instant.now();
 		CancellationAuditEventEntity started = auditRepository.save(new CancellationAuditEventEntity(
 				request, CancellationAuditEventType.REQUEST_STARTED, null, CancellationRequestStatus.STARTED,
@@ -295,52 +324,15 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				""", Long.MAX_VALUE, CORRELATION)).isInstanceOf(DataIntegrityViolationException.class);
 	}
 
-	private CertificateCancellationRequestEntity saveRequest(String dni, Instant expiry) {
-		return requestRepository.saveAndFlush(new CertificateCancellationRequestEntity(
-				dni, Instant.now().plus(Duration.ofHours(2)), expiry));
+	private CertificateCancellationRequestEntity saveRequest(String dni) {
+		return requestRepository.saveAndFlush(new CertificateCancellationRequestEntity(dni));
 	}
 
-	private void assertOptimisticRequestLock(Long requestId) {
-		EntityManager first = entityManagerFactory.createEntityManager();
-		EntityManager second = entityManagerFactory.createEntityManager();
-		try {
-			first.getTransaction().begin();
-			second.getTransaction().begin();
-			CertificateCancellationRequestEntity firstCopy = first.find(CertificateCancellationRequestEntity.class, requestId);
-			CertificateCancellationRequestEntity secondCopy = second.find(CertificateCancellationRequestEntity.class, requestId);
-			firstCopy.recordEligibility(CurrentEligibilityResult.ELIGIBLE, CancellationRequestStatus.ELIGIBLE);
-			first.getTransaction().commit();
-			secondCopy.recordEligibility(CurrentEligibilityResult.INCONCLUSIVE, CancellationRequestStatus.CHECKING_ELIGIBILITY);
-			assertThatThrownBy(second.getTransaction()::commit)
-					.isInstanceOfAny(OptimisticLockException.class, RollbackException.class);
-		}
-		finally {
-			if (first.getTransaction().isActive()) first.getTransaction().rollback();
-			if (second.getTransaction().isActive()) second.getTransaction().rollback();
-			first.close();
-			second.close();
-		}
-	}
-
-	private void assertOptimisticRevocationLock(Long operationId) {
-		EntityManager first = entityManagerFactory.createEntityManager();
-		EntityManager second = entityManagerFactory.createEntityManager();
-		try {
-			first.getTransaction().begin();
-			second.getTransaction().begin();
-			RevocationOperationEntity firstCopy = first.find(RevocationOperationEntity.class, operationId);
-			RevocationOperationEntity secondCopy = second.find(RevocationOperationEntity.class, operationId);
-			firstCopy.markSubmitted(Instant.now(), "external-first");
-			first.getTransaction().commit();
-			secondCopy.markSubmitted(Instant.now(), "external-second");
-			assertThatThrownBy(second.getTransaction()::commit)
-					.isInstanceOfAny(OptimisticLockException.class, RollbackException.class);
-		}
-		finally {
-			if (first.getTransaction().isActive()) first.getTransaction().rollback();
-			if (second.getTransaction().isActive()) second.getTransaction().rollback();
-			first.close();
-			second.close();
-		}
+	private HttpResponse<String> postCancellation(String body) throws Exception {
+		return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/cancellation-requests"))
+				.header("Content-Type", "application/json")
+				.header("X-Correlation-ID", "eligibility-it")
+				.POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
 	}
 }

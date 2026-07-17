@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { ApiError, SystemStatus } from "@/lib/api/contracts";
-import { SYSTEM_STATUS_PATH } from "@/lib/api/contracts";
+import type { ApiError, CancellationRequestResponse, StartCancellationRequest, SystemStatus } from "@/lib/api/contracts";
+import { CANCELLATION_REQUESTS_PATH, SYSTEM_STATUS_PATH } from "@/lib/api/contracts";
 
 describe("generated API aliases", () => {
   it("compile from generated schemas and expose the generated path", () => {
@@ -10,5 +10,11 @@ describe("generated API aliases", () => {
     expect(status.database).toBe("UP");
     expect(error.code).toBe("DEPENDENCY_UNAVAILABLE");
     expect(SYSTEM_STATUS_PATH).toBe("/api/v1/system/status");
+    const request: StartCancellationRequest = { dni: "00000001" };
+    const response: CancellationRequestResponse = { requestId: 42, eligibilityResult: "ELIGIBLE", canContinue: true };
+    expect(request.dni).toHaveLength(8);
+    expect(response.canContinue).toBe(true);
+    expect(response.requestId).toBe(42);
+    expect(CANCELLATION_REQUESTS_PATH).toBe("/api/v1/cancellation-requests");
   });
 });

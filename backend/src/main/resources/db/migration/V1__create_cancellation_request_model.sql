@@ -5,23 +5,15 @@ CREATE TABLE certificate_cancellation_request (
     eligibility_result VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     reason_code VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL,
     other_reason VARCHAR(300) NULL,
-    consent_version VARCHAR(64) NULL,
     confirmed_at TIMESTAMP(6) NULL,
     final_outcome VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL,
-    recoverable_until TIMESTAMP(6) NULL,
-    expires_at TIMESTAMP(6) NOT NULL,
     created_at TIMESTAMP(6) NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL,
-    version BIGINT NOT NULL,
     CONSTRAINT pk_certificate_cancellation_request PRIMARY KEY (id),
     CONSTRAINT chk_request_dni CHECK (REGEXP_LIKE(dni, '^[0-9]{8}$', 'c')),
-    CONSTRAINT chk_request_expiry CHECK (expires_at > created_at),
-    CONSTRAINT chk_request_recoverability
-        CHECK (recoverable_until IS NULL OR recoverable_until >= created_at),
     CONSTRAINT chk_request_confirmation_time
         CHECK (confirmed_at IS NULL OR confirmed_at >= created_at),
-    INDEX idx_request_dni_status_created (dni, request_status, created_at DESC),
-    INDEX idx_request_expiration (request_status, expires_at)
+    INDEX idx_request_dni_status_created (dni, request_status, created_at DESC)
 ) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
 CREATE TABLE certificate_eligibility_check (
@@ -69,30 +61,6 @@ CREATE TABLE identity_verification (
     INDEX idx_identity_latest_valid (request_id, verification_status, attempt_number DESC)
 ) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 
-CREATE TABLE cancellation_request_session (
-    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    request_id BIGINT UNSIGNED NOT NULL,
-    session_reference VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    created_at TIMESTAMP(6) NOT NULL,
-    expires_at TIMESTAMP(6) NOT NULL,
-    last_used_at TIMESTAMP(6) NULL,
-    invalidated_at TIMESTAMP(6) NULL,
-    invalidation_reason VARCHAR(64) NULL,
-    updated_at TIMESTAMP(6) NOT NULL,
-    CONSTRAINT pk_cancellation_request_session PRIMARY KEY (id),
-    CONSTRAINT fk_session_request FOREIGN KEY (request_id)
-        REFERENCES certificate_cancellation_request (id),
-    CONSTRAINT uq_session_reference UNIQUE (session_reference),
-    CONSTRAINT chk_session_expiry CHECK (expires_at > created_at),
-    CONSTRAINT chk_session_last_use
-        CHECK (last_used_at IS NULL OR last_used_at >= created_at),
-    CONSTRAINT chk_session_invalidation CHECK (
-        (invalidated_at IS NULL AND invalidation_reason IS NULL)
-        OR (invalidated_at IS NOT NULL AND invalidated_at >= created_at AND invalidation_reason IS NOT NULL)
-    ),
-    INDEX idx_session_active (request_id, invalidated_at, expires_at)
-) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
-
 CREATE TABLE revocation_operation (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     request_id BIGINT UNSIGNED NOT NULL,
@@ -109,7 +77,6 @@ CREATE TABLE revocation_operation (
     correlation_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     created_at TIMESTAMP(6) NOT NULL,
     updated_at TIMESTAMP(6) NOT NULL,
-    version BIGINT NOT NULL,
     CONSTRAINT pk_revocation_operation PRIMARY KEY (id),
     CONSTRAINT fk_revocation_request FOREIGN KEY (request_id)
         REFERENCES certificate_cancellation_request (id),

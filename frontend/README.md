@@ -1,6 +1,6 @@
 # Frontend — Cancelación de certificados digitales
 
-Base técnica temporal en Next.js 16, React, TypeScript, Tailwind CSS y App Router. La página comprueba la integración con backend y MySQL, pero no implementa controles del flujo ciudadano.
+Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. La página de inicio valida el DNI y consulta la elegibilidad mediante el backend; las etapas posteriores todavía no están implementadas.
 
 ## Requisitos e inicio
 
@@ -13,14 +13,14 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Abre `http://localhost:3000`. Si el backend está detenido, la página permanece utilizable, muestra “Integración no disponible” y permite reintentar manualmente; no realiza polling.
+Abre `http://localhost:3000`. La portada permanece visible si el backend está detenido y muestra un error comprensible únicamente después de enviar la consulta.
 
 ## Variables
 
 | Variable | Exposición | Valor local | Propósito |
 | --- | --- | --- | --- |
 | `BACKEND_URL` | Solo servidor y herramientas | `http://localhost:8080` | URL del backend para ejecución servidor, sincronización y pruebas reales. |
-| `NEXT_PUBLIC_BACKEND_URL` | Navegador y servidor | `http://localhost:8080` | Dirección pública utilizada por el indicador cliente. |
+| `NEXT_PUBLIC_BACKEND_URL` | Navegador y servidor | `http://localhost:8080` | Dirección pública utilizada por la consulta ciudadana. |
 | `NEXT_PUBLIC_APP_ENV` | Navegador y servidor | `local` | Etiqueta pública del ambiente. |
 
 Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca deben contener secretos. `.env.local` está ignorado por Git.
@@ -54,8 +54,12 @@ npm run test:integration
 
 Consulta [`docs/LOCAL_INTEGRATION.md`](../docs/LOCAL_INTEGRATION.md) para el orden completo de inicio y apagado. La URL API base es `/api/v1`; CORS local admite exactamente `http://localhost:3000`.
 
+## Consulta local
+
+Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El formulario no guarda el DNI en almacenamiento web ni lo coloca en la URL. Solo un resultado elegible muestra la transición preparada hacia verificación de identidad mediante `requestId`; este identificador no autentica ni autoriza y la pantalla de ID Perú pertenece a una tarea posterior.
+
 ## Cliente HTTP
 
 `lib/http-client.ts` centraliza `fetch`, JSON, cookies futuras, correlación, timeout de ocho segundos, cancelación y errores seguros. No incorpora JWT, reintentos, interceptores, sesión, almacenamiento ni librerías HTTP externas.
 
-La página, colores y estado técnico son temporales. Las vistas funcionales se implementarán después desde las referencias aprobadas; el despliegue productivo permanece fuera de alcance.
+La portada se basa en `docs/ui-reference/home.png` y el contexto funcional prevalece sobre cualquier detalle visual contradictorio. JWT, ID Perú, motivo, confirmación, revocación, constancia y despliegue productivo permanecen fuera de alcance.

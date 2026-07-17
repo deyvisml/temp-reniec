@@ -15,6 +15,5 @@ public enum CancellationRequestStatus {
 	FAILED,
 	OUTCOME_UNKNOWN,
 	RECEIPT_AVAILABLE,
-	EXPIRED,
 	ABANDONED
 }

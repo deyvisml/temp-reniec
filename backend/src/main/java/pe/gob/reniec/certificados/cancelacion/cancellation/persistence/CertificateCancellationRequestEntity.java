@@ -18,7 +18,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "certificate_cancellation_request")
@@ -49,9 +48,6 @@ public class CertificateCancellationRequestEntity {
 	@Column(name = "other_reason", length = 300)
 	private String otherReason;
 
-	@Column(name = "consent_version", length = 64)
-	private String consentVersion;
-
 	@Column(name = "confirmed_at")
 	private Instant confirmedAt;
 
@@ -59,21 +55,11 @@ public class CertificateCancellationRequestEntity {
 	@Column(name = "final_outcome", length = 40)
 	private CancellationFinalOutcome finalOutcome;
 
-	@Column(name = "recoverable_until")
-	private Instant recoverableUntil;
-
-	@Column(name = "expires_at", nullable = false)
-	private Instant expiresAt;
-
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
 	@Column(name = "updated_at", nullable = false)
 	private Instant updatedAt;
-
-	@Version
-	@Column(name = "version", nullable = false)
-	private long version;
 
 	@Transient
 	private CancellationReasonCode persistedReason;
@@ -87,10 +73,8 @@ public class CertificateCancellationRequestEntity {
 	protected CertificateCancellationRequestEntity() {
 	}
 
-	public CertificateCancellationRequestEntity(String dni, Instant recoverableUntil, Instant expiresAt) {
+	public CertificateCancellationRequestEntity(String dni) {
 		this.dni = requireDni(dni);
-		this.recoverableUntil = recoverableUntil;
-		this.expiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
 		this.requestStatus = CancellationRequestStatus.STARTED;
 		this.eligibilityResult = CurrentEligibilityResult.NOT_CHECKED;
 	}
@@ -98,6 +82,10 @@ public class CertificateCancellationRequestEntity {
 	public void recordEligibility(CurrentEligibilityResult result, CancellationRequestStatus status) {
 		eligibilityResult = Objects.requireNonNull(result, "result");
 		requestStatus = Objects.requireNonNull(status, "status");
+	}
+
+	public void beginEligibility() {
+		requestStatus = CancellationRequestStatus.CHECKING_ELIGIBILITY;
 	}
 
 	public void registerReason(CancellationReasonCode reason, String description) {
@@ -113,9 +101,8 @@ public class CertificateCancellationRequestEntity {
 		requestStatus = CancellationRequestStatus.REASON_REGISTERED;
 	}
 
-	public void confirm(String consentVersion, Instant confirmedAt) {
+	public void confirm(Instant confirmedAt) {
 		if (reasonCode == null) throw new IllegalStateException("A reason is required before confirmation");
-		this.consentVersion = requireText(consentVersion, "consentVersion");
 		this.confirmedAt = Objects.requireNonNull(confirmedAt, "confirmedAt");
 		requestStatus = CancellationRequestStatus.CONFIRMED;
 	}
@@ -154,13 +141,9 @@ public class CertificateCancellationRequestEntity {
 
 	private void validate() {
 		requireDni(dni);
-		if (!expiresAt.isAfter(createdAt)) throw new IllegalStateException("Expiry must be after creation");
-		if (recoverableUntil != null && recoverableUntil.isBefore(createdAt)) {
-			throw new IllegalStateException("Recovery cannot end before creation");
-		}
 		if (confirmedAt != null) {
-			if (reasonCode == null || consentVersion == null) {
-				throw new IllegalStateException("Confirmation requires reason and consent version");
+			if (reasonCode == null) {
+				throw new IllegalStateException("Confirmation requires reason");
 			}
 			if (confirmedAt.isBefore(createdAt)) throw new IllegalStateException("Confirmation cannot precede creation");
 		}
@@ -196,12 +179,8 @@ public class CertificateCancellationRequestEntity {
 	public CurrentEligibilityResult getEligibilityResult() { return eligibilityResult; }
 	public CancellationReasonCode getReasonCode() { return reasonCode; }
 	public String getOtherReason() { return otherReason; }
-	public String getConsentVersion() { return consentVersion; }
 	public Instant getConfirmedAt() { return confirmedAt; }
 	public CancellationFinalOutcome getFinalOutcome() { return finalOutcome; }
-	public Instant getRecoverableUntil() { return recoverableUntil; }
-	public Instant getExpiresAt() { return expiresAt; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }
-	public long getVersion() { return version; }
 }

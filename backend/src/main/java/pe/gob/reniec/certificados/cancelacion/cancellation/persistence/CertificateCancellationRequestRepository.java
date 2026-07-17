@@ -1,11 +1,14 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
-import java.time.Instant;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 public interface CertificateCancellationRequestRepository
 		extends JpaRepository<CertificateCancellationRequestEntity, Long> {
@@ -13,8 +16,13 @@ public interface CertificateCancellationRequestRepository
 	Optional<CertificateCancellationRequestEntity> findFirstByDniAndRequestStatusInOrderByCreatedAtDesc(
 			String dni, Collection<CancellationRequestStatus> statuses);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	Optional<CertificateCancellationRequestEntity> findTopByDniAndRequestStatusInOrderByCreatedAtDesc(
+			String dni, Collection<CancellationRequestStatus> statuses);
+
 	Optional<CertificateCancellationRequestEntity> findFirstByDniOrderByCreatedAtDesc(String dni);
 
-	List<CertificateCancellationRequestEntity> findByRequestStatusInAndExpiresAtLessThanEqualOrderByExpiresAtAsc(
-			Collection<CancellationRequestStatus> statuses, Instant cutoff);
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@Query("select request from CertificateCancellationRequestEntity request where request.id = :id")
+	Optional<CertificateCancellationRequestEntity> findByIdForUpdate(@Param("id") Long id);
 }

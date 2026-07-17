@@ -1,6 +1,6 @@
 # Backend de cancelación de certificados digitales
 
-Backend técnico construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia y una API técnica versionada; todavía no implementa casos de uso del flujo ciudadano.
+Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano para iniciar una solicitud y consultar elegibilidad mediante un mock local reemplazable.
 
 ## Requisitos previos
 
@@ -88,6 +88,9 @@ OpenAPI está habilitado únicamente con los perfiles `local` y `test` en `http:
 | `DB_PASSWORD` | Obligatoria | Contraseña MySQL; disponible en la plantilla local. |
 | `MYSQL_ROOT_PASSWORD` | Solo Compose | Contraseña root para inicialización y healthcheck local. |
 | `CORS_ALLOWED_ORIGINS` | Vacía (`http://localhost:3000` en local/test) | Lista separada por comas de orígenes frontend exactos. |
+| `ELIGIBILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta interrumpida. |
+| `ELIGIBILITY_TIMEOUT` | `1s` | Tiempo máximo de la integración de elegibilidad. |
+| `ELIGIBILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
 
@@ -116,7 +119,7 @@ Después de compilar también puedes ejecutar el backend desde `/backend`:
 java -jar target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
 ```
 
-Flyway es el único propietario del esquema y usa `src/main/resources/db/migration/V1__create_cancellation_request_model.sql`. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
+Flyway es el único propietario del esquema y aplica una V1 consolidada de seis tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
 
 ## Perfiles
 
@@ -132,6 +135,23 @@ La configuración de producción permanece diferida.
 - Toda respuesta incluye `X-Correlation-ID`; un valor cliente válido se conserva y uno ausente o inválido se reemplaza.
 - CORS se aplica solo a `/api/**`, permite exactamente los orígenes configurados, `GET`, `POST`, `OPTIONS`, los headers mínimos y credenciales futuras. Nunca usa comodines.
 - OpenAPI se publica en `/v3/api-docs` bajo `local` y `test` para sincronizar el contrato del frontend.
+
+## Inicio ciudadano y mock de elegibilidad
+
+`POST /api/v1/cancellation-requests` recibe exclusivamente JSON con un DNI de ocho dígitos. Crea o recupera una solicitud compatible, registra el intento y devuelve `requestId`, DNI enmascarado, estado, resultado y siguiente paso autorizado. El identificador numérico no autentica ni autoriza; el DNI completo no aparece en URLs, errores ni logs.
+
+El adaptador de perfiles `local` y `test` es determinista y no representa el contrato institucional:
+
+| DNI ficticio | Resultado |
+| --- | --- |
+| `00000001` | Elegible |
+| `00000002` | No elegible |
+| `00000003` | Servicio no disponible |
+| `00000004` | No concluyente |
+| `00000005` | Error técnico controlado |
+| `00000006` | Timeout |
+
+Cualquier otro DNI válido devuelve no elegible. Son fixtures sintéticos sin relación con ciudadanos reales. Los resultados transitorios permiten reintento sobre la misma solicitud; una consulta en curso devuelve conflicto controlado y una solicitud sin finalizar se recupera sin límite temporal ni repetición innecesaria de la integración.
 
 ## Detener y reiniciar MySQL local
 
@@ -158,7 +178,7 @@ Nunca ejecutes el reinicio destructivo contra una base compartida o con informac
 
 ## Sustitución de la V1
 
-La simplificación del modelo reemplaza la V1 anterior conservando siete tablas, pero cambia sus identificadores y columnas. Una base local que ya ejecutó una versión anterior de V1 tendrá un checksum incompatible y debe recrearse desde vacío si sus datos son desechables.
+La simplificación del modelo reemplaza la V1 anterior por una línea base de seis tablas, sin sesiones persistentes, UUID público, versiones de consentimiento, ventanas de expiración ni control optimista genérico. Una base local que ya ejecutó una versión anterior de V1 tendrá un checksum incompatible y debe recrearse desde vacío si sus datos son desechables.
 
 Si el volumen local solo contiene datos desechables:
 
@@ -172,10 +192,10 @@ Nunca limpies, repares o recrees automáticamente una base compartida o con dato
 
 ## Modelo y seguridad
 
-El esquema contiene siete conceptos: solicitud, elegibilidad, identidad, sesiones, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
+El esquema contiene seis conceptos: solicitud, elegibilidad, identidad, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
 
-La solicitud guarda el DNI directamente como ocho dígitos y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. MySQL no almacena tokens, credenciales, biometría, payloads externos completos ni archivos PDF. La referencia de sesión no es una credencial y los identificadores numéricos internos no se expondrán como referencias públicas.
+La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del progreso y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. `requestId` identifica la solicitud pero no autentica al ciudadano. MySQL no almacena sesiones, tokens, credenciales, biometría, payloads externos completos ni archivos PDF.
 
 ## Fuera de alcance
 
-Permanecen diferidos endpoints funcionales, JWT, recuperación multidispositivo completa, consulta real de certificados, ID Perú, revocación externa, generación de PDF, criptografía institucional, retención definitiva, módulos administrativos y despliegue productivo. Compose contiene solo MySQL: backend y frontend se ejecutan fuera de contenedores y no se añaden Dockerfiles ni scripts de inicio. El frontend no se modifica en este cambio.
+Permanecen diferidos JWT, la interfaz completa de recuperación, consulta institucional real, ID Perú, motivo, confirmación, revocación externa, constancia, criptografía institucional, retención definitiva, rate limiting productivo, módulos administrativos y despliegue productivo. Compose contiene solo MySQL.

@@ -80,16 +80,16 @@ The central frontend client SHALL use native `fetch`, SHALL choose server-only `
 - **WHEN** fetch fails before a response or a successful response cannot be interpreted according to its contract
 - **THEN** the client reports `NETWORK_ERROR` or `INVALID_RESPONSE` with a generic message and no native exception detail
 
-### Requirement: Temporary visible integration indicator
-The temporary home page SHALL contain an accessible client-side integration indicator that calls `/api/v1/system/status` once on mount and supports an explicit manual retry. It SHALL display textual checking, available, and unavailable states; identify backend and database availability on success; and show only a generic message plus optional correlation on failure. It MUST NOT poll, store status globally, expose technical exceptions, or implement any citizen-flow control.
+### Requirement: Functional eligibility contract uses the shared transport
+The citizen eligibility client SHALL use the existing centralized JSON transport, environment-based backend URL, credentials mode, timeout, abort handling, correlation propagation, and common error mapping. Its request and response types SHALL come from the generated OpenAPI declarations rather than handwritten duplicate DTOs.
 
-#### Scenario: Full local stack is available
-- **WHEN** a visitor opens the temporary page with frontend, backend, and MySQL running
-- **THEN** the indicator reports that backend and database are available without requiring a page reload
+#### Scenario: Eligibility request succeeds
+- **WHEN** the frontend submits a valid DNI and the backend returns a functional outcome
+- **THEN** the client returns typed outcome data and the response correlation identifier to the feature without duplicating transport behavior
 
-#### Scenario: Backend is unavailable
-- **WHEN** the technical request fails or times out
-- **THEN** the page remains usable, reports unavailability in text, and offers a keyboard-operable retry without exposing internal details
+#### Scenario: Eligibility request fails
+- **WHEN** the backend returns a common API error, times out, sends invalid JSON, or cannot be reached
+- **THEN** the shared transport produces the established typed client error and the feature maps it to the appropriate citizen state
 
 ### Requirement: Layered and real integration verification
 The project SHALL retain fast infrastructure-free backend and frontend suites and SHALL add separate verification for the integration contract. Backend integration tests SHALL use disposable MySQL Testcontainers to verify status, failure handling, correlation, CORS, and OpenAPI. A separately invoked frontend integration suite SHALL use the real central client and generated types against a running local backend connected to MySQL. Documentation SHALL provide the exact startup, contract synchronization, unit-test, integration-test, build, health, and shutdown commands.

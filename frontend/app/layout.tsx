@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     default: "Cancelación de certificados digitales",
     template: "%s | Cancelación de certificados digitales",
   },
-  description: "Base técnica del sistema de cancelación de certificados digitales.",
+  description: "Consulta e inicia la cancelación de certificados digitales asociados a tu DNI.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -32,15 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
             aria-atomic="true"
           />
 
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="flex flex-1 items-center py-10 sm:py-14 lg:py-18"
-          >
-            <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-              {children}
-            </div>
-          </main>
+          <main id="main-content" tabIndex={-1} className="main-content">{children}</main>
 
           <SiteFooter />
         </div>

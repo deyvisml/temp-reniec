@@ -1,0 +1,49 @@
+package pe.gob.reniec.certificados.cancelacion.cancellation.eligibility;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.headers.Header;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.shared.error.ApiError;
+
+@RestController
+@RequestMapping("/api/v1/cancellation-requests")
+public class CancellationRequestController {
+
+	private final EligibilityInitiationService service;
+
+	public CancellationRequestController(EligibilityInitiationService service) {
+		this.service = service;
+	}
+
+	@Operation(summary = "Inicia o recupera una solicitud y consulta su elegibilidad")
+	@ApiResponses({
+		@ApiResponse(responseCode = "200", description = "Resultado normalizado de elegibilidad",
+				headers = @Header(name = CorrelationIdFilter.HEADER_NAME, description = "Identificador de correlación", schema = @Schema(type = "string")),
+				content = @Content(schema = @Schema(implementation = CancellationRequestResponse.class))),
+		@ApiResponse(responseCode = "400", description = "DNI o cuerpo inválido", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "409", description = "Consulta en curso o conflicto concurrente", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "415", description = "Tipo de contenido no admitido", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "502", description = "Error controlado del proveedor", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "503", description = "Servicio de elegibilidad no disponible", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "504", description = "Tiempo de espera agotado", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(schema = @Schema(implementation = ApiError.class)))
+	})
+	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	public ResponseEntity<CancellationRequestResponse> initiate(
+			@Valid @RequestBody StartCancellationRequest body, HttpServletRequest request) {
+		String correlationId = String.valueOf(request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE));
+		return ResponseEntity.ok(service.initiate(body.dni(), correlationId));
+	}
+}

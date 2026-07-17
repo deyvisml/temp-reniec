@@ -10,18 +10,18 @@ afterEach(() => {
 });
 
 describe("base application rendering", () => {
-  it("renders the temporary home page without citizen-flow controls", () => {
-    vi.stubEnv("NEXT_PUBLIC_APP_ENV", "test");
-
+  it("renders the real citizen home and accessible DNI form", () => {
     const html = renderToStaticMarkup(<HomePage />);
 
-    expect(html).toContain("Cancelación de certificados digitales");
-    expect(html).toContain("Proyecto en preparación");
-    expect(html).toContain("Estado técnico");
-    expect(html).toContain("Comprobando integración");
-    expect(html).toContain(">test<");
-    expect(html).not.toContain("<form");
-    expect(html).not.toContain("<input");
+    expect(html).toContain("Cancelación de <span>certificados digitales</span>");
+    expect(html).toContain("Ingresa tu DNI para comenzar");
+    expect(html).toContain('aria-label="Consulta de certificados digitales"');
+    expect(html).toContain("<form");
+    expect(html).toContain('inputMode="numeric"');
+    expect(html).toContain('maxLength="8"');
+    expect(html).not.toContain("Proyecto en preparación");
+    expect(html).not.toContain("Comprobando integración");
+    expect(html).not.toContain("ID Perú");
   });
 
   it("renders the Spanish semantic root shell around its children", () => {
@@ -38,7 +38,7 @@ describe("base application rendering", () => {
     expect(html).toContain('href="#main-content"');
     expect(html).toContain('id="global-messages"');
     expect(html).toContain("Contenido de prueba");
-    expect(metadata.description).toContain("Base técnica");
+    expect(metadata.description).toContain("Consulta e inicia");
   });
 
   it("renders the custom not-found page with a home link", () => {

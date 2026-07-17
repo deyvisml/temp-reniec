@@ -1,20 +1,23 @@
 export function SiteHeader() {
   return (
-    <header className="border-b border-slate-800 bg-slate-950 text-white">
-      <div className="mx-auto flex w-full max-w-6xl flex-col items-start justify-between gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6 lg:px-8">
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
-            RENIEC
-          </p>
-          <p className="mt-1 text-sm font-semibold leading-snug text-white sm:text-base">
-            Sistema de Gestión de Certificados Digitales
-          </p>
+    <header className="site-header">
+      <div className="header-inner">
+        <div className="brand" aria-label="RENIEC">
+          <strong>RENIEC</strong>
+          <span>Registro Nacional de Identificación<br />y Estado Civil</span>
+          <div className="brand-mark" aria-hidden="true"><i /><i /><i /></div>
         </div>
-
-        <p className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200">
-          Entorno técnico
-        </p>
+        <div className="header-context">
+          <HeaderItem icon={<ShieldIcon />} title="Servicio ciudadano" text="Cancelación de certificados digitales" />
+          <HeaderItem icon={<HelpIcon />} title="¿Necesitas ayuda?" text="Revisa los mensajes durante el proceso" />
+        </div>
       </div>
     </header>
   );
 }
+
+function HeaderItem({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+  return <div className="header-item"><span>{icon}</span><p><strong>{title}</strong><small>{text}</small></p></div>;
+}
+function ShieldIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.2c0 4.2 2.5 7.7 6.5 9.8 4-2.1 6.5-5.6 6.5-9.8V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg>; }
+function HelpIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1.2.9-1.2 1.7M12 17h.01"/></svg>; }

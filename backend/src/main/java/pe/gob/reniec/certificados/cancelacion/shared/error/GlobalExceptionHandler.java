@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,6 +18,11 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityConcurrencyException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityInProgressException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityProviderException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityTimeoutException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityUnavailableException;
 import pe.gob.reniec.certificados.cancelacion.system.DependencyUnavailableException;
 
 @RestControllerAdvice
@@ -41,6 +47,48 @@ public final class GlobalExceptionHandler {
 			HttpServletRequest request) {
 		return respond(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
 				"El método HTTP no está permitido para esta ruta.", request);
+	}
+
+	@ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+	ResponseEntity<ApiError> handleMediaType(HttpMediaTypeNotSupportedException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "UNSUPPORTED_MEDIA_TYPE",
+				"El tipo de contenido no está permitido.", request);
+	}
+
+	@ExceptionHandler(EligibilityInProgressException.class)
+	ResponseEntity<ApiError> handleEligibilityInProgress(EligibilityInProgressException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.CONFLICT, "ELIGIBILITY_IN_PROGRESS",
+				"La consulta ya se está procesando. Inténtalo nuevamente en unos segundos.", request);
+	}
+
+	@ExceptionHandler(EligibilityConcurrencyException.class)
+	ResponseEntity<ApiError> handleEligibilityConcurrency(EligibilityConcurrencyException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.CONFLICT, "CONCURRENT_REQUEST",
+				"La solicitud fue actualizada simultáneamente. Inténtalo nuevamente.", request);
+	}
+
+	@ExceptionHandler(EligibilityUnavailableException.class)
+	ResponseEntity<ApiError> handleEligibilityUnavailable(EligibilityUnavailableException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.SERVICE_UNAVAILABLE, "ELIGIBILITY_UNAVAILABLE",
+				"No podemos consultar los certificados en este momento. Inténtalo más tarde.", request);
+	}
+
+	@ExceptionHandler(EligibilityTimeoutException.class)
+	ResponseEntity<ApiError> handleEligibilityTimeout(EligibilityTimeoutException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.GATEWAY_TIMEOUT, "ELIGIBILITY_TIMEOUT",
+				"La consulta tardó demasiado. Inténtalo nuevamente.", request);
+	}
+
+	@ExceptionHandler(EligibilityProviderException.class)
+	ResponseEntity<ApiError> handleEligibilityProvider(EligibilityProviderException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.BAD_GATEWAY, "ELIGIBILITY_PROVIDER_ERROR",
+				"No fue posible completar la consulta. Inténtalo nuevamente.", request);
 	}
 
 	@ExceptionHandler({ NoHandlerFoundException.class, NoResourceFoundException.class })

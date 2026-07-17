@@ -15,6 +15,8 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - Se utilizará JWT para la sesión y la comunicación autenticada entre frontend y backend.
 - El progreso del proceso se persistirá en el backend y en MySQL.
 - El ciudadano podrá recuperar su progreso desde otro navegador o dispositivo después de verificar nuevamente su identidad.
+- Para el MVP, la recuperación busca por DNI la solicitud sin finalizar y continúa desde `request_status`, sin fecha de expiración.
+- JWT se diseñará por separado y no implica una tabla de sesiones, refresh tokens ni registros por navegador o dispositivo.
 
 ## Principios de arquitectura y datos
 
