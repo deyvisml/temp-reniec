@@ -46,6 +46,14 @@ npm run build
 
 Estas verificaciones usan Node y dobles de `fetch`; no requieren backend, MySQL, jsdom ni navegador.
 
+## Convención de estilos
+
+Tailwind CSS es la estrategia principal de presentación. El layout, espaciado, tipografía, colores, responsive y estados visuales se expresan con utilidades literales colocadas en el componente TSX que posee el markup.
+
+`app/globals.css` se limita a importar Tailwind y a declarar un tema global mínimo. No debe contener selectores de páginas o componentes, `@apply` para ocultar conjuntos de utilidades, estilos visuales inline ni una segunda hoja global. Si Tailwind no puede representar razonablemente una necesidad vigente, la excepción debe ser la regla CSS más pequeña posible, quedar documentada junto a su motivo y no establecer otra estrategia de estilos.
+
+Las clases condicionales deben escribirse como literales completos para que Tailwind pueda detectarlas. No se construyen fragmentos como `text-${color}-700`. El proyecto no usa `clsx`, `tailwind-merge`, CSS Modules, Sass, styled-components ni un kit de UI porque las variantes actuales no justifican esas dependencias.
+
 La suite real usa el cliente central, los tipos generados y un backend conectado a MySQL:
 
 ```powershell

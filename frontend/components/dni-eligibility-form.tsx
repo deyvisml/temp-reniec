@@ -8,6 +8,15 @@ import { HttpClientError } from "@/lib/http-client";
 
 export const DNI_PATTERN = /^[0-9]{8}$/;
 
+const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
+const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline shadow-[0_12px_24px_#a8003c27] transition-[transform,box-shadow,filter] hover:not-disabled:-translate-y-0.5 hover:not-disabled:saturate-[1.08] hover:not-disabled:shadow-[0_16px_30px_#a8003c35] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
+const secondaryActionClasses = "mx-auto mt-3.5 cursor-pointer border-0 bg-transparent px-4 py-[9px] font-extrabold text-[#164aa8] underline underline-offset-4 focus-visible:rounded focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400]";
+const resultPanelClasses = "flex min-h-[330px] flex-col items-center justify-center text-center";
+const resultTitleClasses = "m-0 text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]";
+const resultBodyClasses = "mx-auto mt-3 mb-5 max-w-[600px] leading-[1.6] text-[#5b6d94]";
+const resultIconClasses = "mb-4 grid size-16 place-items-center rounded-full bg-[#e9f1ff] text-[#1749a8] [&_svg]:size-[34px]";
+const resultKickerClasses = "!mt-0 !mb-[5px] text-[11px] font-black tracking-[0.1em] text-[#a0003d] uppercase";
+
 export function validateDni(value: string): string | undefined {
   if (!value) return "Ingresa tu número de DNI.";
   if (!DNI_PATTERN.test(value)) return "El DNI debe contener exactamente 8 dígitos numéricos.";
@@ -86,7 +95,7 @@ export function DniEligibilityForm() {
 
   return (
     <form
-      className="dni-form"
+      className="text-center"
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -94,19 +103,20 @@ export function DniEligibilityForm() {
       }}
       aria-busy={pending}
     >
-      <div className="form-emblem" aria-hidden="true">
+      <div className="mx-auto mb-3.5 grid size-[54px] place-items-center rounded-full bg-[#e9f1ff] text-[#0755df] [&_svg]:w-[30px]" aria-hidden="true">
         <PersonIcon />
       </div>
-      <div className="form-heading">
-        <h2>Ingresa tu DNI para comenzar</h2>
-        <p>Solo necesitas tu número de DNI para consultar si puedes iniciar la cancelación.</p>
+      <div>
+        <h2 className="m-0 text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]">Ingresa tu DNI para comenzar</h2>
+        <p className="mt-2 mb-[25px] text-sm text-[#61729a]">Solo necesitas tu número de DNI para consultar si puedes iniciar la cancelación.</p>
       </div>
 
-      <div className="field-group">
-        <label htmlFor="dni">Número de DNI</label>
-        <div className={`input-shell${fieldError ? " input-shell-error" : ""}`}>
+      <div className="text-left">
+        <label className="mb-2 block text-[13px] font-extrabold" htmlFor="dni">Número de DNI</label>
+        <div className={`flex h-[58px] items-center gap-3 rounded-lg border-[1.5px] bg-white px-[17px] transition-[border-color,box-shadow] focus-within:border-[#0755df] focus-within:shadow-[0_0_0_4px_#0755df16] max-[480px]:h-[55px] [&>svg]:w-6 [&>svg]:text-[#163e9a] ${fieldError ? "border-[#b00045]" : "border-[#7893ca]"}`}>
           <PersonIcon />
           <input
+            className="h-full min-w-0 flex-1 border-0 bg-transparent text-base text-[#0a1c4b] outline-0 placeholder:text-[#7181a5] disabled:cursor-wait"
             ref={inputRef}
             id="dni"
             name="dni"
@@ -126,17 +136,20 @@ export function DniEligibilityForm() {
             }}
           />
         </div>
-        <p id={fieldError ? "dni-error" : "dni-help"} className={fieldError ? "field-error" : "field-help"}>
+        <p
+          id={fieldError ? "dni-error" : "dni-help"}
+          className={`mt-[9px] mb-[22px] flex items-center gap-[7px] text-xs [&_svg]:size-4 [&_svg]:shrink-0 ${fieldError ? "font-bold text-[#a0003d]" : "text-[#0755df]"}`}
+        >
           <InfoIcon />
           {fieldError ?? "Debe contener 8 dígitos numéricos."}
         </p>
       </div>
 
-      <button className="primary-action" type="submit" disabled={pending}>
+      <button className={primaryActionClasses} type="submit" disabled={pending}>
         <span>{pending ? "Consultando certificados…" : "Iniciar cancelación"}</span>
-        {pending ? <span className="spinner" aria-hidden="true" /> : <ArrowIcon />}
+        {pending ? <span className="size-5 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" aria-hidden="true" /> : <ArrowIcon />}
       </button>
-      <p className="security-note"><ShieldIcon /> Tu información se utiliza únicamente para iniciar esta consulta.</p>
+      <p className="mt-5 flex items-center justify-center gap-2 border-t border-[#e3e8f1] pt-5 text-xs text-[#607199] max-[480px]:items-start max-[480px]:text-left [&_svg]:w-5 [&_svg]:text-[#1749a8]"><ShieldIcon /> Tu información se utiliza únicamente para iniciar esta consulta.</p>
       <span className="sr-only" aria-live="polite">
         {pending ? "Consultando la disponibilidad de certificados digitales." : ""}
       </span>
@@ -152,49 +165,49 @@ function ResultPanel({ view, onRetry, onReset }: {
   if (view.kind === "eligible") {
     const requestId = view.response.requestId;
     return (
-      <section className="result-panel result-success" aria-live="polite" aria-labelledby="result-title">
-        <div className="result-icon"><CheckIcon /></div>
-        <p className="result-kicker">Consulta completada</p>
-        <h2 id="result-title">Puedes continuar con la verificación de identidad</h2>
-        <p>Encontramos certificados digitales susceptibles de cancelación para el DNI {view.response.maskedDni}.</p>
-        {requestId ? <a className="primary-action" href={buildIdentityPath(requestId)}>Continuar <ArrowIcon /></a> : null}
-        <button className="secondary-action" type="button" onClick={onReset}>Realizar otra consulta</button>
+      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
+        <div className={`${resultIconClasses} bg-[#e6f7ef] text-[#08764a]`}><CheckIcon /></div>
+        <p className={resultKickerClasses}>Consulta completada</p>
+        <h2 id="result-title" className={resultTitleClasses}>Puedes continuar con la verificación de identidad</h2>
+        <p className={resultBodyClasses}>Encontramos certificados digitales susceptibles de cancelación para el DNI {view.response.maskedDni}.</p>
+        {requestId ? <a className={`${primaryActionClasses} max-w-[430px]`} href={buildIdentityPath(requestId)}>Continuar <ArrowIcon /></a> : null}
+        <button className={secondaryActionClasses} type="button" onClick={onReset}>Realizar otra consulta</button>
       </section>
     );
   }
 
   if (view.kind === "not-eligible") {
     return (
-      <section className="result-panel" aria-live="polite" aria-labelledby="result-title">
-        <div className="result-icon"><InfoIcon /></div>
-        <p className="result-kicker">Consulta completada</p>
-        <h2 id="result-title">No es posible continuar con la cancelación</h2>
-        <p>No encontramos certificados digitales susceptibles de cancelación. Esta consulta no afecta tu DNI ni tu identidad.</p>
-        <button className="secondary-action" type="button" onClick={onReset}>Volver al inicio</button>
+      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
+        <div className={resultIconClasses}><InfoIcon /></div>
+        <p className={resultKickerClasses}>Consulta completada</p>
+        <h2 id="result-title" className={resultTitleClasses}>No es posible continuar con la cancelación</h2>
+        <p className={resultBodyClasses}>No encontramos certificados digitales susceptibles de cancelación. Esta consulta no afecta tu DNI ni tu identidad.</p>
+        <button className={secondaryActionClasses} type="button" onClick={onReset}>Volver al inicio</button>
       </section>
     );
   }
 
   if (view.kind === "inconclusive") {
     return (
-      <section className="result-panel result-warning" aria-live="polite" aria-labelledby="result-title">
-        <div className="result-icon"><InfoIcon /></div>
-        <h2 id="result-title">No pudimos confirmar el resultado</h2>
-        <p>La consulta no fue concluyente. Puedes intentarlo nuevamente de forma segura.</p>
-        <button className="primary-action" type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
-        <button className="secondary-action" type="button" onClick={onReset}>Ingresar otro DNI</button>
+      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
+        <div className={`${resultIconClasses} bg-[#fff3db] text-[#a45a00]`}><InfoIcon /></div>
+        <h2 id="result-title" className={resultTitleClasses}>No pudimos confirmar el resultado</h2>
+        <p className={resultBodyClasses}>La consulta no fue concluyente. Puedes intentarlo nuevamente de forma segura.</p>
+        <button className={`${primaryActionClasses} max-w-[430px]`} type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
+        <button className={secondaryActionClasses} type="button" onClick={onReset}>Ingresar otro DNI</button>
       </section>
     );
   }
 
   return (
-    <section className="result-panel result-warning" role="alert" aria-labelledby="result-title">
-      <div className="result-icon"><InfoIcon /></div>
-      <h2 id="result-title">{view.title}</h2>
-      <p>{view.message}</p>
-      {view.correlationId ? <p className="correlation">Código de atención: {view.correlationId}</p> : null}
-      <button className="primary-action" type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
-      <button className="secondary-action" type="button" onClick={onReset}>Ingresar otro DNI</button>
+    <section className={resultPanelClasses} role="alert" aria-labelledby="result-title">
+      <div className={`${resultIconClasses} bg-[#fff3db] text-[#a45a00]`}><InfoIcon /></div>
+      <h2 id="result-title" className={resultTitleClasses}>{view.title}</h2>
+      <p className={resultBodyClasses}>{view.message}</p>
+      {view.correlationId ? <p className="rounded-md bg-[#f2f5fa] px-3 py-2 text-[11px] text-[#5b6d94]">Código de atención: {view.correlationId}</p> : null}
+      <button className={`${primaryActionClasses} max-w-[430px]`} type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
+      <button className={secondaryActionClasses} type="button" onClick={onReset}>Ingresar otro DNI</button>
     </section>
   );
 }
@@ -216,8 +229,8 @@ function errorView(error: unknown): Extract<ViewState, { kind: "error" }> {
   return { kind: "error", title, message, correlationId: error.correlationId };
 }
 
-function PersonIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.5-4.2 2.7-6.2 6.5-6.2s6 2 6.5 6.2"/></svg>; }
-function InfoIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6M12 7.5h.01"/></svg>; }
-function ShieldIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.2c0 4.2 2.5 7.7 6.5 9.8 4-2.1 6.5-5.6 6.5-9.8V6L12 3Z"/><path d="m9.3 12 1.8 1.8 3.8-4"/></svg>; }
-function ArrowIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>; }
-function CheckIcon() { return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.3 4.3L19 6.8"/></svg>; }
+function PersonIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.5-4.2 2.7-6.2 6.5-6.2s6 2 6.5 6.2"/></svg>; }
+function InfoIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6M12 7.5h.01"/></svg>; }
+function ShieldIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.2c0 4.2 2.5 7.7 6.5 9.8 4-2.1 6.5-5.6 6.5-9.8V6L12 3Z"/><path d="m9.3 12 1.8 1.8 3.8-4"/></svg>; }
+function ArrowIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>; }
+function CheckIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.3 4.3L19 6.8"/></svg>; }
