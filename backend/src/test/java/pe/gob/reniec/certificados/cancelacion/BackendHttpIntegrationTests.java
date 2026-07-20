@@ -7,15 +7,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
 import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator;
@@ -42,6 +47,9 @@ class BackendHttpIntegrationTests {
 
 	@LocalServerPort
 	private int port;
+
+	@Autowired
+	private RequestMappingHandlerMapping requestMappingHandlerMapping;
 
 	@Test
 	void healthRespondsUpAndGeneratesCorrelation() throws Exception {
@@ -118,6 +126,42 @@ class BackendHttpIntegrationTests {
 
 		assertThat(generatedCorrelationId).isNotEqualTo(invalidCorrelationId);
 		assertThat(UUID.fromString(generatedCorrelationId)).isNotNull();
+	}
+
+	@Test
+	@DisplayName("OpenAPI documenta todas las rutas públicas y ningún contrato inexistente")
+	void openApiDocumentsEveryPublicOperationAndSchema() throws Exception {
+		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/v3/api-docs")).GET().build());
+
+		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+		String document = response.body();
+		Set<String> applicationPaths = requestMappingHandlerMapping.getHandlerMethods().keySet().stream()
+				.flatMap(mapping -> mapping.getPatternValues().stream())
+				.filter(path -> path.startsWith("/api/v1/"))
+				.collect(Collectors.toSet());
+
+		assertThat(applicationPaths)
+				.containsExactlyInAnyOrder("/api/v1/system/status", "/api/v1/cancellation-requests");
+		applicationPaths.forEach(path -> assertThat(document).contains("\"" + path + "\""));
+
+		assertThat(document)
+				.contains("\"/actuator/health\"", "getSystemStatus", "initiateCancellationRequest",
+						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
+						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
+						"ActuatorHealthResponse", "ApiError", "X-Correlation-ID",
+						"VALIDATION_ERROR", "date-time", "[0-9]{8}",
+						"\"200\"", "\"400\"", "\"409\"", "\"415\"", "\"500\"",
+						"\"502\"", "\"503\"", "\"504\"")
+				.doesNotContain("/__test/", "/actuator/info", "/actuator/env", "securitySchemes",
+						"00000001", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
+	}
+
+	@Test
+	void openApiYamlIsAvailableForDevelopmentTooling() throws Exception {
+		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/v3/api-docs.yaml")).GET().build());
+
+		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(response.body()).contains("openapi:", "/api/v1/cancellation-requests:", "/actuator/health:");
 	}
 
 	private URI uri(String path) {

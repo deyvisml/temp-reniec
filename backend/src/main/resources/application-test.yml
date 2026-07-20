@@ -10,6 +10,8 @@ spring:
 springdoc:
   api-docs:
     enabled: true
+  swagger-ui:
+    enabled: false
 
 app:
   cors:

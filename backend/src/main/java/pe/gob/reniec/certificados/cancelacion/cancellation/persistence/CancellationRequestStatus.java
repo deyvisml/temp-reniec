@@ -1,5 +1,8 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "Estado actual de la solicitud ciudadana de cancelación.")
 public enum CancellationRequestStatus {
 	STARTED,
 	CHECKING_ELIGIBILITY,

@@ -22,7 +22,12 @@ spring:
 springdoc:
   api-docs:
     enabled: false
-  paths-to-match: /api/v1/**
+  swagger-ui:
+    enabled: false
+  show-actuator: true
+  paths-to-match:
+    - /api/v1/**
+    - /actuator/health
 
 app:
   cors:

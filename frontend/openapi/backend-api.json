@@ -1,33 +1,69 @@
 {
   "components": {
     "schemas": {
+      "ActuatorHealthResponse": {
+        "description": "Estado agregado y seguro publicado por Spring Boot Actuator.",
+        "properties": {
+          "status": {
+            "description": "Estado agregado.",
+            "example": "UP",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
       "ApiError": {
+        "description": "Formato común y seguro de los errores controlados de la API.",
         "properties": {
           "code": {
+            "description": "Código público y estable del error.",
+            "example": "VALIDATION_ERROR",
             "type": "string"
           },
           "correlationId": {
+            "description": "Identificador de correlación para soporte y trazabilidad.",
+            "example": "7a5f3f75-3bd2-4c47-90fc-6cfc79f1ec2d",
             "type": "string"
           },
           "message": {
+            "description": "Mensaje comprensible sin detalles internos.",
+            "example": "La solicitud contiene datos inválidos.",
             "type": "string"
           },
           "path": {
+            "description": "Ruta de la solicitud que produjo el error.",
+            "example": "/api/v1/cancellation-requests",
             "type": "string"
           },
           "timestamp": {
+            "description": "Fecha y hora UTC del error.",
+            "example": "2026-07-20T18:30:00Z",
             "format": "date-time",
             "type": "string"
           }
         },
+        "required": [
+          "code",
+          "correlationId",
+          "message",
+          "path",
+          "timestamp"
+        ],
         "type": "object"
       },
       "CancellationRequestResponse": {
+        "description": "Resultado normalizado del inicio o recuperación de una solicitud de cancelación.",
         "properties": {
           "canContinue": {
+            "description": "Indica si el backend autoriza continuar al siguiente paso.",
+            "example": true,
             "type": "boolean"
           },
           "eligibilityResult": {
+            "description": "Resultado normalizado de la consulta de certificados.",
             "enum": [
               "ELIGIBLE",
               "NOT_ELIGIBLE",
@@ -35,22 +71,33 @@
               "INCONCLUSIVE",
               "ERROR"
             ],
+            "example": "ELIGIBLE",
             "type": "string"
           },
           "maskedDni": {
+            "description": "DNI enmascarado para presentación segura.",
+            "example": "******01",
             "type": "string"
           },
           "nextStep": {
+            "description": "Siguiente paso autorizado. Es nulo cuando no se permite continuar.",
             "enum": [
               "IDENTITY_VERIFICATION"
             ],
-            "type": "string"
+            "example": "IDENTITY_VERIFICATION",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "requestId": {
+            "description": "Identificador interno de la solicitud. No funciona como credencial ni autorización.",
+            "example": 125,
             "format": "int64",
             "type": "integer"
           },
           "requestStatus": {
+            "description": "Estado actual persistido de la solicitud.",
             "enum": [
               "STARTED",
               "CHECKING_ELIGIBILITY",
@@ -68,17 +115,31 @@
               "RECEIPT_AVAILABLE",
               "ABANDONED"
             ],
+            "example": "PENDING_IDENTITY_VERIFICATION",
             "type": "string"
           },
           "reused": {
+            "description": "Indica si se recuperó una solicitud compatible existente.",
+            "example": false,
             "type": "boolean"
           }
         },
+        "required": [
+          "canContinue",
+          "eligibilityResult",
+          "maskedDni",
+          "nextStep",
+          "requestId",
+          "requestStatus",
+          "reused"
+        ],
         "type": "object"
       },
       "StartCancellationRequest": {
+        "description": "Datos requeridos para iniciar o recuperar una solicitud y consultar su elegibilidad.",
         "properties": {
           "dni": {
+            "description": "Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo.",
             "maxLength": 8,
             "minLength": 8,
             "pattern": "[0-9]{8}",
@@ -94,32 +155,120 @@
         "description": "Estado técnico del backend y su conexión con MySQL",
         "properties": {
           "database": {
+            "description": "Disponibilidad de la conexión comprobada con MySQL.",
             "example": "UP",
             "type": "string"
           },
           "status": {
+            "description": "Estado agregado del backend.",
             "example": "UP",
             "type": "string"
           },
           "timestamp": {
+            "description": "Fecha y hora UTC de la comprobación.",
+            "example": "2026-07-20T18:30:00Z",
             "format": "date-time",
             "type": "string"
           }
         },
+        "required": [
+          "database",
+          "status",
+          "timestamp"
+        ],
         "type": "object"
       }
     }
   },
   "info": {
-    "description": "Contrato técnico versionado del sistema",
+    "contact": {
+      "name": "RENIEC"
+    },
+    "description": "API institucional para consultar elegibilidad e iniciar el flujo ciudadano de cancelación de certificados digitales. La documentación no representa mecanismos de seguridad todavía no implementados.",
     "title": "API de cancelación de certificados digitales",
     "version": "v1"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/actuator/health": {
+      "get": {
+        "description": "Informa si la aplicación y sus dependencias configuradas están operativas sin exponer detalles internos.",
+        "operationId": "getActuatorHealth",
+        "parameters": [
+          {
+            "description": "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "required": false,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActuatorHealthResponse",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Aplicación operativa",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación de la solicitud",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActuatorHealthResponse",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Aplicación o dependencia no disponible",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación de la solicitud",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Comprueba la salud operativa agregada",
+        "tags": [
+          "Estado técnico"
+        ]
+      }
+    },
     "/api/v1/cancellation-requests": {
       "post": {
-        "operationId": "initiate",
+        "description": "Valida el DNI, recupera una solicitud compatible cuando existe o crea una nueva, y consulta si hay certificados digitales susceptibles de cancelación. No devuelve certificados individuales ni expone el DNI completo.",
+        "operationId": "initiateCancellationRequest",
+        "parameters": [
+          {
+            "description": "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "schema": {
+              "maxLength": 64,
+              "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -128,6 +277,7 @@
               }
             }
           },
+          "description": "DNI que inicia o recupera la solicitud. Se valida nuevamente en el backend.",
           "required": true
         },
         "responses": {
@@ -158,7 +308,7 @@
                 }
               }
             },
-            "description": "DNI o cuerpo inválido",
+            "description": "DNI, JSON o cuerpo inválido",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -204,6 +354,24 @@
               }
             }
           },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Error interno controlado",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
           "502": {
             "content": {
               "application/json": {
@@ -212,7 +380,7 @@
                 }
               }
             },
-            "description": "Error controlado del proveedor",
+            "description": "Error controlado del proveedor de elegibilidad",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -261,13 +429,26 @@
         },
         "summary": "Inicia o recupera una solicitud y consulta su elegibilidad",
         "tags": [
-          "cancellation-request-controller"
+          "Solicitudes de cancelación"
         ]
       }
     },
     "/api/v1/system/status": {
       "get": {
-        "operationId": "getStatus",
+        "description": "Ejecuta una comprobación ligera y actual de MySQL. No devuelve credenciales, coordenadas de conexión ni detalles internos.",
+        "operationId": "getSystemStatus",
+        "parameters": [
+          {
+            "description": "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "schema": {
+              "maxLength": 64,
+              "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -281,6 +462,28 @@
             "headers": {
               "X-Correlation-ID": {
                 "description": "Identificador de correlación de la solicitud",
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Error interno controlado",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación de la solicitud",
+                "schema": {
+                  "type": "string"
+                },
                 "style": "simple"
               }
             }
@@ -293,10 +496,13 @@
                 }
               }
             },
-            "description": "Dependencia técnica no disponible",
+            "description": "MySQL no está disponible",
             "headers": {
               "X-Correlation-ID": {
                 "description": "Identificador de correlación de la solicitud",
+                "schema": {
+                  "type": "string"
+                },
                 "style": "simple"
               }
             }
@@ -309,10 +515,14 @@
       }
     }
   },
-  "servers": [
+  "tags": [
     {
-      "description": "Generated server url",
-      "url": "http://localhost:8080"
+      "description": "Inicio, recuperación y elegibilidad de solicitudes ciudadanas.",
+      "name": "Solicitudes de cancelación"
+    },
+    {
+      "description": "Disponibilidad operativa del backend y sus dependencias.",
+      "name": "Estado técnico"
     }
   ]
 }

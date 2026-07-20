@@ -18,8 +18,10 @@ const openApiUrl = process.env.BACKEND_OPENAPI_URL || `${backendUrl}/v3/api-docs
 const schema = process.env.OPENAPI_SCHEMA_FILE
   ? JSON.parse(await readFile(resolve(process.env.OPENAPI_SCHEMA_FILE), "utf8"))
   : await fetchSchema(openApiUrl);
-const snapshot = `${JSON.stringify(sortRecursively(schema), null, 2)}\n`;
-const generated = astToString(await openapiTS(schema));
+const contract = structuredClone(schema);
+delete contract.servers;
+const snapshot = `${JSON.stringify(sortRecursively(contract), null, 2)}\n`;
+const generated = astToString(await openapiTS(contract));
 
 if (mode === "sync") {
   await Promise.all([mkdir(dirname(snapshotPath), { recursive: true }), mkdir(dirname(typesPath), { recursive: true })]);

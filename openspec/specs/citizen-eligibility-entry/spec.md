@@ -7,15 +7,23 @@ Define the citizen-facing home, DNI validation, cancellation-request initiation,
 ## Requirements
 
 ### Requirement: Citizen home communicates the service accurately
-The `/` route SHALL present an accessible, responsive citizen-facing home page based on `docs/ui-reference/home.png` and SHALL explain that the service cancels digital certificates associated with a DNI. It MUST NOT state or imply that the DNI, civil identity, physical document, DNIe, or ID PerÃº account is cancelled, and it MUST NOT expose or allow selection of individual certificates.
+The `/` route SHALL present an accessible, responsive citizen-facing home page based on `docs/ui-reference/home.png` and SHALL implement its component presentation through the Tailwind-first styling baseline defined by `frontend-foundation`. The migration from global component selectors MUST preserve the approved institutional header, service purpose, supplied image assets, DNI entry area, primary action, trust information, functional states, responsive behavior, semantic structure, and visible focus. It MUST NOT state or imply that the DNI, civil identity, physical document, DNIe, or ID Perú account is cancelled, expose or allow selection of individual certificates, alter the original reference files, or redesign the flow as part of the styling refactor.
 
 #### Scenario: Citizen opens the home page
-- **WHEN** a visitor opens `/` on a supported viewport
-- **THEN** the page presents the institutional header, service purpose, DNI entry area, primary action, and trust information with a semantic and responsive layout
+- **WHEN** a visitor opens `/` on a supported desktop, intermediate, or mobile viewport
+- **THEN** the page presents the institutional header, service purpose, supplied hero image, DNI entry area, primary action, and trust information with the approved responsive composition and no horizontal overflow
+
+#### Scenario: Form state is rendered after migration
+- **WHEN** the DNI form displays its initial, validation, loading, eligible, non-eligible, inconclusive, unavailable, timeout, network, or controlled error state
+- **THEN** its existing behavior, accessible announcements, focus treatment, readable hierarchy, and safe actions remain available after replacing global component selectors with Tailwind utilities
 
 #### Scenario: Reference and context differ functionally
 - **WHEN** a visual detail in `home.png` implies behavior not confirmed by `PROJECT_CONTEXT.md`
 - **THEN** the implementation follows the context, records the difference for validation, and does not invent the behavior
+
+#### Scenario: Styling implementation is reviewed
+- **WHEN** the home page, form, header, footer, benefits, and result components are inspected
+- **THEN** their presentation uses colocated Tailwind utilities and contains neither visual inline styles nor dependencies on component selectors in `app/globals.css`
 
 ### Requirement: DNI validation is strict and centralized
 The frontend and backend SHALL accept a DNI only when it contains exactly eight ASCII digits matching `^[0-9]{8}$`. The backend validation SHALL be authoritative, and both implementations SHALL use one named rule and shared test vectors within their respective codebases.
@@ -107,24 +115,70 @@ The backend SHALL prepare, execute, and finalize eligibility through short trans
 - **WHEN** a previously submitted attempt exceeds the configured in-progress threshold after an interrupted execution
 - **THEN** a later initiation closes it as a controlled technical failure before creating the next numbered attempt
 
+### Requirement: Eligibility outcomes use accessible separated feedback
+The frontend SHALL present every completed eligibility outcome through a compact, persistent and responsive SweetAlert2 modal that is visually and semantically separate from the DNI form. The form SHALL remain mounted as background context and MUST NOT be replaced by a full-width result panel inside the consultation card. The application MUST use SweetAlert2's supported public API and MUST NOT retain a project-owned modal implementation, depend on internal SweetAlert2 markup, or add component-specific global CSS.
+
+#### Scenario: Citizen has no cancellable certificates
+- **WHEN** the backend returns `NOT_ELIGIBLE`
+- **THEN** a SweetAlert2 modal states concisely that no digital certificates are available for cancellation with the entered DNI, blocks continuation, avoids unrelated reassurance about the DNI or identity, and offers a conventional action to acknowledge the result
+
+#### Scenario: Citizen receives an eligible result
+- **WHEN** the backend returns `ELIGIBLE` with `canContinue=true`
+- **THEN** the same SweetAlert2 presentation offers the authorized continuation action and an optional safe action to start another consultation
+
+#### Scenario: Citizen receives a retryable result
+- **WHEN** the result is inconclusive, unavailable, timed out, affected by network loss, or represented by a retryable stable error code
+- **THEN** the modal explains the temporary condition without technical detail and provides an explicit safe retry plus an action to enter another DNI
+
+#### Scenario: Outcome modal is reviewed visually
+- **WHEN** an eligibility outcome is displayed on desktop, intermediate or mobile viewports
+- **THEN** the modal remains compact, preserves at least 16 pixels of viewport clearance, keeps all actions reachable, avoids horizontal overflow, and does not recreate the oversized consultation card as an overlay
+
+### Requirement: Eligibility outcome dialogs manage focus and dismissal safely
+The SweetAlert2 integration SHALL expose an accessible name and description, open as a modal dialog, contain keyboard focus, and restore focus to the DNI field after a reset. Visual status MUST NOT rely only on color. Backdrop clicks MUST NOT dismiss the result, and Escape SHALL map to the safe non-continuing action for the current outcome. Retry and continuation SHALL occur only through explicit actions.
+
+#### Scenario: Modal opens after a submitted consultation
+- **WHEN** the pending consultation resolves to a functional result or controlled error
+- **THEN** focus moves into the labeled SweetAlert2 modal and assistive technology can identify its result, explanation and available actions without duplicate announcements
+
+#### Scenario: Citizen navigates with the keyboard
+- **WHEN** the citizen uses Tab or Shift+Tab while the modal is open
+- **THEN** focus remains inside the modal and every available action has a visible focus indicator and a target of at least 44 by 44 pixels
+
+#### Scenario: Citizen dismisses with Escape
+- **WHEN** the citizen presses Escape instead of selecting an action
+- **THEN** the integration executes the variant's safe reset or return behavior, never continues the citizen flow, never retries automatically, and restores focus to the DNI field when the form is shown
+
+#### Scenario: Citizen clicks the backdrop
+- **WHEN** the citizen clicks outside the modal surface
+- **THEN** the result remains open so that a terminal or retryable outcome cannot be lost accidentally
+
+#### Scenario: Citizen prefers reduced motion
+- **WHEN** the browser reports `prefers-reduced-motion: reduce`
+- **THEN** the SweetAlert2 presentation does not use non-essential entrance or exit animation
+
 ### Requirement: Eligibility response semantics are explicit
-The frontend SHALL distinguish eligible, not eligible, inconclusive, service unavailable, timeout, technical backend error, network loss, request-in-progress conflict, and concurrency conflict using typed results or stable API error codes. Citizen messages SHALL be understandable, non-technical, non-enumerating, and SHALL provide a retry or restart action only when safe.
+The frontend SHALL distinguish eligible, not eligible, inconclusive, service unavailable, timeout, technical backend error, network loss, request-in-progress conflict, and concurrency conflict using typed results or stable API error codes. Citizen messages SHALL be understandable, non-technical, non-enumerating, and SHALL provide continuation, retry, restart, or return actions only when safe. Completed outcomes SHALL use the maintained SweetAlert2 modal integration instead of replacing the DNI form or invoking a project-owned modal.
 
 #### Scenario: DNI is not eligible
 - **WHEN** the backend returns `NOT_ELIGIBLE`
-- **THEN** the page blocks continuation, explains that the process cannot continue without listing certificates, and offers a controlled return to the form
+- **THEN** the modal blocks continuation, states that no digital certificates are available for cancellation without listing certificates or adding unrelated reassurance, and offers a conventional action to acknowledge the result
 
 #### Scenario: Result is inconclusive
 - **WHEN** the backend returns `INCONCLUSIVE`
-- **THEN** the page blocks continuation and offers a safe retry against the same compatible request
+- **THEN** the modal blocks continuation and offers a safe explicit retry against the same compatible request or a controlled restart with another DNI
 
 #### Scenario: Service is unavailable or times out
-- **WHEN** the HTTP client receives a service-unavailable or timeout result
-- **THEN** the page remains usable, announces temporary unavailability, preserves no browser-stored DNI, and offers a safe manual retry
+- **WHEN** the client receives a stable unavailable or timeout error
+- **THEN** the modal explains the temporary condition, preserves no browser-stored DNI, displays the correlation identifier when available, and offers only safe retry or restart actions
 
 #### Scenario: Network connection is lost
 - **WHEN** the browser cannot reach the backend
-- **THEN** the page shows a generic connection message without technical details and allows an explicit retry
+- **THEN** the modal shows a generic connection message without technical details and allows an explicit retry or controlled restart
+
+#### Scenario: Eligible result authorizes continuation
+- **WHEN** the backend returns `ELIGIBLE`, `canContinue=true`, and the next step
+- **THEN** the modal offers continuation without placing the DNI in the URL and does not navigate until the citizen activates the explicit action
 
 ### Requirement: Duplicate frontend submissions are prevented
 The DNI form SHALL allow only one active submission per mounted form instance. It SHALL disable the primary action, expose a programmatic busy state, ignore repeated submit events until completion, and cancel in-flight work when the component is unmounted.
@@ -187,4 +241,3 @@ Tests SHALL cover backend validation and orchestration, frontend rendering and i
 #### Scenario: Full local integration suite runs
 - **WHEN** frontend, backend, and MySQL are available and a documented eligible fixture is submitted
 - **THEN** the response is correlated and typed, the request and attempt are persisted, and the frontend exposes only the authorized next transition
-

@@ -27,7 +27,7 @@ Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca 
 
 ## Contrato OpenAPI y tipos
 
-Con MySQL y backend local activos, OpenAPI está en `http://localhost:8080/v3/api-docs`:
+Con MySQL y backend local activos, OpenAPI está en `http://localhost:8080/v3/api-docs`. La documentación navegable puede consultarse en `http://localhost:8080/swagger-ui.html`:
 
 ```powershell
 npm run api:sync

@@ -70,7 +70,13 @@ La comprobación consumible por el frontend ejecuta `SELECT 1` contra MySQL y de
 Invoke-RestMethod http://localhost:8080/api/v1/system/status -Headers @{ "X-Correlation-ID" = "local-check" }
 ```
 
-OpenAPI está habilitado únicamente con los perfiles `local` y `test` en `http://localhost:8080/v3/api-docs`. El documento contiene solo `/api/v1/**`; no incluye Actuator, rutas de prueba ni Swagger UI.
+La documentación está habilitada para desarrollo local:
+
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+- OpenAPI YAML: `http://localhost:8080/v3/api-docs.yaml`
+
+Swagger UI permite explorar y ejecutar las operaciones disponibles contra el backend local. El contrato contiene `GET /api/v1/system/status`, `POST /api/v1/cancellation-requests` y el único endpoint Actuator expuesto, `GET /actuator/health`. No incluye rutas de prueba, otros endpoints Actuator ni mecanismos de seguridad todavía inexistentes.
 
 ## Variables de entorno
 
@@ -123,8 +129,9 @@ Flyway es el único propietario del esquema y aplica una V1 consolidada de seis 
 
 ## Perfiles
 
-- `local`: importa opcionalmente `.env`, conecta mediante `DB_*` y usa logs de aplicación más detallados.
-- `test`: puerto aleatorio; las pruebas rápidas excluyen persistencia y las `*IT` reciben MySQL efímero mediante Testcontainers.
+- `local`: importa opcionalmente `.env`, conecta mediante `DB_*`, usa logs de aplicación más detallados y habilita OpenAPI y Swagger UI.
+- `test`: puerto aleatorio; habilita OpenAPI para verificación automatizada, mantiene Swagger UI deshabilitada normalmente, excluye persistencia en las pruebas rápidas y entrega MySQL efímero mediante Testcontainers a las `*IT`.
+- Sin perfil: OpenAPI y Swagger UI permanecen deshabilitados.
 
 La configuración de producción permanece diferida.
 
@@ -134,7 +141,21 @@ La configuración de producción permanece diferida.
 - Una falla de MySQL responde `503` con el `ApiError` común y código `DEPENDENCY_UNAVAILABLE`, sin detalles JDBC o SQL.
 - Toda respuesta incluye `X-Correlation-ID`; un valor cliente válido se conserva y uno ausente o inválido se reemplaza.
 - CORS se aplica solo a `/api/**`, permite exactamente los orígenes configurados, `GET`, `POST`, `OPTIONS`, los headers mínimos y credenciales futuras. Nunca usa comodines.
-- OpenAPI se publica en `/v3/api-docs` bajo `local` y `test` para sincronizar el contrato del frontend.
+- OpenAPI JSON y YAML se publican en `/v3/api-docs` y `/v3/api-docs.yaml` bajo `local`; el perfil `test` habilita el contrato para pruebas automatizadas.
+- Swagger UI se publica en `/swagger-ui.html` únicamente con el perfil `local`. Su exposición productiva permanece pendiente de una decisión posterior.
+
+## Regla de documentación para endpoints
+
+Todo endpoint nuevo o modificado debe actualizar, dentro del mismo incremento:
+
+- Finalidad, etiqueta, parámetros, cabeceras y cuerpo de la operación.
+- DTO, campos obligatorios, formatos y validaciones reales.
+- Respuestas exitosas, errores controlados y códigos HTTP posibles.
+- Propagación de `X-Correlation-ID`.
+- Reglas de seguridad únicamente cuando hayan sido implementadas.
+- Pruebas de cobertura OpenAPI, snapshot y tipos TypeScript derivados.
+
+Un endpoint no se considera terminado mientras la documentación generada difiera de su comportamiento HTTP. No edites manualmente los contratos generados del frontend. Hasta que JWT exista, Swagger no debe declarar bearer tokens, OAuth2 ni otros esquemas de autenticación.
 
 ## Inicio ciudadano y mock de elegibilidad
 

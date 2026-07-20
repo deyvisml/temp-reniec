@@ -68,13 +68,14 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void openApiContainsOnlyTheVersionedApplicationContract() throws Exception {
+	void openApiContainsApplicationAndExposedOperationalContract() throws Exception {
 		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/v3/api-docs")).GET().build());
 
 		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(response.body())
-				.contains("/api/v1/system/status", "SystemStatusResponse", "ApiError", "503", "X-Correlation-ID")
-				.doesNotContain("/actuator", "/__test/");
+				.contains("/api/v1/system/status", "/api/v1/cancellation-requests", "/actuator/health",
+						"SystemStatusResponse", "StartCancellationRequest", "ApiError", "503", "X-Correlation-ID")
+				.doesNotContain("/actuator/info", "/__test/", "securitySchemes");
 	}
 
 	private URI uri(String path) {
