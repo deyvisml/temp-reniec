@@ -40,10 +40,19 @@ describe("Tailwind-first styling convention", () => {
   it("keeps the citizen home presentation colocated as Tailwind utilities", () => {
     const homeSource = readFileSync(join(frontendRoot, "app", "page.tsx"), "utf8");
     const formSource = readFileSync(join(frontendRoot, "components", "dni-eligibility-form.tsx"), "utf8");
+    const outcomeAlertSource = readFileSync(
+      join(frontendRoot, "components", "eligibility-outcome-alert.tsx"),
+      "utf8",
+    );
+    const layoutSource = readFileSync(join(frontendRoot, "app", "layout.tsx"), "utf8");
 
     expect(homeSource).toContain("max-w-[920px]");
     expect(homeSource).toContain("max-[800px]:grid-cols-1");
     expect(formSource).toContain("focus-within:border-[#0755df]");
     expect(formSource).toContain("motion-reduce:animate-none");
+    expect(outcomeAlertSource).toContain("buttonsStyling: false");
+    expect(outcomeAlertSource).toContain("motion-reduce:transition-none");
+    expect(outcomeAlertSource).not.toMatch(/\.swal2-/);
+    expect(layoutSource).toContain('import "sweetalert2/dist/sweetalert2.min.css"');
   });
 });

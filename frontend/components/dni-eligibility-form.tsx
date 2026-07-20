@@ -2,20 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import {
+  EligibilityOutcomeAlert,
+  type EligibilityOutcome,
+} from "@/components/eligibility-outcome-alert";
 import { startCancellationRequest } from "@/lib/api/cancellation-requests";
-import type { CancellationRequestResponse } from "@/lib/api/contracts";
 import { HttpClientError } from "@/lib/http-client";
 
 export const DNI_PATTERN = /^[0-9]{8}$/;
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
 const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline shadow-[0_12px_24px_#a8003c27] transition-[transform,box-shadow,filter] hover:not-disabled:-translate-y-0.5 hover:not-disabled:saturate-[1.08] hover:not-disabled:shadow-[0_16px_30px_#a8003c35] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
-const secondaryActionClasses = "mx-auto mt-3.5 cursor-pointer border-0 bg-transparent px-4 py-[9px] font-extrabold text-[#164aa8] underline underline-offset-4 focus-visible:rounded focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400]";
-const resultPanelClasses = "flex min-h-[330px] flex-col items-center justify-center text-center";
-const resultTitleClasses = "m-0 text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]";
-const resultBodyClasses = "mx-auto mt-3 mb-5 max-w-[600px] leading-[1.6] text-[#5b6d94]";
-const resultIconClasses = "mb-4 grid size-16 place-items-center rounded-full bg-[#e9f1ff] text-[#1749a8] [&_svg]:size-[34px]";
-const resultKickerClasses = "!mt-0 !mb-[5px] text-[11px] font-black tracking-[0.1em] text-[#a0003d] uppercase";
 
 export function validateDni(value: string): string | undefined {
   if (!value) return "Ingresa tu número de DNI.";
@@ -27,12 +24,7 @@ export function buildIdentityPath(requestId: number): string {
   return `/verificacion-identidad?requestId=${requestId}`;
 }
 
-type ViewState =
-  | { kind: "form" }
-  | { kind: "eligible"; response: CancellationRequestResponse }
-  | { kind: "not-eligible"; response: CancellationRequestResponse }
-  | { kind: "inconclusive"; response: CancellationRequestResponse }
-  | { kind: "error"; title: string; message: string; correlationId?: string };
+type ViewState = { kind: "form" } | EligibilityOutcome;
 
 export function DniEligibilityForm() {
   const [dni, setDni] = useState("");
@@ -66,12 +58,18 @@ export function DniEligibilityForm() {
 
       if (response.eligibilityResult === "ELIGIBLE" && response.canContinue) {
         setDni("");
-        setView({ kind: "eligible", response });
+        setView({
+          kind: "eligible",
+          continuePath: response.requestId
+            ? buildIdentityPath(response.requestId)
+            : undefined,
+          maskedDni: response.maskedDni,
+        });
       } else if (response.eligibilityResult === "NOT_ELIGIBLE") {
         setDni("");
-        setView({ kind: "not-eligible", response });
+        setView({ kind: "not-eligible" });
       } else {
-        setView({ kind: "inconclusive", response });
+        setView({ kind: "inconclusive" });
       }
     } catch (error) {
       if (error instanceof HttpClientError && error.code === "REQUEST_ABORTED") return;
@@ -89,20 +87,17 @@ export function DniEligibilityForm() {
     queueMicrotask(() => inputRef.current?.focus());
   }
 
-  if (view.kind !== "form") {
-    return <ResultPanel view={view} onRetry={() => void submit()} onReset={reset} />;
-  }
-
   return (
-    <form
-      className="text-center"
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
-      }}
-      aria-busy={pending}
-    >
+    <>
+      <form
+        className="text-center"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+        aria-busy={pending}
+      >
       <div className="mx-auto mb-3.5 grid size-[54px] place-items-center rounded-full bg-[#e9f1ff] text-[#0755df] [&_svg]:w-[30px]" aria-hidden="true">
         <PersonIcon />
       </div>
@@ -153,62 +148,16 @@ export function DniEligibilityForm() {
       <span className="sr-only" aria-live="polite">
         {pending ? "Consultando la disponibilidad de certificados digitales." : ""}
       </span>
-    </form>
-  );
-}
-
-function ResultPanel({ view, onRetry, onReset }: {
-  view: Exclude<ViewState, { kind: "form" }>;
-  onRetry: () => void;
-  onReset: () => void;
-}) {
-  if (view.kind === "eligible") {
-    const requestId = view.response.requestId;
-    return (
-      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
-        <div className={`${resultIconClasses} bg-[#e6f7ef] text-[#08764a]`}><CheckIcon /></div>
-        <p className={resultKickerClasses}>Consulta completada</p>
-        <h2 id="result-title" className={resultTitleClasses}>Puedes continuar con la verificación de identidad</h2>
-        <p className={resultBodyClasses}>Encontramos certificados digitales susceptibles de cancelación para el DNI {view.response.maskedDni}.</p>
-        {requestId ? <a className={`${primaryActionClasses} max-w-[430px]`} href={buildIdentityPath(requestId)}>Continuar <ArrowIcon /></a> : null}
-        <button className={secondaryActionClasses} type="button" onClick={onReset}>Realizar otra consulta</button>
-      </section>
-    );
-  }
-
-  if (view.kind === "not-eligible") {
-    return (
-      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
-        <div className={resultIconClasses}><InfoIcon /></div>
-        <p className={resultKickerClasses}>Consulta completada</p>
-        <h2 id="result-title" className={resultTitleClasses}>No es posible continuar con la cancelación</h2>
-        <p className={resultBodyClasses}>No encontramos certificados digitales susceptibles de cancelación. Esta consulta no afecta tu DNI ni tu identidad.</p>
-        <button className={secondaryActionClasses} type="button" onClick={onReset}>Volver al inicio</button>
-      </section>
-    );
-  }
-
-  if (view.kind === "inconclusive") {
-    return (
-      <section className={resultPanelClasses} aria-live="polite" aria-labelledby="result-title">
-        <div className={`${resultIconClasses} bg-[#fff3db] text-[#a45a00]`}><InfoIcon /></div>
-        <h2 id="result-title" className={resultTitleClasses}>No pudimos confirmar el resultado</h2>
-        <p className={resultBodyClasses}>La consulta no fue concluyente. Puedes intentarlo nuevamente de forma segura.</p>
-        <button className={`${primaryActionClasses} max-w-[430px]`} type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
-        <button className={secondaryActionClasses} type="button" onClick={onReset}>Ingresar otro DNI</button>
-      </section>
-    );
-  }
-
-  return (
-    <section className={resultPanelClasses} role="alert" aria-labelledby="result-title">
-      <div className={`${resultIconClasses} bg-[#fff3db] text-[#a45a00]`}><InfoIcon /></div>
-      <h2 id="result-title" className={resultTitleClasses}>{view.title}</h2>
-      <p className={resultBodyClasses}>{view.message}</p>
-      {view.correlationId ? <p className="rounded-md bg-[#f2f5fa] px-3 py-2 text-[11px] text-[#5b6d94]">Código de atención: {view.correlationId}</p> : null}
-      <button className={`${primaryActionClasses} max-w-[430px]`} type="button" onClick={onRetry}>Reintentar <ArrowIcon /></button>
-      <button className={secondaryActionClasses} type="button" onClick={onReset}>Ingresar otro DNI</button>
-    </section>
+      </form>
+      {view.kind !== "form" ? (
+        <EligibilityOutcomeAlert
+          outcome={view}
+          onContinue={(href) => window.location.assign(href)}
+          onRetry={() => void submit()}
+          onReset={reset}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -233,4 +182,3 @@ function PersonIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" a
 function InfoIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6M12 7.5h.01"/></svg>; }
 function ShieldIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.2c0 4.2 2.5 7.7 6.5 9.8 4-2.1 6.5-5.6 6.5-9.8V6L12 3Z"/><path d="m9.3 12 1.8 1.8 3.8-4"/></svg>; }
 function ArrowIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>; }
-function CheckIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.3 4.3L19 6.8"/></svg>; }

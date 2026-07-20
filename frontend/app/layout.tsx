@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
+import "sweetalert2/dist/sweetalert2.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
