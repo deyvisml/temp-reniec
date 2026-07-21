@@ -143,10 +143,18 @@
             "minLength": 8,
             "pattern": "[0-9]{8}",
             "type": "string"
+          },
+          "recaptchaToken": {
+            "description": "Evidencia efímera de Google reCAPTCHA v2 Checkbox. No se almacena ni se devuelve.",
+            "maxLength": 4096,
+            "minLength": 0,
+            "type": "string",
+            "writeOnly": true
           }
         },
         "required": [
-          "dni"
+          "dni",
+          "recaptchaToken"
         ],
         "type": "object"
       },
@@ -183,7 +191,7 @@
     "contact": {
       "name": "RENIEC"
     },
-    "description": "API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano de cancelación de certificados digitales. La documentación no representa mecanismos de seguridad todavía no implementados.",
+    "description": "API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox; no se documentan autenticación ni autorización todavía inexistentes.",
     "title": "API de cancelación de certificados digitales",
     "version": "v1"
   },
@@ -254,7 +262,7 @@
     },
     "/api/v1/cancellation-requests": {
       "post": {
-        "description": "Valida el DNI, crea una solicitud y consulta únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo.",
+        "description": "Valida el DNI y Google reCAPTCHA v2 Checkbox antes de crear una solicitud y consultar únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo o la evidencia anti-bot.",
         "operationId": "initiateCancellationRequest",
         "parameters": [
           {
@@ -276,7 +284,7 @@
               }
             }
           },
-          "description": "DNI que inicia una solicitud nueva. Se valida nuevamente en el backend.",
+          "description": "DNI y evidencia efímera reCAPTCHA que se validan en el backend antes de crear una solicitud.",
           "required": true
         },
         "responses": {
@@ -307,7 +315,7 @@
                 }
               }
             },
-            "description": "DNI, JSON o cuerpo inválido",
+            "description": "DNI, JSON, cuerpo o evidencia reCAPTCHA inválida: VALIDATION_ERROR, RECAPTCHA_REQUIRED, RECAPTCHA_REJECTED o RECAPTCHA_EXPIRED_OR_DUPLICATE",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -379,7 +387,7 @@
                 }
               }
             },
-            "description": "Error controlado del proveedor de disponibilidad",
+            "description": "RECAPTCHA_INVALID_RESPONSE o error controlado del proveedor de disponibilidad",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -397,7 +405,7 @@
                 }
               }
             },
-            "description": "Servicio de disponibilidad no disponible",
+            "description": "RECAPTCHA_UNAVAILABLE o servicio de disponibilidad no disponible",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -415,7 +423,7 @@
                 }
               }
             },
-            "description": "Tiempo de espera agotado",
+            "description": "RECAPTCHA_TIMEOUT o tiempo de espera agotado en disponibilidad",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {

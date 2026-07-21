@@ -1,6 +1,6 @@
 # Frontend — Cancelación de certificados digitales
 
-Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. La página de inicio valida el DNI y consulta la elegibilidad mediante el backend; las etapas posteriores todavía no están implementadas.
+Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. La página de inicio valida el DNI, exige Google reCAPTCHA v2 Checkbox y consulta la disponibilidad mediante el backend; las etapas posteriores todavía no están implementadas.
 
 ## Requisitos e inicio
 
@@ -22,8 +22,9 @@ Abre `http://localhost:3000`. La portada permanece visible si el backend está d
 | `BACKEND_URL` | Solo servidor y herramientas | `http://localhost:8080` | URL del backend para ejecución servidor, sincronización y pruebas reales. |
 | `NEXT_PUBLIC_BACKEND_URL` | Navegador y servidor | `http://localhost:8080` | Dirección pública utilizada por la consulta ciudadana. |
 | `NEXT_PUBLIC_APP_ENV` | Navegador y servidor | `local` | Etiqueta pública del ambiente. |
+| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Navegador y servidor | Clave pública aprobada | Site key de Google reCAPTCHA v2 Checkbox, incorporada al bundle durante el build. |
 
-Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca deben contener secretos. `.env.local` está ignorado por Git.
+Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca deben contener secretos. La site key es pública; la secret permanece exclusivamente en el backend. `.env.local` está ignorado por Git. Si la site key falta, el build sigue funcionando pero el formulario queda bloqueado con un mensaje controlado.
 
 ## Contrato OpenAPI y tipos
 
@@ -64,7 +65,7 @@ Consulta [`docs/LOCAL_INTEGRATION.md`](../docs/LOCAL_INTEGRATION.md) para el ord
 
 ## Consulta local
 
-Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El formulario no guarda el DNI en almacenamiento web ni lo coloca en la URL. Solo un resultado elegible muestra la transición preparada hacia verificación de identidad mediante `requestId`; este identificador no autentica ni autoriza y la pantalla de ID Perú pertenece a una tarea posterior.
+Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El botón solo se habilita con DNI válido, token actual y ningún envío en curso. DNI y token no se guardan en almacenamiento web, cookies persistentes ni URL. El widget se reinicia tras cada intento, expiración o error y no hay reintentos automáticos. Solo un resultado disponible muestra la transición preparada hacia verificación de identidad mediante `requestId`; este identificador no autentica ni autoriza.
 
 ## Cliente HTTP
 

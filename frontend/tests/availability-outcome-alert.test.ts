@@ -51,9 +51,10 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     });
 
     expect(inconclusive.primaryAction.kind).toBe("retry");
-    expect(inconclusive.secondaryAction?.kind).toBe("reset");
+    expect(inconclusive.primaryAction.label).toBe("Intentar nuevamente");
+    expect(inconclusive.secondaryAction).toBeUndefined();
     expect(error.primaryAction.kind).toBe("retry");
-    expect(error.secondaryAction?.kind).toBe("reset");
+    expect(error.secondaryAction).toBeUndefined();
     expect(error.correlationId).toBe("correlation-test");
   });
 
@@ -128,7 +129,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
         isConfirmed: false,
         dismiss: "esc",
       })?.kind,
-    ).toBe("reset");
+    ).toBe("retry");
     expect(
       resolveAvailabilityAlertAction(inconclusive, {
         isConfirmed: false,

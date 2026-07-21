@@ -18,7 +18,7 @@ describe("generated API aliases", () => {
     expect(status.database).toBe("UP");
     expect(error.code).toBe("DEPENDENCY_UNAVAILABLE");
     expect(SYSTEM_STATUS_PATH).toBe("/api/v1/system/status");
-    const request: StartCancellationRequest = { dni: "00000001" };
+    const request: StartCancellationRequest = { dni: "00000001", recaptchaToken: "ephemeral-test-token" };
     const response: CancellationRequestResponse = {
       canContinue: true,
       availabilityResult: "AVAILABLE",
@@ -28,9 +28,21 @@ describe("generated API aliases", () => {
       requestStatus: "PENDING_IDENTITY_VERIFICATION",
     };
     expect(request.dni).toHaveLength(8);
+    expect(request.recaptchaToken).toBe("ephemeral-test-token");
     expect(response.canContinue).toBe(true);
     expect(response.requestId).toBe(42);
     expect(CANCELLATION_REQUESTS_PATH).toBe("/api/v1/cancellation-requests");
+  });
+
+  it("requires bounded write-only CAPTCHA evidence without reusable examples or secrets", () => {
+    const openApi = JSON.parse(
+      readFileSync(join(process.cwd(), "openapi", "backend-api.json"), "utf8"),
+    );
+    const schema = openApi.components.schemas.StartCancellationRequest;
+
+    expect(schema.required).toContain("recaptchaToken");
+    expect(schema.properties.recaptchaToken).toMatchObject({ writeOnly: true, maxLength: 4096 });
+    expect(JSON.stringify(openApi)).not.toMatch(/test-recaptcha-valid|RECAPTCHA_SECRET_KEY|secretKey/);
   });
 
   it("keeps the committed contract free of progress-recovery semantics", () => {

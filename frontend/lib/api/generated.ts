@@ -10,7 +10,7 @@ export interface paths {
         put?: never;
         /**
          * Inicia una solicitud y consulta si existen certificados disponibles
-         * @description Valida el DNI, crea una solicitud y consulta únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo.
+         * @description Valida el DNI y Google reCAPTCHA v2 Checkbox antes de crear una solicitud y consultar únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo o la evidencia anti-bot.
          */
         post: operations["initiateCancellationRequest"];
         delete?: never;
@@ -67,6 +67,8 @@ export interface components {
         StartCancellationRequest: {
             /** @description Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo. */
             dni: string;
+            /** @description Evidencia efímera de Google reCAPTCHA v2 Checkbox. No se almacena ni se devuelve. */
+            recaptchaToken: string;
         };
         /** @description Resultado normalizado del inicio de una nueva solicitud de cancelación. */
         CancellationRequestResponse: {
@@ -180,7 +182,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        /** @description DNI que inicia una solicitud nueva. Se valida nuevamente en el backend. */
+        /** @description DNI y evidencia efímera reCAPTCHA que se validan en el backend antes de crear una solicitud. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StartCancellationRequest"];
@@ -198,7 +200,7 @@ export interface operations {
                     "application/json": components["schemas"]["CancellationRequestResponse"];
                 };
             };
-            /** @description DNI, JSON o cuerpo inválido */
+            /** @description DNI, JSON, cuerpo o evidencia reCAPTCHA inválida: VALIDATION_ERROR, RECAPTCHA_REQUIRED, RECAPTCHA_REJECTED o RECAPTCHA_EXPIRED_OR_DUPLICATE */
             400: {
                 headers: {
                     "X-Correlation-ID"?: string;
@@ -238,7 +240,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Error controlado del proveedor de disponibilidad */
+            /** @description RECAPTCHA_INVALID_RESPONSE o error controlado del proveedor de disponibilidad */
             502: {
                 headers: {
                     "X-Correlation-ID"?: string;
@@ -248,7 +250,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Servicio de disponibilidad no disponible */
+            /** @description RECAPTCHA_UNAVAILABLE o servicio de disponibilidad no disponible */
             503: {
                 headers: {
                     "X-Correlation-ID"?: string;
@@ -258,7 +260,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Tiempo de espera agotado */
+            /** @description RECAPTCHA_TIMEOUT o tiempo de espera agotado en disponibilidad */
             504: {
                 headers: {
                     "X-Correlation-ID"?: string;

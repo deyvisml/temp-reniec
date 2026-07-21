@@ -84,8 +84,7 @@ export function getAvailabilityOutcomePresentation(
         title: "No pudimos confirmar el resultado",
         description:
           "La consulta no fue concluyente. Puedes intentarlo nuevamente de forma segura.",
-        primaryAction: { kind: "retry", label: "Reintentar consulta" },
-        secondaryAction: { kind: "reset", label: "Volver al inicio" },
+        primaryAction: { kind: "retry", label: "Intentar nuevamente" },
       };
 
     case "error":
@@ -96,10 +95,7 @@ export function getAvailabilityOutcomePresentation(
         correlationId: outcome.correlationId,
         primaryAction: outcome.retryable === false
           ? { kind: "reset", label: "Aceptar" }
-          : { kind: "retry", label: "Reintentar consulta" },
-        secondaryAction: outcome.retryable === false
-          ? undefined
-          : { kind: "reset", label: "Volver al inicio" },
+          : { kind: "retry", label: "Intentar nuevamente" },
       };
 
     default:
@@ -159,7 +155,7 @@ export function resolveAvailabilityAlertAction(
 ): AvailabilityOutcomeAction | undefined {
   if (result.isConfirmed) return presentation.primaryAction;
   if (result.dismiss === "cancel") return presentation.secondaryAction;
-  if (result.dismiss === "esc") return safeResetAction(presentation);
+  if (result.dismiss === "esc") return safeDismissAction(presentation);
   return undefined;
 }
 
@@ -227,10 +223,13 @@ const toneIconColors = {
   warning: "#9a5600",
 } satisfies Record<AvailabilityOutcomePresentation["tone"], string>;
 
-function safeResetAction(
+function safeDismissAction(
   presentation: AvailabilityOutcomePresentation,
 ): AvailabilityOutcomeAction | undefined {
-  if (presentation.primaryAction.kind === "reset") {
+  if (
+    presentation.primaryAction.kind === "reset"
+    || presentation.primaryAction.kind === "retry"
+  ) {
     return presentation.primaryAction;
   }
   if (presentation.secondaryAction?.kind === "reset") {

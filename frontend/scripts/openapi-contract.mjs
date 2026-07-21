@@ -21,6 +21,7 @@ const schema = process.env.OPENAPI_SCHEMA_FILE
 const contract = structuredClone(schema);
 delete contract.servers;
 assertInitialResponseBoundary(contract);
+assertRecaptchaRequestBoundary(contract);
 const snapshot = `${JSON.stringify(sortRecursively(contract), null, 2)}\n`;
 const generated = astToString(await openapiTS(contract));
 
@@ -90,5 +91,21 @@ function assertInitialResponseBoundary(document) {
   const leaked = forbidden.filter((property) => property in properties);
   if (leaked.length > 0) {
     throw new Error(`La respuesta inicial expone propiedades no permitidas: ${leaked.join(", ")}.`);
+  }
+}
+
+function assertRecaptchaRequestBoundary(document) {
+  const request = document.components?.schemas?.StartCancellationRequest;
+  const properties = request?.properties ?? {};
+  const required = new Set(request?.required ?? []);
+  const token = properties.recaptchaToken;
+  if (!token || !required.has("recaptchaToken") || token.writeOnly !== true || token.maxLength !== 4096) {
+    throw new Error("El contrato inicial debe exigir recaptchaToken efímero, writeOnly y acotado.");
+  }
+  const serialized = JSON.stringify(document);
+  for (const forbidden of ["RECAPTCHA_SECRET_KEY", "test-recaptcha-valid", "recaptchaSecret", "secretKey"]) {
+    if (serialized.includes(forbidden)) {
+      throw new Error(`El contrato OpenAPI expone configuración o evidencia prohibida: ${forbidden}.`);
+    }
   }
 }

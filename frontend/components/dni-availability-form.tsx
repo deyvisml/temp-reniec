@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   AvailabilityOutcomeAlert,
@@ -9,11 +9,12 @@ import {
 import type { CancellationRequestResponse } from "@/lib/api/contracts";
 import { startCancellationRequest } from "@/lib/api/cancellation-requests";
 import { HttpClientError } from "@/lib/http-client";
+import { RecaptchaCheckbox, RECAPTCHA_SITE_KEY } from "@/components/recaptcha-checkbox";
 
 export const DNI_PATTERN = /^[0-9]{8}$/;
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
-const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline shadow-[0_12px_24px_#a8003c27] transition-[transform,box-shadow,filter] hover:not-disabled:-translate-y-0.5 hover:not-disabled:saturate-[1.08] hover:not-disabled:shadow-[0_16px_30px_#a8003c35] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
+const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline shadow-[0_12px_24px_#a8003c27] transition-[transform,box-shadow,filter] hover:not-disabled:-translate-y-0.5 hover:not-disabled:saturate-[1.08] hover:not-disabled:shadow-[0_16px_30px_#a8003c35] disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
 
 export function validateDni(value: string): string | undefined {
   if (!value) return "Ingresa tu número de DNI.";
@@ -23,6 +24,15 @@ export function validateDni(value: string): string | undefined {
 
 export function buildIdentityPath(requestId: number): string {
   return `/verificacion-identidad?requestId=${requestId}`;
+}
+
+export function canSubmitInitialQuery(
+  dni: string,
+  recaptchaToken: string,
+  pending: boolean,
+  siteKeyConfigured = Boolean(RECAPTCHA_SITE_KEY),
+): boolean {
+  return !pending && !validateDni(dni) && recaptchaToken.length > 0 && siteKeyConfigured;
 }
 
 export function isConsistentInitialResponse(response: CancellationRequestResponse): boolean {
@@ -56,6 +66,9 @@ export function DniAvailabilityForm() {
   const [dni, setDni] = useState("");
   const [fieldError, setFieldError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [recaptchaResetKey, setRecaptchaResetKey] = useState(0);
+  const [securityMessage, setSecurityMessage] = useState<string>();
   const [view, setView] = useState<ViewState>({ kind: "form" });
   const inputRef = useRef<HTMLInputElement>(null);
   const controllerRef = useRef<AbortController | undefined>(undefined);
@@ -63,12 +76,35 @@ export function DniAvailabilityForm() {
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
+  const resetRecaptcha = useCallback((message?: string) => {
+    setRecaptchaToken("");
+    setRecaptchaResetKey((current) => current + 1);
+    setSecurityMessage(message);
+  }, []);
+
+  const handleRecaptchaToken = useCallback((token: string) => {
+    setRecaptchaToken(token);
+    setSecurityMessage(undefined);
+  }, []);
+
+  const handleRecaptchaExpired = useCallback(() => {
+    resetRecaptcha("La verificación expiró. Marca nuevamente la casilla para continuar.");
+  }, [resetRecaptcha]);
+
+  const handleRecaptchaError = useCallback(() => {
+    resetRecaptcha("No pudimos cargar la verificación de seguridad. Inténtalo nuevamente más tarde.");
+  }, [resetRecaptcha]);
+
   async function submit() {
     if (submissionInFlightRef.current) return;
     const validation = validateDni(dni);
     if (validation) {
       setFieldError(validation);
       inputRef.current?.focus();
+      return;
+    }
+    if (!recaptchaToken) {
+      setSecurityMessage("Completa la verificación de seguridad para continuar.");
       return;
     }
 
@@ -80,7 +116,7 @@ export function DniAvailabilityForm() {
     controllerRef.current = controller;
 
     try {
-      const result = await startCancellationRequest(dni, controller.signal);
+      const result = await startCancellationRequest(dni, recaptchaToken, controller.signal);
       const response = result.data;
       if (!response) throw new HttpClientError("Respuesta vacía.", { code: "INVALID_RESPONSE" });
       if (!isConsistentInitialResponse(response)) {
@@ -105,17 +141,26 @@ export function DniAvailabilityForm() {
       }
     } catch (error) {
       if (error instanceof HttpClientError && error.code === "REQUEST_ABORTED") return;
-      setView(buildAvailabilityErrorView(error));
+      const recaptchaMessage = buildRecaptchaErrorMessage(error);
+      if (recaptchaMessage) {
+        setView({ kind: "form" });
+        setSecurityMessage(recaptchaMessage);
+      } else {
+        setView(buildAvailabilityErrorView(error));
+      }
     } finally {
       if (controllerRef.current === controller) controllerRef.current = undefined;
       submissionInFlightRef.current = false;
       setPending(false);
+      setRecaptchaToken("");
+      setRecaptchaResetKey((current) => current + 1);
     }
   }
 
   function reset() {
     setDni("");
     setFieldError(undefined);
+    resetRecaptcha();
     setView({ kind: "form" });
     queueMicrotask(() => inputRef.current?.focus());
   }
@@ -173,7 +218,27 @@ export function DniAvailabilityForm() {
         </p>
       </div>
 
-      <button className={primaryActionClasses} type="submit" disabled={pending}>
+      <div className="mb-5" aria-describedby={securityMessage ? "recaptcha-error" : undefined}>
+        <RecaptchaCheckbox
+          resetKey={recaptchaResetKey}
+          disabled={pending}
+          onToken={handleRecaptchaToken}
+          onExpired={handleRecaptchaExpired}
+          onError={handleRecaptchaError}
+        />
+        {securityMessage ? (
+          <p
+            id="recaptcha-error"
+            className="mx-auto mt-2 text-sm font-semibold text-[#9b003a]"
+            role="alert"
+            aria-live="polite"
+          >
+            {securityMessage}
+          </p>
+        ) : null}
+      </div>
+
+      <button className={primaryActionClasses} type="submit" disabled={!canSubmitInitialQuery(dni, recaptchaToken, pending)}>
         <span>{pending ? "Consultando disponibilidad…" : "Iniciar cancelación"}</span>
         {pending ? <span className="size-5 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" aria-hidden="true" /> : <ArrowIcon />}
       </button>
@@ -186,7 +251,7 @@ export function DniAvailabilityForm() {
         <AvailabilityOutcomeAlert
           outcome={view}
           onContinue={(href) => window.location.assign(href)}
-          onRetry={() => void submit()}
+          onRetry={() => setView({ kind: "form" })}
           onReset={reset}
         />
       ) : null}
@@ -216,6 +281,19 @@ export function buildAvailabilityErrorView(error: unknown): Extract<ViewState, {
     correlationId: error.correlationId,
     retryable: error.code !== "CANCELLATION_REQUEST_IN_PROGRESS",
   };
+}
+
+export function buildRecaptchaErrorMessage(error: unknown): string | undefined {
+  if (!(error instanceof HttpClientError)) return undefined;
+  const messages: Record<string, string> = {
+    RECAPTCHA_REQUIRED: "Completa la verificación de seguridad para continuar.",
+    RECAPTCHA_REJECTED: "No pudimos validar la verificación. Marca nuevamente la casilla.",
+    RECAPTCHA_EXPIRED_OR_DUPLICATE: "La verificación expiró o ya fue utilizada. Complétala nuevamente.",
+    RECAPTCHA_UNAVAILABLE: "La verificación de seguridad no está disponible temporalmente.",
+    RECAPTCHA_TIMEOUT: "La verificación tardó demasiado. Complétala nuevamente.",
+    RECAPTCHA_INVALID_RESPONSE: "No fue posible confirmar la verificación. Complétala nuevamente.",
+  };
+  return messages[error.code];
 }
 
 function PersonIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.5-4.2 2.7-6.2 6.5-6.2s6 2 6.5 6.2"/></svg>; }

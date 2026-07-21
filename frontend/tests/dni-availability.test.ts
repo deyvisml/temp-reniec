@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildAvailabilityErrorView,
+  buildRecaptchaErrorMessage,
+  canSubmitInitialQuery,
   buildIdentityPath,
   isConsistentInitialResponse,
   validateDni,
@@ -65,7 +67,7 @@ describe("DNI eligibility entry", () => {
     }), { status: 200, headers: { "Content-Type": "application/json", "X-Correlation-ID": "front-test" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await startCancellationRequest("00000001");
+    const result = await startCancellationRequest("00000001", "ephemeral-test-token");
 
     expect(result.data?.canContinue).toBe(true);
     expect(result.correlationId).toBe("front-test");
@@ -76,7 +78,27 @@ describe("DNI eligibility entry", () => {
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe("/api/v1/cancellation-requests");
     expect(init.method).toBe("POST");
-    expect(init.body).toBe('{"dni":"00000001"}');
+    expect(init.body).toBe('{"dni":"00000001","recaptchaToken":"ephemeral-test-token"}');
+  });
+
+  it("requires valid DNI, configured widget and current token before submission", () => {
+    expect(canSubmitInitialQuery("00000001", "token", false, true)).toBe(true);
+    expect(canSubmitInitialQuery("0000000", "token", false, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "", false, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "token", true, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "token", false, false)).toBe(false);
+  });
+
+  it("maps CAPTCHA failures separately from certificate availability", () => {
+    expect(buildRecaptchaErrorMessage(new HttpClientError("Rejected", {
+      code: "RECAPTCHA_REJECTED",
+    }))).toContain("verificación");
+    expect(buildRecaptchaErrorMessage(new HttpClientError("Expired", {
+      code: "RECAPTCHA_EXPIRED_OR_DUPLICATE",
+    }))).toContain("expiró");
+    expect(buildRecaptchaErrorMessage(new HttpClientError("Availability", {
+      code: "AVAILABILITY_UNAVAILABLE",
+    }))).toBeUndefined();
   });
 
   it("maps a protected prior operation to a generic non-retryable result", () => {
@@ -94,7 +116,10 @@ describe("DNI eligibility entry", () => {
     const source = readFileSync(join(process.cwd(), "components", "dni-availability-form.tsx"), "utf8");
 
     expect(source).not.toMatch(/localStorage|sessionStorage/);
+    expect(source).not.toMatch(/document\.cookie|console\.(log|info|debug)/);
     expect(source).not.toMatch(/restore|rehydrat|reanud|recuperar/i);
     expect(source).toContain("submissionInFlightRef.current");
+    expect(source).toContain("setRecaptchaToken(\"\")");
+    expect(source).toContain("setRecaptchaResetKey");
   });
 });

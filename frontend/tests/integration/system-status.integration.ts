@@ -4,6 +4,7 @@ import { getSystemStatus } from "@/lib/api/system-status";
 import { startCancellationRequest } from "@/lib/api/cancellation-requests";
 
 describe("live frontend to backend integration", () => {
+  const recaptchaToken = process.env.RECAPTCHA_TEST_TOKEN ?? "test-recaptcha-valid";
   it("reaches the backend and its MySQL datasource with correlation", async () => {
     const result = await getSystemStatus();
     expect(result.data.status).toBe("UP");
@@ -13,7 +14,7 @@ describe("live frontend to backend integration", () => {
   });
 
 	it("initiates a real positive availability request through backend and MySQL", async () => {
-    const result = await startCancellationRequest("00000001");
+    const result = await startCancellationRequest("00000001", recaptchaToken);
     expect(result.data?.availabilityResult).toBe("AVAILABLE");
     expect(result.data?.requestStatus).toBe("PENDING_IDENTITY_VERIFICATION");
     expect(result.data?.canContinue).toBe(true);
@@ -28,7 +29,7 @@ describe("live frontend to backend integration", () => {
   });
 
 	it("keeps a confirmed negative availability result blocked", async () => {
-		const result = await startCancellationRequest("00000002");
+		const result = await startCancellationRequest("00000002", recaptchaToken);
 		expect(result.data?.availabilityResult).toBe("NOT_AVAILABLE");
 		expect(result.data?.requestStatus).toBe("NO_CERTIFICATES_AVAILABLE");
 		expect(result.data?.canContinue).toBe(false);
