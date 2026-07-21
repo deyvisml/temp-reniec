@@ -132,22 +132,26 @@ The backend SHALL retain fast tests that verify context startup, the health resp
 - **THEN** baseline tests and MySQL persistence integration tests pass without a manually configured database or functional integration
 
 ### Requirement: Concise local operation documentation
-The backend SHALL contain a concise README covering prerequisites, one-time creation of ignored `backend/.env` from the committed local example, local MySQL lifecycle, Maven Wrapper build and verification commands, health and application API URLs, `/v3/api-docs`, `/v3/api-docs.yaml`, the local Swagger UI URL, profile-specific documentation exposure, supported environment variables, Flyway ownership, persistence-test requirements, correlation, sensitive-data restrictions, and the rule that every new or modified endpoint MUST update OpenAPI documentation and its contract tests before it is complete. It SHALL state that Swagger UI is a local development tool, that no authentication scheme is documented until one exists, and that production exposure remains deferred.
+The backend SHALL retain concise local instructions for MySQL, build, tests, health, OpenAPI and Swagger and SHALL document the deterministic fictitious DNI fixtures for the certificate-availability mock. The fixture table SHALL identify positive, negative, inconclusive, unavailable, timeout and technical-error behavior and SHALL state that no fixture returns certificate objects. It SHALL not document a second-service URL, payload or mock before that integration exists.
 
-#### Scenario: Contributor explores the local API
-- **WHEN** a contributor starts MySQL and the backend with the documented local profile
-- **THEN** the README enables the contributor to open Swagger UI, inspect the machine-readable documents, identify all current operations and execute the endpoints that accept direct local testing
+#### Scenario: Contributor tests the initial flow locally
+- **WHEN** a contributor follows the README with the local profile
+- **THEN** the contributor can reproduce every normalized availability scenario and understands that detailed certificates are not obtained at this stage
 
-#### Scenario: Contributor reviews production boundaries
-- **WHEN** a contributor reads the documentation-exposure guidance
-- **THEN** it is clear that OpenAPI and Swagger UI are disabled by default, production exposure is undecided, and no nonexistent security mechanism is represented
+#### Scenario: Contributor searches for the listing service
+- **WHEN** local backend documentation is inspected
+- **THEN** the second service is identified as future work and no invented endpoint or environment variable is presented as current
 
 ### Requirement: Technical-foundation-only boundary
-The backend foundation MAY contain MySQL, Flyway, Testcontainers, the eight-table cancellation-request persistence model specified by `cancellation-request-persistence-model`, incremental V2 migrations, optimistic versions limited to the new mutable certificate and individual-result rows, the versioned technical integration API, a development-only Docker Compose service containing MySQL 8.4, and the citizen eligibility endpoint and use case specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, public-reference UUIDs, consent versions, recovery or expiration windows, automatic request expiration, or generic optimistic-version columns; containerize backend or frontend; add application Dockerfiles or PowerShell startup scripts; or introduce functional JWT or refresh-token behavior, real ID Perú, real certificate lookup, selection UI or endpoint, real or mock revocation execution, document storage or other new external integrations, complete progress-recovery UI, PDF generation, production deployment, administrative modules, microservices, queues, event sourcing, CQRS, a multi-module Maven build, another database, Redis, workflow stored procedures, complex triggers, generated guard columns, selection-only tables, unassessed tables, or unused layers.
+The backend foundation MAY contain MySQL, Flyway, Testcontainers, the corrected seven-table cancellation-request model, forward migrations through the availability correction, the versioned technical API, local MySQL Compose, Swagger/OpenAPI and the initial certificate-availability endpoint specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, recovery windows or speculative guards; containerize the applications; implement JWT, ID Perú, the post-authentication listing service, its contract or attempt table, selection UI or endpoint, real revocation execution, document generation, production deployment, administration, microservices, queues, event sourcing, CQRS, another database or unused layers.
 
-#### Scenario: Completed change is reviewed for scope
-- **WHEN** the implementation diff, migration history, JPA model, repositories, tests, runtime routes, and dependencies are inspected
-- **THEN** they contain the existing backend foundation plus two justified persistence tables and their incremental migration, with no changed API behavior, frontend work, external service call, session infrastructure, production configuration, or administrative capability
+#### Scenario: Completed correction is reviewed for scope
+- **WHEN** migration history, JPA model, routes, gateway, OpenAPI, frontend contract and dependencies are inspected
+- **THEN** the existing foundation contains an existence-only first service and preserves the certificate table for later listing without implementing that listing or adding a dependency
+
+#### Scenario: Dependency set is reviewed
+- **WHEN** Maven and npm dependency declarations are compared before and after the change
+- **THEN** no new runtime or preventive dependency was added for the service separation
 
 ### Requirement: Development-only Swagger UI exposure
 The backend SHALL provide Swagger UI at the documented path when the `local` profile is active and SHALL keep Swagger UI and OpenAPI disabled in common configuration. The test profile SHALL expose the machine-readable OpenAPI document for automated verification while keeping the interactive UI disabled unless a dedicated test explicitly enables it. This change MUST NOT define production exposure.
@@ -163,4 +167,3 @@ The backend SHALL provide Swagger UI at the documented path when the `local` pro
 #### Scenario: Automated contract tests run
 - **WHEN** the backend test profile executes documentation tests
 - **THEN** `/v3/api-docs` is available to the tests and Swagger UI remains disabled except in the isolated UI availability test
-

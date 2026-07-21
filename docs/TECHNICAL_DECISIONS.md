@@ -5,7 +5,9 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 ## Contexto funcional vigente y alineación
 
 - `docs/context/PROJECT_CONTEXT.md` es la única fuente funcional vigente y prevalece sobre documentos técnicos o diseños que todavía describan el flujo anterior.
-- La consulta inicial tiene como objetivo devolver una lista de emisiones vigentes, presentadas al ciudadano como certificados digitales vigentes únicamente después de autenticar su identidad.
+- La consulta inicial recibe el DNI y devuelve únicamente si existen certificados disponibles; no devuelve ni persiste lista, cantidad o datos individuales.
+- Después de autenticar al ciudadano, un segundo servicio obtiene las emisiones vigentes con número de orden, fecha de creación y UUID para su persistencia y selección en el paso 2.
+- Un resultado positivo inicial seguido de una lista vacía bloquea el avance y se comunica como ausencia actual de certificados, no como error de autenticación.
 - El flujo permite seleccionar uno, varios o todos los certificados disponibles. Después de confirmar, esa selección es inmutable y forma el conjunto atómico de revocación; los no seleccionados permanecen fuera de la operación.
 - La integración de revocación deberá enviar la lista completa bajo una única clave de idempotencia y aceptar solo un resultado común: exitoso, fallido o incierto. Un proveedor que produzca resultados mixtos por UUID será incompatible y no se normalizará como resultado parcial.
 - `revocation_operation.normalized_result` será la fuente técnica del resultado; no se persistirán filas de resultado por certificado. La constancia identificará el conjunto seleccionado y su resultado común.

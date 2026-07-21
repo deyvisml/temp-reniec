@@ -39,10 +39,6 @@ public class CancellationRequestCertificateEntity {
 	@JoinColumn(name = "request_id", nullable = false, updatable = false)
 	private CertificateCancellationRequestEntity request;
 
-	@ManyToOne(fetch = FetchType.LAZY, optional = false)
-	@JoinColumn(name = "eligibility_check_id", nullable = false, updatable = false)
-	private CertificateEligibilityCheckEntity eligibilityCheck;
-
 	@Column(name = "order_number", nullable = false, updatable = false, length = 64)
 	private String orderNumber;
 
@@ -84,16 +80,14 @@ public class CancellationRequestCertificateEntity {
 	protected CancellationRequestCertificateEntity() { }
 
 	public CancellationRequestCertificateEntity(CertificateCancellationRequestEntity request,
-			CertificateEligibilityCheckEntity eligibilityCheck, String orderNumber, Instant emissionCreatedAt,
+			String orderNumber, Instant emissionCreatedAt,
 			String certificateUuid, Instant consultedAt) {
 		this.request = Objects.requireNonNull(request, "request");
-		this.eligibilityCheck = Objects.requireNonNull(eligibilityCheck, "eligibilityCheck");
 		this.orderNumber = requireAsciiText(orderNumber, "orderNumber", 64);
 		this.emissionCreatedAt = Objects.requireNonNull(emissionCreatedAt, "emissionCreatedAt");
 		this.certificateUuid = canonicalUuid(certificateUuid);
 		this.consultedAt = Objects.requireNonNull(consultedAt, "consultedAt");
 		this.availabilityStatus = CertificateAvailabilityStatus.AVAILABLE;
-		validateRequestRelationship();
 		validateTimes();
 	}
 
@@ -179,15 +173,7 @@ public class CancellationRequestCertificateEntity {
 		if (selected != (selectedAt != null)) {
 			throw new IllegalStateException("selected and selectedAt must be consistent");
 		}
-		validateRequestRelationship();
 		validateTimes();
-	}
-
-	private void validateRequestRelationship() {
-		if (request.getId() != null && eligibilityCheck.getRequest().getId() != null
-				&& !Objects.equals(request.getId(), eligibilityCheck.getRequest().getId())) {
-			throw new IllegalArgumentException("eligibilityCheck must belong to request");
-		}
 	}
 
 	private void validateTimes() {
@@ -221,7 +207,6 @@ public class CancellationRequestCertificateEntity {
 
 	public Long getId() { return id; }
 	public CertificateCancellationRequestEntity getRequest() { return request; }
-	public CertificateEligibilityCheckEntity getEligibilityCheck() { return eligibilityCheck; }
 	public String getOrderNumber() { return orderNumber; }
 	public Instant getEmissionCreatedAt() { return emissionCreatedAt; }
 	public String getCertificateUuid() { return certificateUuid; }

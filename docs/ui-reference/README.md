@@ -6,7 +6,7 @@ Estas imágenes son las referencias visuales principales para implementar las vi
 
 | Vista | Función |
 | --- | --- |
-| [`home.png`](./home.png) | Página de inicio, ingreso del DNI y consulta inicial de certificados digitales vigentes. |
+| [`home.png`](./home.png) | Página de inicio, ingreso del DNI y consulta de existencia de certificados disponibles, sin datos individuales. |
 | [`step-1.png`](./step-1.png) | Paso 1: autenticación del ciudadano mediante ID Perú. |
 | [`step-2.png`](./step-2.png) | Paso 2: selección de uno o varios certificados digitales vigentes. |
 | [`step-3.png`](./step-3.png) | Paso 3: selección del motivo de cancelación. |
@@ -15,10 +15,14 @@ Estas imágenes son las referencias visuales principales para implementar las vi
 
 ## Consulta y selección de certificados
 
-El servicio de consulta inicial devuelve una lista de **emisiones vigentes**. En la interfaz ciudadana, cada emisión se presenta como un **certificado digital vigente** y contiene, como mínimo, número de orden, fecha de creación y UUID.
+La consulta de la pantalla inicial y el listado detallado son servicios distintos:
 
-- Una lista vacía impide continuar.
-- La lista obtenida debe conservarse vinculada con la solicitud de cancelación.
+- El primer servicio recibe el DNI y solo confirma si existen certificados disponibles. No devuelve lista, cantidad, número de orden, fecha de creación ni UUID.
+- Después de autenticar al ciudadano, el segundo servicio devuelve las **emisiones vigentes**. En la interfaz cada emisión se presenta como un **certificado digital vigente** y contiene, como mínimo, número de orden, fecha de creación y UUID.
+
+- Solo una confirmación positiva del primer servicio permite avanzar hacia la autenticación; un error o resultado incierto no equivale a ausencia.
+- Una lista vacía del segundo servicio impide continuar, incluso si la consulta inicial fue positiva.
+- La lista obtenida después de la autenticación debe conservarse vinculada con la solicitud de cancelación.
 - Los certificados no se muestran antes de autenticar al ciudadano mediante ID Perú.
 - Después de la autenticación siempre se presenta el paso de selección, incluso cuando exista un solo certificado.
 - El ciudadano debe seleccionar al menos un certificado para continuar.

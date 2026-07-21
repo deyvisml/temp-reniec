@@ -9,11 +9,11 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 
-public interface CertificateEligibilityCheckRepository extends JpaRepository<CertificateEligibilityCheckEntity, Long> {
+public interface CertificateAvailabilityCheckRepository extends JpaRepository<CertificateAvailabilityCheckEntity, Long> {
 
-	Optional<CertificateEligibilityCheckEntity> findFirstByRequest_IdOrderByAttemptNumberDesc(Long requestId);
+	Optional<CertificateAvailabilityCheckEntity> findFirstByRequest_IdOrderByAttemptNumberDesc(Long requestId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	@Query("select check from CertificateEligibilityCheckEntity check where check.id = :id")
-	Optional<CertificateEligibilityCheckEntity> findByIdForUpdate(@Param("id") Long id);
+	@Query("select check from CertificateAvailabilityCheckEntity check where check.id = :id")
+	Optional<CertificateAvailabilityCheckEntity> findByIdForUpdate(@Param("id") Long id);
 }

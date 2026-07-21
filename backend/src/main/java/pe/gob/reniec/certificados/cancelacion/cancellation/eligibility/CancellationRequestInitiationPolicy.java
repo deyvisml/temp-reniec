@@ -9,11 +9,10 @@ final class CancellationRequestInitiationPolicy {
 
 	private static final Set<CancellationRequestStatus> REPLACEABLE_PRE_CONFIRMATION = EnumSet.of(
 			CancellationRequestStatus.STARTED,
-			CancellationRequestStatus.CERTIFICATES_AVAILABLE,
-			CancellationRequestStatus.ELIGIBLE,
 			CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION,
 			CancellationRequestStatus.IDENTITY_VERIFIED,
-			CancellationRequestStatus.AUTHENTICATED_PENDING_SELECTION,
+			CancellationRequestStatus.AUTHENTICATED_PENDING_CERTIFICATE_LIST,
+			CancellationRequestStatus.CERTIFICATES_AVAILABLE,
 			CancellationRequestStatus.CERTIFICATES_SELECTED,
 			CancellationRequestStatus.REASON_REGISTERED,
 			CancellationRequestStatus.PENDING_CONFIRMATION);
@@ -26,7 +25,6 @@ final class CancellationRequestInitiationPolicy {
 
 	private static final Set<CancellationRequestStatus> TERMINAL_HISTORY = EnumSet.of(
 			CancellationRequestStatus.NO_CERTIFICATES_AVAILABLE,
-			CancellationRequestStatus.NOT_ELIGIBLE,
 			CancellationRequestStatus.REVOCATION_SUCCEEDED,
 			CancellationRequestStatus.REVOCATION_FAILED,
 			CancellationRequestStatus.COMPLETED,
@@ -42,7 +40,7 @@ final class CancellationRequestInitiationPolicy {
 	}
 
 	static boolean isEligibilityInProgress(CancellationRequestStatus status) {
-		return status == CancellationRequestStatus.CHECKING_ELIGIBILITY;
+		return status == CancellationRequestStatus.CHECKING_AVAILABILITY;
 	}
 
 	static boolean isProtected(CancellationRequestStatus status) {

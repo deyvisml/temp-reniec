@@ -1,6 +1,6 @@
 # Backend de cancelación de certificados digitales
 
-Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano para iniciar una solicitud y consultar elegibilidad mediante un mock local reemplazable.
+Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano para iniciar una solicitud y consultar si existen certificados disponibles mediante un mock local reemplazable.
 
 ## Requisitos previos
 
@@ -94,9 +94,9 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `DB_PASSWORD` | Obligatoria | Contraseña MySQL; disponible en la plantilla local. |
 | `MYSQL_ROOT_PASSWORD` | Solo Compose | Contraseña root para inicialización y healthcheck local. |
 | `CORS_ALLOWED_ORIGINS` | Vacía (`http://localhost:3000` en local/test) | Lista separada por comas de orígenes frontend exactos. |
-| `ELIGIBILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta interrumpida. |
-| `ELIGIBILITY_TIMEOUT` | `1s` | Tiempo máximo de la integración de elegibilidad. |
-| `ELIGIBILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
+| `AVAILABILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta de existencia interrumpida. |
+| `AVAILABILITY_TIMEOUT` | `1s` | Tiempo máximo del primer servicio de disponibilidad. |
+| `AVAILABILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
 
@@ -125,7 +125,7 @@ Después de compilar también puedes ejecutar el backend desde `/backend`:
 java -jar target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
 ```
 
-Flyway es el único propietario del esquema y aplica una V1 consolidada de seis tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
+Flyway es el único propietario del esquema y aplica el historial V1–V5 hasta obtener el modelo vigente de siete tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
 
 ## Perfiles
 
@@ -157,22 +157,22 @@ Todo endpoint nuevo o modificado debe actualizar, dentro del mismo incremento:
 
 Un endpoint no se considera terminado mientras la documentación generada difiera de su comportamiento HTTP. No edites manualmente los contratos generados del frontend. Hasta que JWT exista, Swagger no debe declarar bearer tokens, OAuth2 ni otros esquemas de autenticación.
 
-## Inicio ciudadano y mock de elegibilidad
+## Inicio ciudadano y mock de disponibilidad
 
-`POST /api/v1/cancellation-requests` recibe exclusivamente JSON con un DNI de ocho dígitos. Crea o recupera una solicitud compatible, registra el intento y devuelve `requestId`, DNI enmascarado, estado, resultado y siguiente paso autorizado. El identificador numérico no autentica ni autoriza; el DNI completo no aparece en URLs, errores ni logs.
+`POST /api/v1/cancellation-requests` recibe exclusivamente JSON con un DNI de ocho dígitos. Crea una solicitud, registra el intento y determina solamente si existe al menos un certificado disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni crea certificados individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; el DNI completo no aparece en URLs, errores ni logs.
 
 El adaptador de perfiles `local` y `test` es determinista y no representa el contrato institucional:
 
 | DNI ficticio | Resultado |
 | --- | --- |
-| `00000001` | Elegible |
-| `00000002` | No elegible |
+| `00000001` | `AVAILABLE`: existencia confirmada; permite continuar a autenticación |
+| `00000002` | `NOT_AVAILABLE`: ausencia confirmada; bloquea el avance |
 | `00000003` | Servicio no disponible |
 | `00000004` | No concluyente |
 | `00000005` | Error técnico controlado |
 | `00000006` | Timeout |
 
-Cualquier otro DNI válido devuelve no elegible. Son fixtures sintéticos sin relación con ciudadanos reales. Los resultados transitorios permiten reintento sobre la misma solicitud; una consulta en curso devuelve conflicto controlado y una solicitud sin finalizar se recupera sin límite temporal ni repetición innecesaria de la integración.
+Cualquier otro DNI válido devuelve `NOT_AVAILABLE`. Son fixtures sintéticos sin relación con ciudadanos reales. Ningún fixture produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada. La lista detallada corresponde a un segundo servicio futuro, posterior a ID Perú, y no se implementa ni se simula en este incremento.
 
 ## Detener y reiniciar MySQL local
 
@@ -197,9 +197,9 @@ docker compose up -d --wait
 
 Nunca ejecutes el reinicio destructivo contra una base compartida o con información relevante. `flyway clean` permanece deshabilitado.
 
-## Sustitución de la V1
+## Antecedente de la V1 local
 
-La simplificación del modelo reemplaza la V1 anterior por una línea base de seis tablas, sin sesiones persistentes, UUID público, versiones de consentimiento, ventanas de expiración ni control optimista genérico. Una base local que ya ejecutó una versión anterior de V1 tendrá un checksum incompatible y debe recrearse desde vacío si sus datos son desechables.
+La V1 consolidada eliminó estructuras anteriores de sobreingeniería. Desde entonces, V2–V5 evolucionan el esquema exclusivamente hacia adelante; V5 corrige la separación entre disponibilidad inicial y listado autenticado. Una base que ya estaba en V4 se actualiza sin recrearse ni perder certificados existentes.
 
 Si el volumen local solo contiene datos desechables:
 
@@ -213,7 +213,7 @@ Nunca limpies, repares o recrees automáticamente una base compartida o con dato
 
 ## Modelo y seguridad
 
-El esquema contiene seis conceptos: solicitud, elegibilidad, identidad, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
+El esquema contiene siete tablas para solicitud, consulta de disponibilidad, certificados detallados futuros, identidad, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
 
 La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del progreso y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. `requestId` identifica la solicitud pero no autentica al ciudadano. MySQL no almacena sesiones, tokens, credenciales, biometría, payloads externos completos ni archivos PDF.
 

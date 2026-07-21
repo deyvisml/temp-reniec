@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  EligibilityOutcomeAlert,
-  type EligibilityOutcome,
-} from "@/components/eligibility-outcome-alert";
+  AvailabilityOutcomeAlert,
+  type AvailabilityOutcomeView,
+} from "@/components/availability-outcome-alert";
+import type { CancellationRequestResponse } from "@/lib/api/contracts";
 import { startCancellationRequest } from "@/lib/api/cancellation-requests";
 import { HttpClientError } from "@/lib/http-client";
 
@@ -24,20 +25,46 @@ export function buildIdentityPath(requestId: number): string {
   return `/verificacion-identidad?requestId=${requestId}`;
 }
 
-type ViewState = { kind: "form" } | EligibilityOutcome;
+export function isConsistentInitialResponse(response: CancellationRequestResponse): boolean {
+  if (!Number.isSafeInteger(response.requestId) || response.requestId <= 0) return false;
+  if (!/^\*{6}[0-9]{2}$/.test(response.maskedDni)) return false;
 
-export function DniEligibilityForm() {
+  if (response.availabilityResult === "AVAILABLE") {
+    return response.canContinue
+      && response.nextStep === "IDENTITY_VERIFICATION"
+      && response.requestStatus === "PENDING_IDENTITY_VERIFICATION";
+  }
+
+  if (response.availabilityResult === "NOT_AVAILABLE") {
+    return !response.canContinue
+      && response.nextStep === null
+      && response.requestStatus === "NO_CERTIFICATES_AVAILABLE";
+  }
+
+  if (response.availabilityResult === "INCONCLUSIVE") {
+    return !response.canContinue
+      && response.nextStep === null
+      && response.requestStatus === "STARTED";
+  }
+
+  return false;
+}
+
+type ViewState = { kind: "form" } | AvailabilityOutcomeView;
+
+export function DniAvailabilityForm() {
   const [dni, setDni] = useState("");
   const [fieldError, setFieldError] = useState<string>();
   const [pending, setPending] = useState(false);
   const [view, setView] = useState<ViewState>({ kind: "form" });
   const inputRef = useRef<HTMLInputElement>(null);
   const controllerRef = useRef<AbortController | undefined>(undefined);
+  const submissionInFlightRef = useRef(false);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   async function submit() {
-    if (pending) return;
+    if (submissionInFlightRef.current) return;
     const validation = validateDni(dni);
     if (validation) {
       setFieldError(validation);
@@ -46,6 +73,7 @@ export function DniEligibilityForm() {
     }
 
     setFieldError(undefined);
+    submissionInFlightRef.current = true;
     setPending(true);
     setView({ kind: "form" });
     const controller = new AbortController();
@@ -55,27 +83,32 @@ export function DniEligibilityForm() {
       const result = await startCancellationRequest(dni, controller.signal);
       const response = result.data;
       if (!response) throw new HttpClientError("Respuesta vacía.", { code: "INVALID_RESPONSE" });
+      if (!isConsistentInitialResponse(response)) {
+        throw new HttpClientError("Respuesta inconsistente.", {
+          code: "INVALID_RESPONSE",
+          correlationId: result.correlationId,
+        });
+      }
 
-      if (response.eligibilityResult === "ELIGIBLE" && response.canContinue) {
+      if (response.availabilityResult === "AVAILABLE") {
         setDni("");
         setView({
-          kind: "eligible",
-          continuePath: response.requestId
-            ? buildIdentityPath(response.requestId)
-            : undefined,
+          kind: "available",
+          continuePath: buildIdentityPath(response.requestId),
           maskedDni: response.maskedDni,
         });
-      } else if (response.eligibilityResult === "NOT_ELIGIBLE") {
+      } else if (response.availabilityResult === "NOT_AVAILABLE") {
         setDni("");
-        setView({ kind: "not-eligible" });
+        setView({ kind: "not-available" });
       } else {
         setView({ kind: "inconclusive" });
       }
     } catch (error) {
       if (error instanceof HttpClientError && error.code === "REQUEST_ABORTED") return;
-      setView(buildEligibilityErrorView(error));
+      setView(buildAvailabilityErrorView(error));
     } finally {
       if (controllerRef.current === controller) controllerRef.current = undefined;
+      submissionInFlightRef.current = false;
       setPending(false);
     }
   }
@@ -141,7 +174,7 @@ export function DniEligibilityForm() {
       </div>
 
       <button className={primaryActionClasses} type="submit" disabled={pending}>
-        <span>{pending ? "Consultando certificados…" : "Iniciar cancelación"}</span>
+        <span>{pending ? "Consultando disponibilidad…" : "Iniciar cancelación"}</span>
         {pending ? <span className="size-5 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" aria-hidden="true" /> : <ArrowIcon />}
       </button>
       <p className="mt-5 flex items-center justify-center gap-2 border-t border-[#e3e8f1] pt-5 text-xs text-[#607199] max-[480px]:items-start max-[480px]:text-left [&_svg]:w-5 [&_svg]:text-[#1749a8]"><ShieldIcon /> Tu información se utiliza únicamente para iniciar esta consulta.</p>
@@ -150,7 +183,7 @@ export function DniEligibilityForm() {
       </span>
       </form>
       {view.kind !== "form" ? (
-        <EligibilityOutcomeAlert
+        <AvailabilityOutcomeAlert
           outcome={view}
           onContinue={(href) => window.location.assign(href)}
           onRetry={() => void submit()}
@@ -161,17 +194,17 @@ export function DniEligibilityForm() {
   );
 }
 
-export function buildEligibilityErrorView(error: unknown): Extract<ViewState, { kind: "error" }> {
+export function buildAvailabilityErrorView(error: unknown): Extract<ViewState, { kind: "error" }> {
   if (!(error instanceof HttpClientError)) {
     return { kind: "error", title: "No pudimos completar la consulta", message: "Ocurrió un problema inesperado. Inténtalo nuevamente." };
   }
   const messages: Record<string, [string, string]> = {
     TIMEOUT: ["La consulta está tardando demasiado", "Verifica tu conexión e inténtalo nuevamente."],
-    ELIGIBILITY_TIMEOUT: ["La consulta está tardando demasiado", "El servicio no respondió a tiempo. Inténtalo nuevamente."],
+    AVAILABILITY_TIMEOUT: ["La consulta está tardando demasiado", "El servicio no respondió a tiempo. Inténtalo nuevamente."],
     NETWORK_ERROR: ["No pudimos conectarnos", "Verifica tu conexión a internet e inténtalo nuevamente."],
-    ELIGIBILITY_UNAVAILABLE: ["Servicio temporalmente no disponible", "No podemos consultar los certificados en este momento."],
-    ELIGIBILITY_PROVIDER_ERROR: ["No pudimos completar la consulta", "El servicio presentó un inconveniente temporal."],
-    ELIGIBILITY_IN_PROGRESS: ["La consulta ya está en proceso", "Espera unos segundos antes de intentarlo nuevamente."],
+    AVAILABILITY_UNAVAILABLE: ["Servicio temporalmente no disponible", "No podemos consultar los certificados en este momento."],
+    AVAILABILITY_PROVIDER_ERROR: ["No pudimos completar la consulta", "El servicio presentó un inconveniente temporal."],
+    AVAILABILITY_CHECK_IN_PROGRESS: ["La consulta ya está en proceso", "Espera unos segundos antes de intentarlo nuevamente."],
     CONCURRENT_REQUEST: ["No pudimos iniciar la solicitud", "Inténtalo nuevamente en unos momentos."],
     CANCELLATION_REQUEST_IN_PROGRESS: ["No es posible iniciar otra solicitud", "Existe una operación que todavía debe finalizar. Inténtalo nuevamente más adelante."],
   };

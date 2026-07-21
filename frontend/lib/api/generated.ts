@@ -9,8 +9,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Inicia una nueva solicitud y consulta su elegibilidad
-         * @description Valida el DNI, crea una solicitud nueva y consulta si hay certificados digitales susceptibles de cancelación. No reabre solicitudes anteriores, no devuelve certificados individuales ni expone el DNI completo.
+         * Inicia una solicitud y consulta si existen certificados disponibles
+         * @description Valida el DNI, crea una solicitud y consulta únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo.
          */
         post: operations["initiateCancellationRequest"];
         delete?: never;
@@ -63,7 +63,7 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description Datos requeridos para iniciar una nueva solicitud y consultar su elegibilidad. */
+        /** @description Datos requeridos para iniciar una nueva solicitud y consultar si existen certificados disponibles. */
         StartCancellationRequest: {
             /** @description Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo. */
             dni: string;
@@ -86,13 +86,13 @@ export interface components {
              * @example PENDING_IDENTITY_VERIFICATION
              * @enum {string}
              */
-            requestStatus: "STARTED" | "CHECKING_ELIGIBILITY" | "NO_CERTIFICATES_AVAILABLE" | "CERTIFICATES_AVAILABLE" | "NOT_ELIGIBLE" | "ELIGIBLE" | "PENDING_IDENTITY_VERIFICATION" | "IDENTITY_VERIFIED" | "AUTHENTICATED_PENDING_SELECTION" | "CERTIFICATES_SELECTED" | "REASON_REGISTERED" | "PENDING_CONFIRMATION" | "CONFIRMED" | "REVOCATION_IN_PROGRESS" | "REVOCATION_SUCCEEDED" | "REVOCATION_FAILED" | "REVOCATION_OUTCOME_UNKNOWN" | "COMPLETED" | "FAILED" | "OUTCOME_UNKNOWN" | "RECEIPT_AVAILABLE" | "ABANDONED";
+            requestStatus: "STARTED" | "CHECKING_AVAILABILITY" | "NO_CERTIFICATES_AVAILABLE" | "PENDING_IDENTITY_VERIFICATION" | "IDENTITY_VERIFIED" | "AUTHENTICATED_PENDING_CERTIFICATE_LIST" | "CERTIFICATES_AVAILABLE" | "CERTIFICATES_SELECTED" | "REASON_REGISTERED" | "PENDING_CONFIRMATION" | "CONFIRMED" | "REVOCATION_IN_PROGRESS" | "REVOCATION_SUCCEEDED" | "REVOCATION_FAILED" | "REVOCATION_OUTCOME_UNKNOWN" | "COMPLETED" | "FAILED" | "OUTCOME_UNKNOWN" | "RECEIPT_AVAILABLE" | "ABANDONED";
             /**
-             * @description Resultado normalizado de la consulta de certificados.
-             * @example ELIGIBLE
+             * @description Resultado normalizado de la consulta inicial de existencia. No representa una lista detallada.
+             * @example AVAILABLE
              * @enum {string}
              */
-            eligibilityResult: "ELIGIBLE" | "NOT_ELIGIBLE" | "UNAVAILABLE" | "INCONCLUSIVE" | "ERROR";
+            availabilityResult: "AVAILABLE" | "NOT_AVAILABLE" | "INCONCLUSIVE" | "UNAVAILABLE" | "ERROR";
             /**
              * @description Indica si el backend autoriza continuar al siguiente paso.
              * @example true
@@ -187,7 +187,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Resultado normalizado de elegibilidad */
+            /** @description Resultado normalizado de existencia de certificados */
             200: {
                 headers: {
                     /** @description Identificador de correlación */
@@ -208,7 +208,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Conflicto controlado: ELIGIBILITY_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST */
+            /** @description Conflicto controlado: AVAILABILITY_CHECK_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST */
             409: {
                 headers: {
                     "X-Correlation-ID"?: string;
@@ -238,7 +238,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Error controlado del proveedor de elegibilidad */
+            /** @description Error controlado del proveedor de disponibilidad */
             502: {
                 headers: {
                     "X-Correlation-ID"?: string;
@@ -248,7 +248,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Servicio de elegibilidad no disponible */
+            /** @description Servicio de disponibilidad no disponible */
             503: {
                 headers: {
                     "X-Correlation-ID"?: string;

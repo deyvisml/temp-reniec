@@ -21,7 +21,7 @@ describe("generated API aliases", () => {
     const request: StartCancellationRequest = { dni: "00000001" };
     const response: CancellationRequestResponse = {
       canContinue: true,
-      eligibilityResult: "ELIGIBLE",
+      availabilityResult: "AVAILABLE",
       maskedDni: "******01",
       nextStep: "IDENTITY_VERIFICATION",
       requestId: 42,
@@ -40,5 +40,31 @@ describe("generated API aliases", () => {
     expect(openApi).toContain("CANCELLATION_REQUEST_IN_PROGRESS");
     expect(openApi).not.toMatch(/reused|publicReference|recupera una solicitud|inicio o recuperación/i);
     expect(generated).not.toMatch(/reused|publicReference|recupera una solicitud|inicio o recuperación/i);
+  });
+
+  it("keeps the initial response limited to certificate existence", () => {
+    const openApi = JSON.parse(
+      readFileSync(join(process.cwd(), "openapi", "backend-api.json"), "utf8"),
+    );
+    const schema = openApi.components.schemas.CancellationRequestResponse;
+
+    expect(schema.required).toContain("availabilityResult");
+    expect(schema.properties.availabilityResult.enum).toEqual([
+      "AVAILABLE",
+      "NOT_AVAILABLE",
+      "INCONCLUSIVE",
+      "UNAVAILABLE",
+      "ERROR",
+    ]);
+    expect(Object.keys(schema.properties)).not.toEqual(
+      expect.arrayContaining([
+        "eligibilityResult",
+        "certificates",
+        "certificateCount",
+        "orderNumber",
+        "emissionCreatedAt",
+        "certificateUuid",
+      ]),
+    );
   });
 });

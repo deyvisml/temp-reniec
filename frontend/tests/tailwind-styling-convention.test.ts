@@ -39,9 +39,9 @@ describe("Tailwind-first styling convention", () => {
 
   it("keeps the citizen home presentation colocated as Tailwind utilities", () => {
     const homeSource = readFileSync(join(frontendRoot, "app", "page.tsx"), "utf8");
-    const formSource = readFileSync(join(frontendRoot, "components", "dni-eligibility-form.tsx"), "utf8");
+    const formSource = readFileSync(join(frontendRoot, "components", "dni-availability-form.tsx"), "utf8");
     const outcomeAlertSource = readFileSync(
-      join(frontendRoot, "components", "eligibility-outcome-alert.tsx"),
+      join(frontendRoot, "components", "availability-outcome-alert.tsx"),
       "utf8",
     );
     const layoutSource = readFileSync(join(frontendRoot, "app", "layout.tsx"), "utf8");

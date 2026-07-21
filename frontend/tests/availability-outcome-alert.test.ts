@@ -3,15 +3,15 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  getEligibilityOutcomePresentation,
-  getEligibilitySweetAlertOptions,
-  resolveEligibilityAlertAction,
-} from "@/components/eligibility-outcome-alert";
+  getAvailabilityOutcomePresentation,
+  getAvailabilitySweetAlertOptions,
+  resolveAvailabilityAlertAction,
+} from "@/components/availability-outcome-alert";
 
 describe("SweetAlert2 eligibility outcome feedback", () => {
   it("maps an eligible result to an explicit authorized continuation", () => {
-    const presentation = getEligibilityOutcomePresentation({
-      kind: "eligible",
+    const presentation = getAvailabilityOutcomePresentation({
+      kind: "available",
       continuePath: "/verificacion-identidad?requestId=42",
       maskedDni: "******01",
     });
@@ -27,7 +27,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("maps a not-eligible result to a calm terminal reset", () => {
-    const presentation = getEligibilityOutcomePresentation({ kind: "not-eligible" });
+    const presentation = getAvailabilityOutcomePresentation({ kind: "not-available" });
 
     expect(presentation.tone).toBe("informative");
     expect(presentation.title).toBe("No encontramos certificados para cancelar");
@@ -42,8 +42,8 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("keeps retries and controlled correlation data explicit", () => {
-    const inconclusive = getEligibilityOutcomePresentation({ kind: "inconclusive" });
-    const error = getEligibilityOutcomePresentation({
+    const inconclusive = getAvailabilityOutcomePresentation({ kind: "inconclusive" });
+    const error = getAvailabilityOutcomePresentation({
       kind: "error",
       title: "Servicio temporalmente no disponible",
       message: "No podemos consultar los certificados en este momento.",
@@ -58,7 +58,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("acknowledges a protected operation without offering retry or historical recovery", () => {
-    const presentation = getEligibilityOutcomePresentation({
+    const presentation = getAvailabilityOutcomePresentation({
       kind: "error",
       title: "No es posible iniciar otra solicitud",
       message: "Existe una operación que todavía debe finalizar.",
@@ -72,12 +72,12 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("builds supported SweetAlert2 options without dynamic HTML", () => {
-    const presentation = getEligibilityOutcomePresentation({
-      kind: "eligible",
+    const presentation = getAvailabilityOutcomePresentation({
+      kind: "available",
       continuePath: "/verificacion-identidad?requestId=42",
       maskedDni: "<img src=x onerror=alert(1)>",
     });
-    const options = getEligibilitySweetAlertOptions(presentation, false);
+    const options = getAvailabilitySweetAlertOptions(presentation, false);
 
     expect(options.titleText).toBe(presentation.title);
     expect(options.text).toContain("<img src=x onerror=alert(1)>");
@@ -92,45 +92,45 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("disables non-essential animation for reduced motion", () => {
-    const presentation = getEligibilityOutcomePresentation({ kind: "not-eligible" });
+    const presentation = getAvailabilityOutcomePresentation({ kind: "not-available" });
 
-    expect(getEligibilitySweetAlertOptions(presentation, true).animation).toBe(false);
-    expect(getEligibilitySweetAlertOptions(presentation, false).animation).toBe(true);
+    expect(getAvailabilitySweetAlertOptions(presentation, true).animation).toBe(false);
+    expect(getAvailabilitySweetAlertOptions(presentation, false).animation).toBe(true);
   });
 
   it("resolves only explicit or safe dismiss actions", () => {
-    const eligible = getEligibilityOutcomePresentation({
-      kind: "eligible",
+    const eligible = getAvailabilityOutcomePresentation({
+      kind: "available",
       continuePath: "/verificacion-identidad?requestId=42",
     });
-    const inconclusive = getEligibilityOutcomePresentation({ kind: "inconclusive" });
+    const inconclusive = getAvailabilityOutcomePresentation({ kind: "inconclusive" });
 
     expect(
-      resolveEligibilityAlertAction(eligible, {
+      resolveAvailabilityAlertAction(eligible, {
         isConfirmed: true,
         dismiss: undefined,
       })?.kind,
     ).toBe("continue");
     expect(
-      resolveEligibilityAlertAction(eligible, {
+      resolveAvailabilityAlertAction(eligible, {
         isConfirmed: false,
         dismiss: "cancel",
       })?.kind,
     ).toBe("reset");
     expect(
-      resolveEligibilityAlertAction(inconclusive, {
+      resolveAvailabilityAlertAction(inconclusive, {
         isConfirmed: true,
         dismiss: undefined,
       })?.kind,
     ).toBe("retry");
     expect(
-      resolveEligibilityAlertAction(inconclusive, {
+      resolveAvailabilityAlertAction(inconclusive, {
         isConfirmed: false,
         dismiss: "esc",
       })?.kind,
     ).toBe("reset");
     expect(
-      resolveEligibilityAlertAction(inconclusive, {
+      resolveAvailabilityAlertAction(inconclusive, {
         isConfirmed: false,
         dismiss: "backdrop",
       }),
@@ -139,11 +139,11 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
 
   it("loads SweetAlert2 on demand and removes the project-owned modal", () => {
     const alertSource = readFileSync(
-      join(process.cwd(), "components", "eligibility-outcome-alert.tsx"),
+      join(process.cwd(), "components", "availability-outcome-alert.tsx"),
       "utf8",
     );
     const formSource = readFileSync(
-      join(process.cwd(), "components", "dni-eligibility-form.tsx"),
+      join(process.cwd(), "components", "dni-availability-form.tsx"),
       "utf8",
     );
 
@@ -151,7 +151,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     expect(alertSource).toContain("if (!active) return");
     expect(alertSource).not.toContain("<dialog");
     expect(alertSource).not.toContain("sweetalert2-react-content");
-    expect(formSource).toContain("EligibilityOutcomeAlert");
+    expect(formSource).toContain("AvailabilityOutcomeAlert");
     expect(formSource).not.toContain("EligibilityOutcomeDialog");
     expect(formSource).not.toContain("ResultPanel");
   });

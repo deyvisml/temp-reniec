@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { DniEligibilityForm } from "@/components/dni-eligibility-form";
+import { DniAvailabilityForm } from "@/components/dni-availability-form";
 
 const iconStroke =
     "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
@@ -53,7 +53,7 @@ export default function HomePage() {
                 className="z-2 relative bg-[#ffffffed] shadow-[0_24px_70px_-30px_#001b6055] backdrop-blur-[10px] mx-auto mt-[26px] max-[800px]:mt-0 px-16 max-[480px]:px-[18px] max-[800px]:px-6 max-[480px]:py-[25px] max-[800px]:py-[30px] pt-[34px] pb-7 border border-[#e0e7f2] rounded-[18px] max-[480px]:rounded-[14px] w-full max-w-[920px]"
                 aria-label="Consulta de certificados digitales"
             >
-                <DniEligibilityForm />
+                <DniAvailabilityForm />
             </section>
 
             <section

@@ -14,31 +14,31 @@ import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator.EligibilityPreparation;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator.AvailabilityPreparation;
 
 @Service
 public class EligibilityInitiationService {
 
 	private final EligibilityPersistenceCoordinator persistence;
-	private final CertificateEligibilityGateway gateway;
+	private final CertificateAvailabilityPort availabilityPort;
 	private final Duration timeout;
 	private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
 	public EligibilityInitiationService(EligibilityPersistenceCoordinator persistence,
-			CertificateEligibilityGateway gateway,
-			@Value("${app.eligibility.timeout:1s}") Duration timeout) {
+			CertificateAvailabilityPort availabilityPort,
+			@Value("${app.availability.timeout:1s}") Duration timeout) {
 		this.persistence = persistence;
-		this.gateway = gateway;
+		this.availabilityPort = availabilityPort;
 		this.timeout = timeout;
 	}
 
 	public CancellationRequestResponse initiate(String dni, String correlationId) {
 		try {
-			EligibilityPreparation preparation = persistence.prepare(dni, correlationId);
-			EligibilityGatewayResult result = execute(dni, preparation);
+			AvailabilityPreparation preparation = persistence.prepare(dni, correlationId);
+			AvailabilityResult result = execute(dni, preparation);
 			CancellationRequestResponse response = persistence.finalizeAttempt(preparation, result);
-			if (result.outcome() == EligibilityOutcome.UNAVAILABLE) throw new EligibilityUnavailableException();
-			if (result.outcome() == EligibilityOutcome.ERROR) throw new EligibilityProviderException();
+			if (result.outcome() == AvailabilityOutcome.UNAVAILABLE) throw new EligibilityUnavailableException();
+			if (result.outcome() == AvailabilityOutcome.ERROR) throw new EligibilityProviderException();
 			return response;
 		}
 		catch (CancellationRequestProtectedException | EligibilityInProgressException | EligibilityUnavailableException
@@ -50,26 +50,26 @@ public class EligibilityInitiationService {
 		}
 	}
 
-	private EligibilityGatewayResult execute(String dni, EligibilityPreparation preparation) {
-		Future<EligibilityGatewayResult> future = executor.submit(() -> gateway.check(dni));
+	private AvailabilityResult execute(String dni, AvailabilityPreparation preparation) {
+		Future<AvailabilityResult> future = executor.submit(() -> availabilityPort.checkAvailability(dni));
 		try {
 			return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
 		}
 		catch (TimeoutException exception) {
 			future.cancel(true);
 			persistence.finalizeAttempt(preparation,
-					new EligibilityGatewayResult(EligibilityOutcome.UNAVAILABLE, null, "ELIGIBILITY_TIMEOUT"));
+					new AvailabilityResult(AvailabilityOutcome.UNAVAILABLE, null, "AVAILABILITY_TIMEOUT"));
 			throw new EligibilityTimeoutException();
 		}
 		catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
 			persistence.finalizeAttempt(preparation,
-					new EligibilityGatewayResult(EligibilityOutcome.ERROR, null, "ELIGIBILITY_INTERRUPTED"));
+					new AvailabilityResult(AvailabilityOutcome.ERROR, null, "AVAILABILITY_INTERRUPTED"));
 			throw new EligibilityProviderException();
 		}
 		catch (ExecutionException exception) {
 			persistence.finalizeAttempt(preparation,
-					new EligibilityGatewayResult(EligibilityOutcome.ERROR, null, "ELIGIBILITY_PROVIDER_ERROR"));
+					new AvailabilityResult(AvailabilityOutcome.ERROR, null, "AVAILABILITY_PROVIDER_ERROR"));
 			throw new EligibilityProviderException();
 		}
 	}

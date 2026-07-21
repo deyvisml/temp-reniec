@@ -21,11 +21,11 @@ springdoc:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
-  eligibility:
-    stale-attempt-threshold: ${ELIGIBILITY_STALE_ATTEMPT_THRESHOLD:30s}
-    timeout: ${ELIGIBILITY_TIMEOUT:1s}
+  availability:
+    stale-attempt-threshold: ${AVAILABILITY_STALE_ATTEMPT_THRESHOLD:30s}
+    timeout: ${AVAILABILITY_TIMEOUT:1s}
     mock:
-      simulated-timeout: ${ELIGIBILITY_MOCK_SIMULATED_TIMEOUT:2s}
+      simulated-timeout: ${AVAILABILITY_MOCK_SIMULATED_TIMEOUT:2s}
 
 logging:
   level:

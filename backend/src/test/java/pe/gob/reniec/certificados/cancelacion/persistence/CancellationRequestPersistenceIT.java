@@ -37,11 +37,11 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Cancellat
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckEntity;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentEligibilityResult;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckResult;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckStatus;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateAvailabilityCheckEntity;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateAvailabilityCheckRepository;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentAvailabilityResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.AvailabilityCheckResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.AvailabilityCheckStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityMatchResult;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationRepository;
@@ -61,7 +61,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	private static final String CORRELATION = "persistence-test-correlation";
 
 	@Autowired CertificateCancellationRequestRepository requestRepository;
-	@Autowired CertificateEligibilityCheckRepository eligibilityRepository;
+	@Autowired CertificateAvailabilityCheckRepository availabilityRepository;
 	@Autowired IdentityVerificationRepository identityRepository;
 	@Autowired RevocationOperationRepository revocationRepository;
 	@Autowired CancellationReceiptRepository receiptRepository;
@@ -77,7 +77,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM cancellation_request_certificate");
 		jdbcTemplate.update("DELETE FROM revocation_operation");
 		jdbcTemplate.update("DELETE FROM identity_verification");
-		jdbcTemplate.update("DELETE FROM certificate_eligibility_check");
+		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
 	}
 
@@ -125,13 +125,13 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 		assertThat(tables).containsExactly(
 				"cancellation_audit_event", "cancellation_receipt",
-				"cancellation_request_certificate", "certificate_cancellation_request",
-				"certificate_eligibility_check", "identity_verification", "revocation_operation");
+				"cancellation_request_certificate", "certificate_availability_check",
+				"certificate_cancellation_request", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(4);
+		assertThat(migrationCount).isEqualTo(5);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
-		assertThat(documentedColumnCount).isEqualTo(81);
+		assertThat(documentedColumnCount).isEqualTo(80);
 		assertThat(health.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(health.body()).contains("\"status\":\"UP\"")
 				.doesNotContain("jdbc", "mysql", "username", "password", "sql", "dni");
@@ -177,7 +177,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void serializesConcurrentEligibilityAndStartsANewRequestForALaterEntry() throws Exception {
+	void serializesConcurrentAvailabilityAndStartsANewRequestForALaterEntry() throws Exception {
 		String body = "{\"dni\":\"00000001\"}";
 		CountDownLatch start = new CountDownLatch(1);
 		try (var executor = Executors.newFixedThreadPool(2)) {
@@ -189,14 +189,15 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 			assertThat(List.of(firstResponse.statusCode(), secondResponse.statusCode()))
 					.allMatch(status -> status == 200 || status == 409);
 			assertThat(firstResponse.body() + secondResponse.body())
-					.contains("ELIGIBLE", "IDENTITY_VERIFICATION", "******01")
+					.contains("AVAILABLE", "IDENTITY_VERIFICATION", "******01")
 					.doesNotContain("00000001", "\"id\"");
 		}
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM certificate_cancellation_request WHERE dni='00000001'", Integer.class))
 				.isEqualTo(1);
 		assertThat(jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(1);
+				"SELECT COUNT(*) FROM certificate_availability_check", Integer.class)).isEqualTo(1);
+		assertThat(certificateCount()).isZero();
 
 		Long firstRequestId = jdbcTemplate.queryForObject(
 				"SELECT id FROM certificate_cancellation_request WHERE dni='00000001'", Long.class);
@@ -208,13 +209,14 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				"SELECT COUNT(*) FROM certificate_cancellation_request WHERE dni='00000001'", Integer.class))
 				.isEqualTo(2);
 		assertThat(jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(2);
+				"SELECT COUNT(*) FROM certificate_availability_check", Integer.class)).isEqualTo(2);
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT request_status FROM certificate_cancellation_request WHERE id=?",
 				String.class, firstRequestId)).isEqualTo("ABANDONED");
 		assertThat(jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM certificate_eligibility_check WHERE attempt_number=1", Integer.class))
+				"SELECT COUNT(*) FROM certificate_availability_check WHERE attempt_number=1", Integer.class))
 				.isEqualTo(2);
+		assertThat(certificateCount()).isZero();
 	}
 
 	@Test
@@ -229,7 +231,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(response.body()).contains("CANCELLATION_REQUEST_IN_PROGRESS", "correlationId")
 				.doesNotContain("00000001", "requestId", "constancia", "certificate");
 		assertThat(requestRepository.count()).isEqualTo(1);
-		assertThat(eligibilityRepository.count()).isZero();
+		assertThat(availabilityRepository.count()).isZero();
 	}
 
 	@Test
@@ -239,7 +241,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(response.body()).contains("VALIDATION_ERROR", "correlationId")
 				.doesNotContain("1234");
 		assertThat(requestRepository.count()).isZero();
-		assertThat(eligibilityRepository.count()).isZero();
+		assertThat(availabilityRepository.count()).isZero();
 	}
 
 	@Test
@@ -251,7 +253,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		HttpResponse<String> timeout = postCancellation("{\"dni\":\"00000006\"}");
 
 		assertThat(notEligible.statusCode()).isEqualTo(200);
-		assertThat(notEligible.body()).contains("NOT_ELIGIBLE").doesNotContain("00000002");
+		assertThat(notEligible.body()).contains("NOT_AVAILABLE").doesNotContain("00000002");
 		assertThat(unavailable.statusCode()).isEqualTo(503);
 		assertThat(unavailable.body()).contains("ELIGIBILITY_UNAVAILABLE").doesNotContain("00000003");
 		assertThat(inconclusive.statusCode()).isEqualTo(200);
@@ -261,13 +263,17 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(timeout.statusCode()).isEqualTo(504);
 		assertThat(timeout.body()).contains("ELIGIBILITY_TIMEOUT").doesNotContain("00000006");
 		assertThat(requestRepository.count()).isEqualTo(5);
-		assertThat(eligibilityRepository.count()).isEqualTo(5);
+		assertThat(availabilityRepository.count()).isEqualTo(5);
+		assertThat(certificateCount()).isZero();
+		assertThat(notEligible.body() + unavailable.body() + inconclusive.body() + technical.body() + timeout.body())
+				.doesNotContain("certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount");
 	}
 
 	@Test
 	void storesReadableRequestReasonConfirmationAndTerminalHistoryWithoutExpiration() {
 		CertificateCancellationRequestEntity request = saveRequest("12345678");
-		request.recordEligibility(CurrentEligibilityResult.ELIGIBLE, CancellationRequestStatus.ELIGIBLE);
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request.registerReason(CancellationReasonCode.OTHER, "Cambio de dispositivo personal");
 		request.confirm(Instant.now());
 		requestRepository.saveAndFlush(request);
@@ -275,7 +281,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(requestRepository.findById(request.getId())).get().satisfies(found -> {
 			assertThat(found.getDni()).isEqualTo("12345678");
 			assertThat(found.getRequestStatus()).isEqualTo(CancellationRequestStatus.CONFIRMED);
-			assertThat(found.getEligibilityResult()).isEqualTo(CurrentEligibilityResult.ELIGIBLE);
+			assertThat(found.getAvailabilityResult()).isEqualTo(CurrentAvailabilityResult.AVAILABLE);
 			assertThat(found.getReasonCode()).isEqualTo(CancellationReasonCode.OTHER);
 			assertThat(found.getOtherReason()).isEqualTo("Cambio de dispositivo personal");
 			assertThat(found.getConfirmedAt()).isNotNull();
@@ -297,17 +303,17 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void recordsRepeatableEligibilityAndIdentityAttemptsAndFindsLatestValid() {
+	void recordsRepeatableAvailabilityAndIdentityAttemptsAndFindsLatestValid() {
 		CertificateCancellationRequestEntity request = saveRequest("23456789");
 		Instant now = Instant.now();
-		CertificateEligibilityCheckEntity eligibility1 = new CertificateEligibilityCheckEntity(
-				request, 1, EligibilityCheckStatus.SUBMITTED, now, CORRELATION);
-		eligibility1.complete(EligibilityCheckResult.INCONCLUSIVE, now.plusSeconds(1), "eligibility-ref-1");
-		eligibilityRepository.saveAndFlush(eligibility1);
-		CertificateEligibilityCheckEntity eligibility2 = new CertificateEligibilityCheckEntity(
-				request, 2, EligibilityCheckStatus.SUBMITTED, now.plusSeconds(2), CORRELATION);
-		eligibility2.complete(EligibilityCheckResult.ELIGIBLE, now.plusSeconds(3), "eligibility-ref-2");
-		eligibilityRepository.saveAndFlush(eligibility2);
+		CertificateAvailabilityCheckEntity eligibility1 = new CertificateAvailabilityCheckEntity(
+				request, 1, AvailabilityCheckStatus.SUBMITTED, now, CORRELATION);
+		eligibility1.complete(AvailabilityCheckResult.INCONCLUSIVE, now.plusSeconds(1), "eligibility-ref-1");
+		availabilityRepository.saveAndFlush(eligibility1);
+		CertificateAvailabilityCheckEntity eligibility2 = new CertificateAvailabilityCheckEntity(
+				request, 2, AvailabilityCheckStatus.SUBMITTED, now.plusSeconds(2), CORRELATION);
+		eligibility2.complete(AvailabilityCheckResult.AVAILABLE, now.plusSeconds(3), "eligibility-ref-2");
+		availabilityRepository.saveAndFlush(eligibility2);
 
 		IdentityVerificationEntity identity1 = new IdentityVerificationEntity(request, 1, "ID_PERU", now, CORRELATION);
 		identity1.finish(IdentityVerificationStatus.REJECTED, IdentityMatchResult.INCONCLUSIVE,
@@ -319,13 +325,13 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				now.plusSeconds(3), "identity-ref-2", null);
 		identityRepository.saveAndFlush(identity2);
 
-		assertThat(eligibilityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId())).get()
-				.extracting(CertificateEligibilityCheckEntity::getId).isEqualTo(eligibility2.getId());
+		assertThat(availabilityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId())).get()
+				.extracting(CertificateAvailabilityCheckEntity::getId).isEqualTo(eligibility2.getId());
 		assertThat(identityRepository.findFirstByRequest_IdAndVerificationStatusOrderByAttemptNumberDesc(
 				request.getId(), IdentityVerificationStatus.VERIFIED)).get()
 				.extracting(IdentityVerificationEntity::getId).isEqualTo(identity2.getId());
-		assertThatThrownBy(() -> eligibilityRepository.saveAndFlush(new CertificateEligibilityCheckEntity(
-				request, 2, EligibilityCheckStatus.CREATED, now.plusSeconds(4), CORRELATION)))
+		assertThatThrownBy(() -> availabilityRepository.saveAndFlush(new CertificateAvailabilityCheckEntity(
+				request, 2, AvailabilityCheckStatus.CREATED, now.plusSeconds(4), CORRELATION)))
 				.isInstanceOf(DataIntegrityViolationException.class);
 		assertThatThrownBy(() -> identityRepository.saveAndFlush(new IdentityVerificationEntity(
 				request, 2, "ID_PERU", now.plusSeconds(4), CORRELATION)))
@@ -395,7 +401,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				"CREATED", CORRELATION, AuditEventOrigin.CITIZEN, now));
 		CancellationAuditEventEntity checked = auditRepository.save(new CancellationAuditEventEntity(
 				request, CancellationAuditEventType.ELIGIBILITY_CHECKED, CancellationRequestStatus.STARTED,
-				CancellationRequestStatus.ELIGIBLE, "ELIGIBLE", CORRELATION,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION, "AVAILABLE", CORRELATION,
 				AuditEventOrigin.EXTERNAL_PROVIDER, now.plusSeconds(1)));
 
 		assertThat(auditRepository.findByRequest_IdOrderByOccurredAtAscIdAsc(request.getId()))
@@ -439,5 +445,9 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				.header("Content-Type", "application/json")
 				.header("X-Correlation-ID", "eligibility-it")
 				.POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	private Integer certificateCount() {
+		return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cancellation_request_certificate", Integer.class);
 	}
 }

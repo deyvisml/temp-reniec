@@ -74,8 +74,10 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(response.body())
 				.contains("/api/v1/system/status", "/api/v1/cancellation-requests", "/actuator/health",
-						"SystemStatusResponse", "StartCancellationRequest", "ApiError", "503", "X-Correlation-ID")
-				.doesNotContain("/actuator/info", "/__test/", "securitySchemes");
+						"SystemStatusResponse", "StartCancellationRequest", "ApiError", "availabilityResult",
+						"AVAILABLE", "NOT_AVAILABLE", "503", "X-Correlation-ID")
+				.doesNotContain("/actuator/info", "/__test/", "securitySchemes", "eligibilityResult",
+						"certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount");
 	}
 
 	private URI uri(String path) {

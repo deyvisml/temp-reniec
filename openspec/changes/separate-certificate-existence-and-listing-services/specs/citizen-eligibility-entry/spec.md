@@ -1,10 +1,5 @@
-# Citizen Eligibility Entry Specification
+## MODIFIED Requirements
 
-## Purpose
-
-Define the citizen-facing home, DNI validation, cancellation-request initiation, and normalized certificate-eligibility consultation that begin the cancellation journey.
-
-## Requirements
 ### Requirement: Citizen home communicates the service accurately
 The `/` route SHALL present an accessible, responsive citizen-facing home page based on `docs/ui-reference/home.png` and SHALL describe the initial action as checking whether certificates are available for cancellation. It MUST NOT state or imply that this stage obtains a detailed list, reveal a certificate count, expose or select individual certificates, or cancel the DNI, civil identity, physical document, DNIe or ID Perú account. Its existing institutional composition, DNI form, feedback, responsive behavior, semantic structure and visible focus SHALL remain intact.
 
@@ -15,21 +10,6 @@ The `/` route SHALL present an accessible, responsive citizen-facing home page b
 #### Scenario: Positive result is presented
 - **WHEN** the backend confirms that certificates are available
 - **THEN** the home offers identity verification without displaying quantity, order number, creation date or UUID
-
-### Requirement: DNI validation is strict and centralized
-The frontend and backend SHALL accept a DNI only when it contains exactly eight ASCII digits matching `^[0-9]{8}$`. The backend validation SHALL be authoritative, and both implementations SHALL use one named rule and shared test vectors within their respective codebases.
-
-#### Scenario: Empty DNI is submitted
-- **WHEN** the citizen submits an empty DNI
-- **THEN** the frontend prevents the request, associates a clear error with the field, and moves focus to the invalid control
-
-#### Scenario: Invalid DNI reaches the backend
-- **WHEN** the endpoint receives a DNI with letters, spaces, Unicode digits, fewer than eight digits, more than eight digits, or an oversized payload
-- **THEN** it returns the common validation error without creating a request or eligibility attempt
-
-#### Scenario: Valid DNI is submitted
-- **WHEN** the input contains exactly eight ASCII digits
-- **THEN** the frontend permits submission and the backend accepts the value for case-use processing
 
 ### Requirement: Versioned request initiation contract
 The backend SHALL expose `POST /api/v1/cancellation-requests` with a JSON DNI body to create a new request and determine whether at least one certificate is currently available for cancellation. A functional success response SHALL include the new numeric `requestId`, masked DNI, current request status, normalized `availabilityResult`, `canContinue`, and `nextStep`. It MUST NOT expose an eligibility alias, provider boolean, full DNI, certificate collection, count, order number, creation date, UUID, historical request identifier or public-reference UUID. `requestId` MUST NOT authenticate or authorize a caller by itself.
@@ -118,29 +98,6 @@ The frontend SHALL present every completed availability outcome through the main
 - **WHEN** the result is inconclusive, unavailable, timed out or affected by network loss
 - **THEN** the modal explains that availability could not be confirmed and provides an explicit safe retry without claiming absence
 
-### Requirement: Eligibility outcome dialogs manage focus and dismissal safely
-The SweetAlert2 integration SHALL expose an accessible name and description, open as a modal dialog, contain keyboard focus, and restore focus to the DNI field after a reset. Visual status MUST NOT rely only on color. Backdrop clicks MUST NOT dismiss the result, and Escape SHALL map to the safe non-continuing action for the current outcome. Retry and continuation SHALL occur only through explicit actions.
-
-#### Scenario: Modal opens after a submitted consultation
-- **WHEN** the pending consultation resolves to a functional result or controlled error
-- **THEN** focus moves into the labeled SweetAlert2 modal and assistive technology can identify its result, explanation and available actions without duplicate announcements
-
-#### Scenario: Citizen navigates with the keyboard
-- **WHEN** the citizen uses Tab or Shift+Tab while the modal is open
-- **THEN** focus remains inside the modal and every available action has a visible focus indicator and a target of at least 44 by 44 pixels
-
-#### Scenario: Citizen dismisses with Escape
-- **WHEN** the citizen presses Escape instead of selecting an action
-- **THEN** the integration executes the variant's safe reset or return behavior, never continues the citizen flow, never retries automatically, and restores focus to the DNI field when the form is shown
-
-#### Scenario: Citizen clicks the backdrop
-- **WHEN** the citizen clicks outside the modal surface
-- **THEN** the result remains open so that a terminal or retryable outcome cannot be lost accidentally
-
-#### Scenario: Citizen prefers reduced motion
-- **WHEN** the browser reports `prefers-reduced-motion: reduce`
-- **THEN** the SweetAlert2 presentation does not use non-essential entrance or exit animation
-
 ### Requirement: Eligibility response semantics are explicit
 The frontend SHALL distinguish available, not available, inconclusive, service unavailable, timeout, technical backend error, network loss, request-in-progress conflict, protected-operation conflict and concurrency conflict using generated types or stable API codes. Citizen messages SHALL be understandable, non-technical and non-enumerating. Only `AVAILABLE` with `canContinue=true` SHALL authorize the identity-verification action.
 
@@ -156,17 +113,6 @@ The frontend SHALL distinguish available, not available, inconclusive, service u
 - **WHEN** the backend returns `AVAILABLE`, `canContinue=true` and `nextStep=IDENTITY_VERIFICATION`
 - **THEN** the frontend offers continuation without certificate details and without placing the DNI in the URL
 
-### Requirement: Duplicate frontend submissions are prevented
-The DNI form SHALL allow only one active submission per mounted form instance. It SHALL disable the primary action, expose a programmatic busy state, ignore repeated submit events until completion, and cancel in-flight work when the component is unmounted.
-
-#### Scenario: Citizen activates submit twice
-- **WHEN** the primary action is clicked or triggered repeatedly while a request is pending
-- **THEN** only one HTTP request is issued and the loading state is announced accessibly
-
-#### Scenario: Page is left during submission
-- **WHEN** the form unmounts while the request is active
-- **THEN** the client aborts the request and does not update stale UI state
-
 ### Requirement: Continuation is emitted only for eligible requests
 The backend SHALL set `canContinue=true` and `nextStep=IDENTITY_VERIFICATION` only when certificate availability is positively confirmed for the current active request. Negative, inconclusive, unavailable, timeout and technical outcomes SHALL block navigation. The frontend SHALL prepare `/verificacion-identidad` using only `requestId` and SHALL never include the DNI or certificate data in the URL.
 
@@ -177,24 +123,6 @@ The backend SHALL set `canContinue=true` and `nextStep=IDENTITY_VERIFICATION` on
 #### Scenario: Any other result is received
 - **WHEN** availability is negative or cannot be confirmed
 - **THEN** the frontend exposes no continuation control and does not navigate
-
-### Requirement: DNI exposure is minimized outside MySQL
-The system SHALL persist the DNI only in the consolidated request column, derive masked presentation from it, and MUST NOT place the full value in logs, metrics, error bodies, URLs, OpenAPI examples, browser storage, cookies, or technical endpoints. The frontend SHALL clear the input value after a terminal response or controlled reset.
-
-#### Scenario: Application logs are inspected
-- **WHEN** initiation succeeds, fails validation, times out, conflicts, or raises an unexpected error
-- **THEN** logs contain correlation and technical state but not the submitted DNI
-
-#### Scenario: Browser storage and history are inspected
-- **WHEN** the citizen completes or abandons the initial consultation
-- **THEN** the DNI is absent from local storage, session storage, cookies, and visited URLs
-
-### Requirement: Initial anti-abuse controls remain simple
-The endpoint SHALL enforce strict media type, body size, DNI format, bounded timeout, active-request deduplication, and in-progress attempt deduplication. The change MUST NOT introduce an in-memory per-IP limiter presented as a production control; final distributed rate limiting and perimeter controls SHALL remain documented for a later infrastructure decision.
-
-#### Scenario: Automated duplicate burst targets one DNI
-- **WHEN** multiple equivalent submissions overlap
-- **THEN** validation, database serialization, and in-progress conflict handling prevent multiplication of active requests and provider calls
 
 ### Requirement: Functional contract remains synchronized
 The OpenAPI document SHALL describe initiation of a new request and certificate-existence query, the normalized availability response, numeric `requestId`, correlation header, and every expected common error. It MUST NOT expose `eligibilityResult`, a raw provider boolean, a certificate collection, count, order number, creation date or UUID. Frontend generated types SHALL be regenerated from that document and contract drift checks SHALL remain mandatory.
@@ -221,37 +149,3 @@ Tests SHALL cover backend validation and orchestration, frontend result mapping,
 #### Scenario: Contract and privacy checks run
 - **WHEN** OpenAPI, generated types, logs, URLs and browser storage are inspected
 - **THEN** the initial flow exposes neither UUID nor other individual certificate data and never stores the DNI in browser storage or URLs
-
-### Requirement: Every home-page entry starts a new journey
-Submitting a DNI from the home page SHALL express a new cancellation intention. The backend SHALL query current certificates for a newly created request and MUST NOT resume a prior request based on DNI, elapsed time, browser, device, or previous status. Continuing immediately from the response belongs to the same current journey and SHALL NOT be described as recovery.
-
-#### Scenario: Previous pre-confirmation journey exists
-- **WHEN** the citizen returns to the home page and submits the same DNI after leaving a request before confirmation
-- **THEN** the old request is abandoned and the response belongs to a new request with a new eligibility consultation
-
-#### Scenario: Previous completed journey exists
-- **WHEN** the citizen previously reached the constancia and later submits the same DNI again
-- **THEN** the system starts from current certificate consultation and never returns the old constancia as the active screen
-
-#### Scenario: One certificate was previously left unselected
-- **WHEN** a prior request canceled only some certificates and the citizen initiates again
-- **THEN** the new request uses a fresh provider result so remaining currently valid certificates can participate independently
-
-#### Scenario: Browser storage is inspected
-- **WHEN** the citizen closes or reloads the application
-- **THEN** no DNI, request progress, or restoration token is read from `localStorage` or `sessionStorage` to resume the prior journey
-
-### Requirement: Unsafe overlapping operations are blocked without recovery
-A new initiation SHALL be rejected while the same DNI has a live eligibility call that is not stale or a confirmed revocation whose outcome remains active or uncertain. The response MUST use a stable generic error and correlation identifier and MUST NOT return the previous `requestId`, step, certificates, selection, or constancia.
-
-#### Scenario: Eligibility call is active
-- **WHEN** another submission arrives while the current eligibility call is within its active threshold
-- **THEN** the backend returns the existing in-progress conflict and creates no second request or provider call
-
-#### Scenario: Revocation is active or uncertain
-- **WHEN** another submission arrives while a confirmed operation is executing or its outcome is unknown
-- **THEN** the backend blocks initiation without recovering or exposing the previous journey
-
-#### Scenario: Prior revocation becomes terminal
-- **WHEN** the previous operation reaches a confirmed terminal result and the citizen initiates again
-- **THEN** a new request is allowed and historical operation and constancia rows remain unchanged

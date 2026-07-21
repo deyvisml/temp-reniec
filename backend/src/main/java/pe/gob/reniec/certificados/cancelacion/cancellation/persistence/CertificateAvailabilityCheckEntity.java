@@ -17,8 +17,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "certificate_eligibility_check")
-public class CertificateEligibilityCheckEntity {
+@Table(name = "certificate_availability_check")
+public class CertificateAvailabilityCheckEntity {
 
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,11 +34,11 @@ public class CertificateEligibilityCheckEntity {
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "check_status", nullable = false, length = 16)
-	private EligibilityCheckStatus checkStatus;
+	private AvailabilityCheckStatus checkStatus;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "normalized_result", length = 24)
-	private EligibilityCheckResult normalizedResult;
+	private AvailabilityCheckResult normalizedResult;
 
 	@Column(name = "external_reference", length = 128)
 	private String externalReference;
@@ -58,10 +58,10 @@ public class CertificateEligibilityCheckEntity {
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
-	protected CertificateEligibilityCheckEntity() { }
+	protected CertificateAvailabilityCheckEntity() { }
 
-	public CertificateEligibilityCheckEntity(CertificateCancellationRequestEntity request, int attemptNumber,
-			EligibilityCheckStatus status, Instant requestedAt, String correlationId) {
+	public CertificateAvailabilityCheckEntity(CertificateCancellationRequestEntity request, int attemptNumber,
+			AvailabilityCheckStatus status, Instant requestedAt, String correlationId) {
 		this.request = Objects.requireNonNull(request, "request");
 		if (attemptNumber < 1) throw new IllegalArgumentException("attemptNumber must be positive");
 		this.attemptNumber = attemptNumber;
@@ -70,19 +70,19 @@ public class CertificateEligibilityCheckEntity {
 		this.correlationId = requireText(correlationId, "correlationId");
 	}
 
-	public void complete(EligibilityCheckResult result, Instant responseTime, String externalReference) {
+	public void complete(AvailabilityCheckResult result, Instant responseTime, String externalReference) {
 		normalizedResult = Objects.requireNonNull(result, "result");
 		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
 		this.externalReference = externalReference;
 		errorCode = null;
-		checkStatus = EligibilityCheckStatus.COMPLETED;
+		checkStatus = AvailabilityCheckStatus.COMPLETED;
 	}
 
-	public void fail(EligibilityCheckResult result, Instant responseTime, String errorCode) {
+	public void fail(AvailabilityCheckResult result, Instant responseTime, String errorCode) {
 		normalizedResult = Objects.requireNonNull(result, "result");
 		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
 		this.errorCode = requireText(errorCode, "errorCode");
-		checkStatus = EligibilityCheckStatus.FAILED;
+		checkStatus = AvailabilityCheckStatus.FAILED;
 	}
 
 	@PrePersist
@@ -101,8 +101,8 @@ public class CertificateEligibilityCheckEntity {
 	public Long getId() { return id; }
 	public CertificateCancellationRequestEntity getRequest() { return request; }
 	public int getAttemptNumber() { return attemptNumber; }
-	public EligibilityCheckStatus getCheckStatus() { return checkStatus; }
-	public EligibilityCheckResult getNormalizedResult() { return normalizedResult; }
+	public AvailabilityCheckStatus getCheckStatus() { return checkStatus; }
+	public AvailabilityCheckResult getNormalizedResult() { return normalizedResult; }
 	public String getExternalReference() { return externalReference; }
 	public Instant getRequestedAt() { return requestedAt; }
 	public Instant getRespondedAt() { return respondedAt; }

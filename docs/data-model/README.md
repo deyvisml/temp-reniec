@@ -2,15 +2,14 @@
 
 > La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica atómica ejecutada como consecuencia de la confirmación de dicha solicitud.
 
-Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V4. El modelo efectivo contiene una tabla raíz y seis tablas relacionadas: siete tablas y 81 columnas de dominio. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
+Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V5. El modelo efectivo contiene una tabla raíz y seis tablas relacionadas: siete tablas y 80 columnas de dominio. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
 
 ## Diagrama entidad-relación
 
 ```mermaid
 erDiagram
-    certificate_cancellation_request ||--o{ certificate_eligibility_check : "registra intentos"
+    certificate_cancellation_request ||--o{ certificate_availability_check : "consulta existencia"
     certificate_cancellation_request ||--o{ cancellation_request_certificate : "conserva certificados"
-    certificate_eligibility_check ||--o{ cancellation_request_certificate : "obtiene"
     certificate_cancellation_request ||--o{ identity_verification : "registra intentos"
     certificate_cancellation_request ||--o{ revocation_operation : "origina"
     certificate_cancellation_request ||--o{ cancellation_receipt : "conserva constancias"
@@ -25,8 +24,8 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 | Tabla | Responsabilidad | Justificación |
 | --- | --- | --- |
 | `certificate_cancellation_request` | Estado y progreso actual del trámite ciudadano. | Es la raíz conceptual y fuente directa del progreso. |
-| `certificate_eligibility_check` | Cada consulta inicial al servicio de certificados. | Una consulta puede fallar o repetirse de forma controlada. |
-| `cancellation_request_certificate` | Cada emisión vigente devuelta para una solicitud y su selección actual. | La consulta devuelve cero, uno o varios certificados y el ciudadano decide cuáles cancelar. |
+| `certificate_availability_check` | Cada consulta inicial que determina únicamente si existen certificados disponibles. | Una consulta puede fallar o repetirse y no contiene datos individuales. |
+| `cancellation_request_certificate` | Cada emisión vigente que obtendrá el futuro segundo servicio después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
 | `identity_verification` | Cada intento de autenticación con ID Perú. | La verificación puede cancelarse, fallar o repetirse. |
 | `revocation_operation` | Cada ejecución técnica idempotente y atómica de revocación. | Conserva el único resultado técnico del conjunto confirmado. |
 | `cancellation_receipt` | Generación y disponibilidad de la constancia. | Su falla no cambia una revocación ya confirmada. |
@@ -34,15 +33,17 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 
 ## Solicitud principal
 
-`certificate_cancellation_request` conserva el DNI, `request_status`, el resultado de consulta vigente, motivo, descripción de `OTHER`, confirmación, resultado final y fechas técnicas. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
+`certificate_cancellation_request` conserva el DNI, `request_status`, `availability_result`, motivo, descripción de `OTHER`, confirmación, resultado final y fechas técnicas. `availability_result` solo indica si la existencia fue confirmada; no significa que la lista detallada ya se obtuvo. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
+
+`certificate_availability_check` registra cada intento del primer servicio con estado técnico, resultado `AVAILABLE`, `NOT_AVAILABLE`, `INCONCLUSIVE`, `UNAVAILABLE` o `ERROR`, fechas, correlación y referencias controladas. No almacena cantidad, número de orden, fecha de creación ni UUID. Un resultado positivo deja la solicitud en `PENDING_IDENTITY_VERIFICATION` y cero filas de certificados.
 
 La solicitud no contiene colecciones JPA automáticas. Los intentos, certificados, operaciones y constancias se consultan con sus repositorios cuando un caso de uso los requiere.
 
 ## Certificados consultados y selección
 
-`cancellation_request_certificate` contiene la solicitud propietaria, el intento que obtuvo el certificado, número de orden, fecha de emisión, UUID canónico, disponibilidad, fecha de consulta, selección, fecha de selección, versión optimista y fechas técnicas.
+`cancellation_request_certificate` contiene la solicitud propietaria, número de orden, fecha de emisión, UUID canónico, disponibilidad, fecha de consulta, selección, fecha de selección, versión optimista y fechas técnicas. Queda reservada para el segundo servicio posterior a la autenticación.
 
-Una solicitud puede tener cero, uno o varios certificados. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, certificate_uuid)` es único y la clave foránea compuesta `(request_id, eligibility_check_id)` impide asociar una consulta perteneciente a otra solicitud.
+Una solicitud puede tener cero, uno o varios certificados. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, certificate_uuid)` es único. No existe `eligibility_check_id` ni otra relación con la consulta inicial porque ese servicio nunca obtiene certificados.
 
 `selected` y `selected_at` siempre son coherentes. Antes de confirmar pueden seleccionarse uno, varios o todos los certificados disponibles. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación y no cambian de disponibilidad por la revocación.
 
@@ -66,8 +67,9 @@ No existe `certificate_revocation_result`: duplicar un resultado común por cada
 
 ## Estados controlados
 
-- Solicitud vigente: `NO_CERTIFICATES_AVAILABLE`, `CERTIFICATES_AVAILABLE`, `AUTHENTICATED_PENDING_SELECTION`, `CERTIFICATES_SELECTED`, `REVOCATION_IN_PROGRESS`, `REVOCATION_SUCCEEDED`, `REVOCATION_FAILED` y `REVOCATION_OUTCOME_UNKNOWN`.
-- Solicitud heredada: se conservan estados V1 como `STARTED`, `ELIGIBLE`, `NOT_ELIGIBLE`, `COMPLETED`, `FAILED` y `OUTCOME_UNKNOWN` para compatibilidad.
+- Consulta inicial: `STARTED`, `CHECKING_AVAILABILITY`, `NO_CERTIFICATES_AVAILABLE` y `PENDING_IDENTITY_VERIFICATION`.
+- Etapa autenticada y selección futura: `IDENTITY_VERIFIED`, `AUTHENTICATED_PENDING_CERTIFICATE_LIST`, `CERTIFICATES_AVAILABLE` y `CERTIFICATES_SELECTED`.
+- Etapas posteriores: `REVOCATION_IN_PROGRESS`, `REVOCATION_SUCCEEDED`, `REVOCATION_FAILED`, `REVOCATION_OUTCOME_UNKNOWN`, `COMPLETED`, `FAILED`, `OUTCOME_UNKNOWN`, `RECEIPT_AVAILABLE` y `ABANDONED`.
 - Disponibilidad: `AVAILABLE`, `NO_LONGER_AVAILABLE`, `REVOCATION_PENDING`, `REVOKED`, `REVOCATION_FAILED` y `OUTCOME_UNKNOWN`.
 - Resultado de operación: `SUCCEEDED`, `FAILED` y `OUTCOME_UNKNOWN`.
 
@@ -77,7 +79,7 @@ Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas 
 
 - Los intentos usan unicidad `(request_id, attempt_number)`.
 - `idempotency_key`, `receipt_code` y `(request_id, certificate_uuid)` son únicos según su responsabilidad.
-- Las claves compuestas impiden vincular intentos pertenecientes a solicitudes diferentes.
+- La consulta inicial solo referencia la solicitud y nunca es fuente de una fila de certificado.
 - Los checks verifican UUID canónico, fechas coherentes y consistencia de selección.
 - Los índices permiten listar certificados por solicitud, consultar seleccionados o disponibles y recuperar intentos e historial.
 - `@Version` protege la fila de certificado que puede modificarse concurrentemente antes de confirmar.
@@ -110,8 +112,9 @@ Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso,
 - `V2__add_request_certificates_and_revocation_results.sql` agrega el certificado de solicitud y la estructura individual que entonces estaba prevista.
 - `V3__add_spanish_schema_comments.sql` documenta en español las ocho tablas y 95 columnas existentes en V3.
 - `V4__enforce_atomic_certificate_revocation.sql` elimina `certificate_revocation_result` y las dos claves candidatas que solo soportaban sus relaciones.
-- Una base vacía ejecuta V1 a V4 y termina con siete tablas y 81 columnas de dominio.
-- Una base existente en V3 ejecuta V4 sin modificar solicitudes, consultas, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
+- `V5__separate_certificate_availability_from_listing.sql` renombra la consulta y el resultado iniciales a disponibilidad, convierte valores heredados inequívocos y elimina de los certificados la relación incorrecta con el primer intento.
+- Una base vacía ejecuta V1 a V5 y termina con siete tablas y 80 columnas de dominio.
+- Una base existente en V4 ejecuta V5 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
 
 Flyway no revierte migraciones automáticamente. Cualquier cambio posterior requiere una nueva migración hacia adelante.
 
@@ -137,6 +140,13 @@ SELECT order_number, emission_created_at, certificate_uuid,
 FROM cancellation_request_certificate
 WHERE request_id = 1
 ORDER BY emission_created_at, id;
+
+-- Intentos del primer servicio; un AVAILABLE no crea certificados.
+SELECT request_id, attempt_number, check_status, normalized_result,
+       error_code, correlation_id, requested_at, responded_at
+FROM certificate_availability_check
+WHERE request_id = 1
+ORDER BY attempt_number;
 
 -- Operaciones atómicas y su resultado común.
 SELECT id, idempotency_key, operation_status, normalized_result,

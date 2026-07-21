@@ -1,9 +1,9 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
-public enum CurrentEligibilityResult {
+public enum CurrentAvailabilityResult {
 	NOT_CHECKED,
-	ELIGIBLE,
-	NOT_ELIGIBLE,
+	AVAILABLE,
+	NOT_AVAILABLE,
 	UNAVAILABLE,
 	INCONCLUSIVE,
 	ERROR

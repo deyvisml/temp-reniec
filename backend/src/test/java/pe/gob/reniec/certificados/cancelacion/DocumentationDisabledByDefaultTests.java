@@ -13,7 +13,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.CertificateEligibilityGateway;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.CertificateAvailabilityPort;
 import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
@@ -34,7 +34,7 @@ class DocumentationDisabledByDefaultTests {
 	EligibilityPersistenceCoordinator eligibilityPersistenceCoordinator;
 
 	@MockitoBean
-	CertificateEligibilityGateway certificateEligibilityGateway;
+	CertificateAvailabilityPort certificateEligibilityGateway;
 
 	@LocalServerPort
 	private int port;

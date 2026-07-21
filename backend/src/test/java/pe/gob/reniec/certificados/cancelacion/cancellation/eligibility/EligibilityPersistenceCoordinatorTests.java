@@ -23,20 +23,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator.EligibilityPreparation;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator.AvailabilityPreparation;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckEntity;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentEligibilityResult;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckStatus;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateAvailabilityCheckEntity;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateAvailabilityCheckRepository;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentAvailabilityResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.AvailabilityCheckStatus;
 
 @ExtendWith(MockitoExtension.class)
 class EligibilityPersistenceCoordinatorTests {
 
 	@Mock CertificateCancellationRequestRepository requests;
-	@Mock CertificateEligibilityCheckRepository checks;
+	@Mock CertificateAvailabilityCheckRepository checks;
 
 	EligibilityPersistenceCoordinator coordinator;
 	AtomicLong ids;
@@ -55,11 +55,11 @@ class EligibilityPersistenceCoordinatorTests {
 		CertificateCancellationRequestEntity previous = request(1, status);
 		when(requests.findTopByDniOrderByCreatedAtDesc("00000001")).thenReturn(Optional.of(previous));
 
-		EligibilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
+		AvailabilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
 
 		assertThat(previous.getRequestStatus()).isEqualTo(CancellationRequestStatus.ABANDONED);
 		assertThat(preparation.requestId()).isNotEqualTo(previous.getId());
-		verify(checks).saveAndFlush(any(CertificateEligibilityCheckEntity.class));
+		verify(checks).saveAndFlush(any(CertificateAvailabilityCheckEntity.class));
 	}
 
 	@ParameterizedTest
@@ -68,7 +68,7 @@ class EligibilityPersistenceCoordinatorTests {
 		CertificateCancellationRequestEntity previous = request(1, status);
 		when(requests.findTopByDniOrderByCreatedAtDesc("00000001")).thenReturn(Optional.of(previous));
 
-		EligibilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
+		AvailabilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
 
 		assertThat(previous.getRequestStatus()).isEqualTo(status);
 		assertThat(preparation.requestId()).isNotEqualTo(previous.getId());
@@ -88,43 +88,43 @@ class EligibilityPersistenceCoordinatorTests {
 
 	@Test
 	void protectsLiveEligibilityAttempt() {
-		CertificateCancellationRequestEntity previous = request(1, CancellationRequestStatus.CHECKING_ELIGIBILITY);
-		CertificateEligibilityCheckEntity check = check(previous, 11, Instant.now());
+		CertificateCancellationRequestEntity previous = request(1, CancellationRequestStatus.CHECKING_AVAILABILITY);
+		CertificateAvailabilityCheckEntity check = check(previous, 11, Instant.now());
 		when(requests.findTopByDniOrderByCreatedAtDesc("00000001")).thenReturn(Optional.of(previous));
 		when(checks.findFirstByRequest_IdOrderByAttemptNumberDesc(1L)).thenReturn(Optional.of(check));
 
 		assertThatThrownBy(() -> coordinator.prepare("00000001", "unit-correlation"))
 				.isInstanceOf(EligibilityInProgressException.class);
-		assertThat(previous.getRequestStatus()).isEqualTo(CancellationRequestStatus.CHECKING_ELIGIBILITY);
+		assertThat(previous.getRequestStatus()).isEqualTo(CancellationRequestStatus.CHECKING_AVAILABILITY);
 	}
 
 	@Test
 	void closesStaleAttemptAbandonsOldRequestAndStartsFreshAttemptOne() {
-		CertificateCancellationRequestEntity previous = request(1, CancellationRequestStatus.CHECKING_ELIGIBILITY);
-		CertificateEligibilityCheckEntity stale = check(previous, 11, Instant.now().minusSeconds(60));
+		CertificateCancellationRequestEntity previous = request(1, CancellationRequestStatus.CHECKING_AVAILABILITY);
+		CertificateAvailabilityCheckEntity stale = check(previous, 11, Instant.now().minusSeconds(60));
 		when(requests.findTopByDniOrderByCreatedAtDesc("00000001")).thenReturn(Optional.of(previous));
 		when(checks.findFirstByRequest_IdOrderByAttemptNumberDesc(1L)).thenReturn(Optional.of(stale));
 
-		EligibilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
+		AvailabilityPreparation preparation = coordinator.prepare("00000001", "unit-correlation");
 
 		assertThat(previous.getRequestStatus()).isEqualTo(CancellationRequestStatus.ABANDONED);
-		assertThat(stale.getCheckStatus()).isEqualTo(pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckStatus.FAILED);
+		assertThat(stale.getCheckStatus()).isEqualTo(pe.gob.reniec.certificados.cancelacion.cancellation.persistence.AvailabilityCheckStatus.FAILED);
 		assertThat(preparation.requestId()).isNotEqualTo(previous.getId());
 	}
 
 	@Test
 	void rejectsLateFinalizationAfterRequestWasAbandoned() {
-		CertificateCancellationRequestEntity old = request(1, CancellationRequestStatus.CHECKING_ELIGIBILITY);
-		CertificateEligibilityCheckEntity attempt = check(old, 11, Instant.now().minusSeconds(60));
+		CertificateCancellationRequestEntity old = request(1, CancellationRequestStatus.CHECKING_AVAILABILITY);
+		CertificateAvailabilityCheckEntity attempt = check(old, 11, Instant.now().minusSeconds(60));
 		old.transitionTo(CancellationRequestStatus.ABANDONED, null);
 		when(requests.findByIdForUpdate(1L)).thenReturn(Optional.of(old));
 		when(checks.findByIdForUpdate(11L)).thenReturn(Optional.of(attempt));
 
-		assertThatThrownBy(() -> coordinator.finalizeAttempt(new EligibilityPreparation(1L, 11L),
-				new EligibilityGatewayResult(EligibilityOutcome.ELIGIBLE, "late", null)))
+		assertThatThrownBy(() -> coordinator.finalizeAttempt(new AvailabilityPreparation(1L, 11L),
+				new AvailabilityResult(AvailabilityOutcome.AVAILABLE, "late", null)))
 				.isInstanceOf(EligibilityConcurrencyException.class);
 		assertThat(old.getRequestStatus()).isEqualTo(CancellationRequestStatus.ABANDONED);
-		assertThat(attempt.getCheckStatus()).isEqualTo(EligibilityCheckStatus.SUBMITTED);
+		assertThat(attempt.getCheckStatus()).isEqualTo(AvailabilityCheckStatus.SUBMITTED);
 	}
 
 	private CertificateCancellationRequestEntity request(long id, CancellationRequestStatus status) {
@@ -134,10 +134,10 @@ class EligibilityPersistenceCoordinatorTests {
 		return request;
 	}
 
-	private CertificateEligibilityCheckEntity check(CertificateCancellationRequestEntity request, long id,
+	private CertificateAvailabilityCheckEntity check(CertificateCancellationRequestEntity request, long id,
 			Instant requestedAt) {
-		CertificateEligibilityCheckEntity check = new CertificateEligibilityCheckEntity(
-				request, 1, EligibilityCheckStatus.SUBMITTED, requestedAt, "unit-correlation");
+		CertificateAvailabilityCheckEntity check = new CertificateAvailabilityCheckEntity(
+				request, 1, AvailabilityCheckStatus.SUBMITTED, requestedAt, "unit-correlation");
 		ReflectionTestUtils.setField(check, "id", id);
 		return check;
 	}
@@ -153,10 +153,9 @@ class EligibilityPersistenceCoordinatorTests {
 		return Stream.of(
 				CancellationRequestStatus.STARTED,
 				CancellationRequestStatus.CERTIFICATES_AVAILABLE,
-				CancellationRequestStatus.ELIGIBLE,
 				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION,
 				CancellationRequestStatus.IDENTITY_VERIFIED,
-				CancellationRequestStatus.AUTHENTICATED_PENDING_SELECTION,
+				CancellationRequestStatus.AUTHENTICATED_PENDING_CERTIFICATE_LIST,
 				CancellationRequestStatus.CERTIFICATES_SELECTED,
 				CancellationRequestStatus.REASON_REGISTERED,
 				CancellationRequestStatus.PENDING_CONFIRMATION);
@@ -165,7 +164,6 @@ class EligibilityPersistenceCoordinatorTests {
 	static Stream<CancellationRequestStatus> terminalStatuses() {
 		return Stream.of(
 				CancellationRequestStatus.NO_CERTIFICATES_AVAILABLE,
-				CancellationRequestStatus.NOT_ELIGIBLE,
 				CancellationRequestStatus.REVOCATION_SUCCEEDED,
 				CancellationRequestStatus.REVOCATION_FAILED,
 				CancellationRequestStatus.COMPLETED,

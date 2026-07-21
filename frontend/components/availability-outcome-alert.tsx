@@ -13,9 +13,9 @@ const primaryActionClasses =
 const secondaryActionClasses =
   "min-h-12 w-full cursor-pointer rounded-lg border border-[#b8c6df] bg-white px-5 py-3 font-extrabold text-[#164aa8] transition-colors hover:bg-[#f3f7fd] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none";
 
-export type EligibilityOutcome =
-  | { kind: "eligible"; continuePath?: string; maskedDni?: string }
-  | { kind: "not-eligible" }
+export type AvailabilityOutcomeView =
+  | { kind: "available"; continuePath?: string; maskedDni?: string }
+  | { kind: "not-available" }
   | { kind: "inconclusive" }
   | {
       kind: "error";
@@ -25,26 +25,26 @@ export type EligibilityOutcome =
       retryable?: boolean;
     };
 
-export type EligibilityOutcomeAction = {
+export type AvailabilityOutcomeAction = {
   kind: "continue" | "retry" | "reset";
   label: string;
   href?: string;
 };
 
-export type EligibilityOutcomePresentation = {
+export type AvailabilityOutcomePresentation = {
   tone: "positive" | "informative" | "warning";
   title: string;
   description: string;
   correlationId?: string;
-  primaryAction: EligibilityOutcomeAction;
-  secondaryAction?: EligibilityOutcomeAction;
+  primaryAction: AvailabilityOutcomeAction;
+  secondaryAction?: AvailabilityOutcomeAction;
 };
 
-export function getEligibilityOutcomePresentation(
-  outcome: EligibilityOutcome,
-): EligibilityOutcomePresentation {
+export function getAvailabilityOutcomePresentation(
+  outcome: AvailabilityOutcomeView,
+): AvailabilityOutcomePresentation {
   switch (outcome.kind) {
-    case "eligible":
+    case "available":
       if (!outcome.continuePath) {
         return {
           tone: "warning",
@@ -59,8 +59,8 @@ export function getEligibilityOutcomePresentation(
         tone: "positive",
         title: "Puedes continuar con la verificación de identidad",
         description: outcome.maskedDni
-          ? `Encontramos certificados digitales susceptibles de cancelación para el DNI ${outcome.maskedDni}.`
-          : "Encontramos certificados digitales susceptibles de cancelación para el DNI consultado.",
+          ? `Confirmamos que existen certificados disponibles para el DNI ${outcome.maskedDni}. La lista se consultará después de verificar tu identidad.`
+          : "Confirmamos que existen certificados disponibles. La lista se consultará después de verificar tu identidad.",
         primaryAction: {
           kind: "continue",
           label: "Continuar con la verificación",
@@ -69,7 +69,7 @@ export function getEligibilityOutcomePresentation(
         secondaryAction: { kind: "reset", label: "Volver al inicio" },
       };
 
-    case "not-eligible":
+    case "not-available":
       return {
         tone: "informative",
         title: "No encontramos certificados para cancelar",
@@ -107,8 +107,8 @@ export function getEligibilityOutcomePresentation(
   }
 }
 
-export function getEligibilitySweetAlertOptions(
-  presentation: EligibilityOutcomePresentation,
+export function getAvailabilitySweetAlertOptions(
+  presentation: AvailabilityOutcomePresentation,
   reducedMotion: boolean,
 ): SweetAlertOptions {
   return {
@@ -153,23 +153,23 @@ export function getEligibilitySweetAlertOptions(
   };
 }
 
-export function resolveEligibilityAlertAction(
-  presentation: EligibilityOutcomePresentation,
+export function resolveAvailabilityAlertAction(
+  presentation: AvailabilityOutcomePresentation,
   result: Pick<SweetAlertResult, "isConfirmed" | "dismiss">,
-): EligibilityOutcomeAction | undefined {
+): AvailabilityOutcomeAction | undefined {
   if (result.isConfirmed) return presentation.primaryAction;
   if (result.dismiss === "cancel") return presentation.secondaryAction;
   if (result.dismiss === "esc") return safeResetAction(presentation);
   return undefined;
 }
 
-export function EligibilityOutcomeAlert({
+export function AvailabilityOutcomeAlert({
   outcome,
   onContinue,
   onRetry,
   onReset,
 }: {
-  outcome: EligibilityOutcome;
+  outcome: AvailabilityOutcomeView;
   onContinue: (href: string) => void;
   onRetry: () => void;
   onReset: () => void;
@@ -187,18 +187,18 @@ export function EligibilityOutcomeAlert({
       if (!active) return;
 
       closeActivePopup = () => Swal.close();
-      const presentation = getEligibilityOutcomePresentation(outcome);
+      const presentation = getAvailabilityOutcomePresentation(outcome);
       const reducedMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
       const footer = createCorrelationFooter(presentation.correlationId);
       const result = await Swal.fire({
-        ...getEligibilitySweetAlertOptions(presentation, reducedMotion),
+        ...getAvailabilitySweetAlertOptions(presentation, reducedMotion),
         footer,
       });
 
       if (!active) return;
-      const action = resolveEligibilityAlertAction(presentation, result);
+      const action = resolveAvailabilityAlertAction(presentation, result);
       if (!action) return;
 
       if (action.kind === "continue" && action.href) continueEvent(action.href);
@@ -219,17 +219,17 @@ const toneIcons = {
   positive: "success",
   informative: "info",
   warning: "warning",
-} satisfies Record<EligibilityOutcomePresentation["tone"], SweetAlertIcon>;
+} satisfies Record<AvailabilityOutcomePresentation["tone"], SweetAlertIcon>;
 
 const toneIconColors = {
   positive: "#08764a",
   informative: "#1749a8",
   warning: "#9a5600",
-} satisfies Record<EligibilityOutcomePresentation["tone"], string>;
+} satisfies Record<AvailabilityOutcomePresentation["tone"], string>;
 
 function safeResetAction(
-  presentation: EligibilityOutcomePresentation,
-): EligibilityOutcomeAction | undefined {
+  presentation: AvailabilityOutcomePresentation,
+): AvailabilityOutcomeAction | undefined {
   if (presentation.primaryAction.kind === "reset") {
     return presentation.primaryAction;
   }
@@ -247,5 +247,5 @@ function createCorrelationFooter(correlationId?: string): HTMLElement | undefine
 }
 
 function assertNever(value: never): never {
-  throw new Error(`Resultado de elegibilidad no soportado: ${String(value)}`);
+  throw new Error(`Resultado de disponibilidad no soportado: ${String(value)}`);
 }

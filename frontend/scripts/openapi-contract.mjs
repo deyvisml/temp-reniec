@@ -16,10 +16,11 @@ const backendUrl = (process.env.BACKEND_URL || "http://localhost:8080").replace(
 const openApiUrl = process.env.BACKEND_OPENAPI_URL || `${backendUrl}/v3/api-docs`;
 
 const schema = process.env.OPENAPI_SCHEMA_FILE
-  ? JSON.parse(await readFile(resolve(process.env.OPENAPI_SCHEMA_FILE), "utf8"))
+  ? JSON.parse((await readFile(resolve(process.env.OPENAPI_SCHEMA_FILE), "utf8")).replace(/^\uFEFF/, ""))
   : await fetchSchema(openApiUrl);
 const contract = structuredClone(schema);
 delete contract.servers;
+assertInitialResponseBoundary(contract);
 const snapshot = `${JSON.stringify(sortRecursively(contract), null, 2)}\n`;
 const generated = astToString(await openapiTS(contract));
 
@@ -67,4 +68,27 @@ async function fetchSchema(url) {
   }
   if (!response.ok) throw new Error(`OpenAPI respondió HTTP ${response.status} en ${url}.`);
   return response.json();
+}
+
+function assertInitialResponseBoundary(document) {
+  const response = document.components?.schemas?.CancellationRequestResponse;
+  const properties = response?.properties ?? {};
+  const required = new Set(response?.required ?? []);
+  const forbidden = [
+    "eligibilityResult",
+    "certificates",
+    "certificateCount",
+    "orderNumber",
+    "emissionCreatedAt",
+    "certificateUuid",
+    "uuid",
+  ];
+
+  if (!("availabilityResult" in properties) || !required.has("availabilityResult")) {
+    throw new Error("El contrato inicial debe exigir availabilityResult.");
+  }
+  const leaked = forbidden.filter((property) => property in properties);
+  if (leaked.length > 0) {
+    throw new Error(`La respuesta inicial expone propiedades no permitidas: ${leaked.join(", ")}.`);
+  }
 }

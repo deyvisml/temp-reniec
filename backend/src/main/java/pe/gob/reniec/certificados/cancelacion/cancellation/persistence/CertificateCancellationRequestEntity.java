@@ -38,8 +38,8 @@ public class CertificateCancellationRequestEntity {
 	private CancellationRequestStatus requestStatus;
 
 	@Enumerated(EnumType.STRING)
-	@Column(name = "eligibility_result", nullable = false, length = 24)
-	private CurrentEligibilityResult eligibilityResult;
+	@Column(name = "availability_result", nullable = false, length = 24)
+	private CurrentAvailabilityResult availabilityResult;
 
 	@Enumerated(EnumType.STRING)
 	@Column(name = "reason_code", length = 40)
@@ -76,16 +76,16 @@ public class CertificateCancellationRequestEntity {
 	public CertificateCancellationRequestEntity(String dni) {
 		this.dni = requireDni(dni);
 		this.requestStatus = CancellationRequestStatus.STARTED;
-		this.eligibilityResult = CurrentEligibilityResult.NOT_CHECKED;
+		this.availabilityResult = CurrentAvailabilityResult.NOT_CHECKED;
 	}
 
-	public void recordEligibility(CurrentEligibilityResult result, CancellationRequestStatus status) {
-		eligibilityResult = Objects.requireNonNull(result, "result");
+	public void recordAvailability(CurrentAvailabilityResult result, CancellationRequestStatus status) {
+		availabilityResult = Objects.requireNonNull(result, "result");
 		requestStatus = Objects.requireNonNull(status, "status");
 	}
 
-	public void beginEligibility() {
-		requestStatus = CancellationRequestStatus.CHECKING_ELIGIBILITY;
+	public void beginAvailabilityCheck() {
+		requestStatus = CancellationRequestStatus.CHECKING_AVAILABILITY;
 	}
 
 	public void registerReason(CancellationReasonCode reason, String description) {
@@ -176,7 +176,7 @@ public class CertificateCancellationRequestEntity {
 	public Long getId() { return id; }
 	public String getDni() { return dni; }
 	public CancellationRequestStatus getRequestStatus() { return requestStatus; }
-	public CurrentEligibilityResult getEligibilityResult() { return eligibilityResult; }
+	public CurrentAvailabilityResult getAvailabilityResult() { return availabilityResult; }
 	public CancellationReasonCode getReasonCode() { return reasonCode; }
 	public String getOtherReason() { return otherReason; }
 	public Instant getConfirmedAt() { return confirmedAt; }

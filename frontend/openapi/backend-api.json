@@ -57,22 +57,22 @@
       "CancellationRequestResponse": {
         "description": "Resultado normalizado del inicio de una nueva solicitud de cancelación.",
         "properties": {
+          "availabilityResult": {
+            "description": "Resultado normalizado de la consulta inicial de existencia. No representa una lista detallada.",
+            "enum": [
+              "AVAILABLE",
+              "NOT_AVAILABLE",
+              "INCONCLUSIVE",
+              "UNAVAILABLE",
+              "ERROR"
+            ],
+            "example": "AVAILABLE",
+            "type": "string"
+          },
           "canContinue": {
             "description": "Indica si el backend autoriza continuar al siguiente paso.",
             "example": true,
             "type": "boolean"
-          },
-          "eligibilityResult": {
-            "description": "Resultado normalizado de la consulta de certificados.",
-            "enum": [
-              "ELIGIBLE",
-              "NOT_ELIGIBLE",
-              "UNAVAILABLE",
-              "INCONCLUSIVE",
-              "ERROR"
-            ],
-            "example": "ELIGIBLE",
-            "type": "string"
           },
           "maskedDni": {
             "description": "DNI enmascarado para presentación segura.",
@@ -100,14 +100,12 @@
             "description": "Estado actual persistido de la solicitud.",
             "enum": [
               "STARTED",
-              "CHECKING_ELIGIBILITY",
+              "CHECKING_AVAILABILITY",
               "NO_CERTIFICATES_AVAILABLE",
-              "CERTIFICATES_AVAILABLE",
-              "NOT_ELIGIBLE",
-              "ELIGIBLE",
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
-              "AUTHENTICATED_PENDING_SELECTION",
+              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
+              "CERTIFICATES_AVAILABLE",
               "CERTIFICATES_SELECTED",
               "REASON_REGISTERED",
               "PENDING_CONFIRMATION",
@@ -127,8 +125,8 @@
           }
         },
         "required": [
+          "availabilityResult",
           "canContinue",
-          "eligibilityResult",
           "maskedDni",
           "nextStep",
           "requestId",
@@ -137,7 +135,7 @@
         "type": "object"
       },
       "StartCancellationRequest": {
-        "description": "Datos requeridos para iniciar una nueva solicitud y consultar su elegibilidad.",
+        "description": "Datos requeridos para iniciar una nueva solicitud y consultar si existen certificados disponibles.",
         "properties": {
           "dni": {
             "description": "Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo.",
@@ -185,7 +183,7 @@
     "contact": {
       "name": "RENIEC"
     },
-    "description": "API institucional para consultar elegibilidad e iniciar el flujo ciudadano de cancelación de certificados digitales. La documentación no representa mecanismos de seguridad todavía no implementados.",
+    "description": "API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano de cancelación de certificados digitales. La documentación no representa mecanismos de seguridad todavía no implementados.",
     "title": "API de cancelación de certificados digitales",
     "version": "v1"
   },
@@ -256,7 +254,7 @@
     },
     "/api/v1/cancellation-requests": {
       "post": {
-        "description": "Valida el DNI, crea una solicitud nueva y consulta si hay certificados digitales susceptibles de cancelación. No reabre solicitudes anteriores, no devuelve certificados individuales ni expone el DNI completo.",
+        "description": "Valida el DNI, crea una solicitud y consulta únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo.",
         "operationId": "initiateCancellationRequest",
         "parameters": [
           {
@@ -290,7 +288,7 @@
                 }
               }
             },
-            "description": "Resultado normalizado de elegibilidad",
+            "description": "Resultado normalizado de existencia de certificados",
             "headers": {
               "X-Correlation-ID": {
                 "description": "Identificador de correlación",
@@ -327,7 +325,7 @@
                 }
               }
             },
-            "description": "Conflicto controlado: ELIGIBILITY_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST",
+            "description": "Conflicto controlado: AVAILABILITY_CHECK_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -381,7 +379,7 @@
                 }
               }
             },
-            "description": "Error controlado del proveedor de elegibilidad",
+            "description": "Error controlado del proveedor de disponibilidad",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -399,7 +397,7 @@
                 }
               }
             },
-            "description": "Servicio de elegibilidad no disponible",
+            "description": "Servicio de disponibilidad no disponible",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -428,7 +426,7 @@
             }
           }
         },
-        "summary": "Inicia una nueva solicitud y consulta su elegibilidad",
+        "summary": "Inicia una solicitud y consulta si existen certificados disponibles",
         "tags": [
           "Solicitudes de cancelación"
         ]
@@ -518,7 +516,7 @@
   },
   "tags": [
     {
-      "description": "Inicio de nuevas solicitudes y elegibilidad ciudadana.",
+      "description": "Inicio de solicitudes y consulta de disponibilidad de certificados.",
       "name": "Solicitudes de cancelación"
     },
     {

@@ -36,10 +36,6 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Cancellat
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateAvailabilityStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateCancellationRequestRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckEntity;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CertificateEligibilityCheckRepository;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckResult;
-import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.EligibilityCheckStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationStatus;
@@ -54,7 +50,6 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	private static final Instant NOW = Instant.parse("2026-07-20T15:00:00Z");
 
 	@Autowired CertificateCancellationRequestRepository requestRepository;
-	@Autowired CertificateEligibilityCheckRepository eligibilityRepository;
 	@Autowired CancellationRequestCertificateRepository certificateRepository;
 	@Autowired RevocationOperationRepository operationRepository;
 	@Autowired CancellationReceiptRepository receiptRepository;
@@ -69,7 +64,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM cancellation_request_certificate");
 		jdbcTemplate.update("DELETE FROM revocation_operation");
 		jdbcTemplate.update("DELETE FROM identity_verification");
-		jdbcTemplate.update("DELETE FROM certificate_eligibility_check");
+		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
 	}
 
@@ -107,7 +102,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void enforcesUuidSourceAndSelectionIntegrity() {
+	void enforcesUuidRequestOwnershipAndSelectionIntegrity() {
 		RequestFixture first = request("20000001", 1);
 		RequestFixture second = request("20000002", 1);
 		String sharedUuid = "0dcde0fc-5e1f-4f28-b9be-52aafaa10240";
@@ -118,11 +113,11 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		assertThat(certificate(second, "ORD-C", sharedUuid, 3).getId()).isNotNull();
 		assertThatThrownBy(() -> jdbcTemplate.update("""
 				INSERT INTO cancellation_request_certificate
-				(request_id, eligibility_check_id, order_number, emission_created_at, certificate_uuid,
+				(request_id, order_number, emission_created_at, certificate_uuid,
 				 availability_status, consulted_at, selected, selected_at, version, created_at, updated_at)
-				VALUES (?, ?, 'WRONG-SOURCE', ?, '68d769c6-a58f-4dbd-b668-80a3a36c0524',
+				VALUES (?, 'ORPHAN', ?, '68d769c6-a58f-4dbd-b668-80a3a36c0524',
 				 'AVAILABLE', ?, FALSE, NULL, 0, ?, ?)
-				""", second.request().getId(), first.check().getId(), NOW.minusSeconds(30), NOW, NOW, NOW))
+				""", Long.MAX_VALUE, NOW.minusSeconds(30), NOW, NOW, NOW))
 				.isInstanceOf(DataIntegrityViolationException.class);
 		assertThatThrownBy(() -> jdbcTemplate.update("""
 				UPDATE cancellation_request_certificate SET selected = TRUE, selected_at = NULL
@@ -293,16 +288,13 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	private RequestFixture request(String dni, int attempt) {
 		CertificateCancellationRequestEntity request = requestRepository.saveAndFlush(
 				new CertificateCancellationRequestEntity(dni));
-		CertificateEligibilityCheckEntity check = new CertificateEligibilityCheckEntity(
-				request, attempt, EligibilityCheckStatus.SUBMITTED, NOW, "corr-" + dni);
-		check.complete(EligibilityCheckResult.ELIGIBLE, NOW.plusSeconds(1), "query-" + dni);
-		return new RequestFixture(request, eligibilityRepository.saveAndFlush(check));
+		return new RequestFixture(request);
 	}
 
 	private CancellationRequestCertificateEntity certificate(RequestFixture fixture, String order,
 			String uuid, long seconds) {
 		CancellationRequestCertificateEntity certificate = new CancellationRequestCertificateEntity(
-				fixture.request(), fixture.check(), order, NOW.minus(1, ChronoUnit.DAYS), uuid,
+				fixture.request(), order, NOW.minus(1, ChronoUnit.DAYS), uuid,
 				NOW.plusSeconds(seconds));
 		return certificateRepository.saveAndFlush(certificate);
 	}
@@ -311,6 +303,5 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		return "00000000-0000-4000-8000-" + dni + String.format("%04d", suffix);
 	}
 
-	private record RequestFixture(CertificateCancellationRequestEntity request,
-			CertificateEligibilityCheckEntity check) { }
+	private record RequestFixture(CertificateCancellationRequestEntity request) { }
 }

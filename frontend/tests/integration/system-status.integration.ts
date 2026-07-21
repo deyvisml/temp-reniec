@@ -12,9 +12,9 @@ describe("live frontend to backend integration", () => {
     expect(result.correlationId).toBeTruthy();
   });
 
-  it("initiates a real eligibility request through backend and MySQL", async () => {
+	it("initiates a real positive availability request through backend and MySQL", async () => {
     const result = await startCancellationRequest("00000001");
-    expect(result.data?.eligibilityResult).toBe("ELIGIBLE");
+    expect(result.data?.availabilityResult).toBe("AVAILABLE");
     expect(result.data?.requestStatus).toBe("PENDING_IDENTITY_VERIFICATION");
     expect(result.data?.canContinue).toBe(true);
     expect(result.data?.nextStep).toBe("IDENTITY_VERIFICATION");
@@ -22,5 +22,17 @@ describe("live frontend to backend integration", () => {
     expect(result.data?.requestId).toBeTypeOf("number");
     expect(result.correlationId).toBeTruthy();
     expect(JSON.stringify(result.data)).not.toContain("00000001");
+		expect(JSON.stringify(result.data)).not.toMatch(
+			/certificateUuid|orderNumber|emissionCreatedAt|certificateCount|certificates/,
+		);
   });
+
+	it("keeps a confirmed negative availability result blocked", async () => {
+		const result = await startCancellationRequest("00000002");
+		expect(result.data?.availabilityResult).toBe("NOT_AVAILABLE");
+		expect(result.data?.requestStatus).toBe("NO_CERTIFICATES_AVAILABLE");
+		expect(result.data?.canContinue).toBe(false);
+		expect(result.data?.nextStep).toBeNull();
+		expect(JSON.stringify(result.data)).not.toContain("00000002");
+	});
 });

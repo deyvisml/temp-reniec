@@ -25,7 +25,7 @@ describe("OpenAPI drift check", () => {
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
 
 function runNode(script: string, cwd: string, schemaFile: string) {

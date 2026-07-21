@@ -14,7 +14,7 @@ El sistema no cancela la identidad civil, el número de DNI, el documento físic
 
 El flujo general comprende una pantalla de inicio y cinco pasos:
 
-1. Ingreso del número de DNI y consulta de certificados digitales vigentes.
+1. Ingreso del número de DNI y consulta de existencia de certificados digitales disponibles.
 2. Autenticación del titular mediante ID Perú.
 3. Selección de uno o varios certificados digitales vigentes.
 4. Selección del motivo de cancelación.
@@ -22,7 +22,7 @@ El flujo general comprende una pantalla de inicio y cinco pasos:
 6. Ejecución inmediata de la revocación.
 7. Presentación del resultado y generación de una constancia o comprobante.
 
-El sistema dependerá de servicios externos para consultar los certificados digitales vigentes, autenticar al ciudadano y ejecutar la revocación. El servicio de consulta devolverá una lista de certificados. El servicio de revocación recibirá en una sola operación la lista completa de UUID confirmados y deberá aplicar una regla atómica: cancelar todos los certificados seleccionados o no cancelar ninguno.
+El sistema dependerá de dos servicios de certificados claramente separados, además de ID Perú y del servicio de revocación. El primer servicio se consumirá desde la pantalla de inicio y responderá únicamente si existen certificados disponibles para cancelar, sin devolver lista, cantidad, número de orden, fecha de creación ni UUID. Después de autenticar al ciudadano, un segundo servicio devolverá la lista detallada de certificados vigentes. El servicio de revocación recibirá en una sola operación la lista completa de UUID confirmados y deberá aplicar una regla atómica: cancelar todos los certificados seleccionados o no cancelar ninguno.
 
 ---
 
@@ -126,11 +126,13 @@ Implementar un servicio web institucional de RENIEC que permita a una persona na
 ## 5. Objetivos específicos preliminares
 
 - Permitir que el ciudadano inicie el proceso utilizando su número de DNI.
-- Consultar mediante un servicio institucional las emisiones vigentes de certificados digitales asociadas al DNI.
-- Recibir y conservar temporalmente la lista de certificados obtenida durante la consulta inicial.
-- Evitar que el proceso continúe cuando la lista devuelta esté vacía.
+- Consultar mediante un primer servicio institucional si el DNI tiene certificados disponibles para cancelar.
+- Evitar que el proceso continúe cuando el primer servicio confirme que no existen certificados disponibles.
+- Distinguir la ausencia confirmada de un resultado inconcluso, indisponibilidad, timeout o error técnico.
 - Autenticar al titular mediante el servicio externo ID Perú.
 - Verificar la correspondencia entre la identidad autenticada y el DNI ingresado.
+- Consultar mediante un segundo servicio la lista detallada de certificados vigentes después de autenticar al titular.
+- Recibir y conservar temporalmente la lista vinculada con la solicitud.
 - Mostrar los certificados digitales vigentes después de la autenticación.
 - Permitir seleccionar uno o varios certificados.
 - Mostrar siempre el paso de selección, incluso cuando exista un solo certificado.
@@ -150,15 +152,13 @@ Implementar un servicio web institucional de RENIEC que permita a una persona na
 
 La solución propuesta es un **portal web de cancelación de certificados digitales vigentes para personas naturales**.
 
-En la pantalla de inicio, el ciudadano ingresará su número de DNI. El sistema consultará un servicio externo que devolverá una lista de certificados digitales vigentes susceptibles de cancelación. Cada elemento de la lista incluirá, como mínimo:
+En la pantalla de inicio, el ciudadano ingresará su número de DNI. El sistema consultará un primer servicio externo que responderá únicamente si existen certificados digitales disponibles para cancelar. Un resultado negativo confirmado impedirá continuar; un resultado positivo permitirá iniciar la autenticación. Un resultado inconcluso, indisponibilidad, timeout o error técnico no se interpretará como ausencia de certificados y mantendrá bloqueada la continuidad con una opción de reintento segura.
 
-- Número de orden.
-- Fecha de creación.
-- UUID o identificador único.
+La consulta inicial no devolverá ni persistirá certificados individuales, cantidades, números de orden, fechas de creación o UUID.
 
-Si la lista está vacía, el sistema informará al ciudadano que no existen certificados disponibles para cancelar y no permitirá continuar. Si existe al menos un certificado, el sistema conservará la lista dentro del proceso y permitirá iniciar la autenticación.
+Después de autenticar su identidad mediante ID Perú, el sistema consumirá un segundo servicio para obtener la lista real de certificados vigentes. Cada elemento incluirá número de orden, fecha de creación y UUID. La lista quedará vinculada con la solicitud y se mostrará en el paso de selección, incluso cuando contenga un solo elemento. El usuario deberá seleccionar al menos un certificado para continuar.
 
-Después de autenticar su identidad mediante ID Perú, el ciudadano accederá al paso de selección de certificados. Este paso se mostrará siempre, incluso cuando la lista contenga un solo elemento. El usuario deberá seleccionar al menos un certificado para continuar.
+La confirmación positiva del primer servicio no garantiza que el listado posterior siga conteniendo elementos. Si el segundo servicio devuelve una lista vacía después de la autenticación, el ciudadano no podrá continuar; se informará que actualmente no existen certificados disponibles, sin presentarlo como error de autenticación ni inventar certificados.
 
 Posteriormente, el titular seleccionará el motivo de la cancelación. El sistema ofrecerá un conjunto de motivos predefinidos y una alternativa denominada **Otro motivo**, que permitirá registrar una explicación adicional.
 
@@ -177,12 +177,12 @@ Cuando la operación concluya, el sistema mostrará el conjunto de certificados 
 El alcance preliminar comprende:
 
 - Ingreso y validación básica del número de DNI.
-- Consulta de certificados digitales vigentes.
-- Recepción de una lista de certificados.
-- Evaluación de continuidad según el tamaño de la lista.
-- Conservación temporal de la lista dentro del proceso.
+- Consulta inicial de existencia de certificados disponibles mediante un resultado positivo o negativo.
+- Manejo separado de resultado inconcluso, indisponibilidad, timeout y error técnico.
 - Autenticación mediante ID Perú.
 - Validación de correspondencia entre el DNI y la identidad autenticada.
+- Consulta posterior de la lista detallada de certificados digitales vigentes.
+- Conservación temporal de la lista dentro de la solicitud.
 - Visualización de certificados digitales vigentes.
 - Selección de uno o varios certificados.
 - Validación de selección mínima.
@@ -260,7 +260,8 @@ No forman parte del alcance confirmado:
 | Ciudadano o persona natural | Usuario principal y titular de los certificados digitales | Cancelar oportunamente uno o varios certificados vigentes | Ingresar DNI, autenticarse, seleccionar certificados, registrar motivo, confirmar y descargar la constancia | Robo, pérdida, cambio de equipo o número, sospecha de uso no autorizado u otro motivo |
 | RENIEC | Institución responsable del servicio | Proporcionar un canal confiable y trazable | Administrar el servicio, definir reglas, comunicar resultados y garantizar la trazabilidad institucional | Durante todo el proceso |
 | ID Perú | Servicio externo de autenticación | Confirmar que la persona que realiza el proceso es quien afirma ser | Autenticar al ciudadano y devolver el resultado correspondiente | Después de verificar que existe al menos un certificado |
-| Servicio de consulta de certificados | Sistema externo colaborador | Obtener las emisiones vigentes asociadas al DNI | Recibir el DNI y devolver una lista de certificados con número de orden, fecha de creación y UUID | Desde la pantalla de inicio |
+| Servicio de existencia de certificados | Sistema externo colaborador | Confirmar si el DNI tiene al menos un certificado disponible para cancelar | Recibir el DNI y devolver únicamente un resultado positivo o negativo, sin lista ni datos individuales | Desde la pantalla de inicio |
+| Servicio de listado de certificados vigentes | Sistema externo colaborador | Obtener las emisiones vigentes después de autenticar al ciudadano | Recibir la referencia necesaria y devolver una lista con número de orden, fecha de creación y UUID | En el paso 2, después de ID Perú |
 | Servicio de revocación | Sistema externo colaborador | Ejecutar de forma atómica la revocación de los certificados seleccionados | Recibir la lista completa de UUID y una clave de idempotencia, y devolver un único resultado para el conjunto | Después de la confirmación |
 | Servicio o mecanismo de constancias | Actor conceptual pendiente de validación | Generar evidencia de la operación | Producir o proporcionar el comprobante correspondiente | Después de contar con el resultado de la revocación |
 | Personal de soporte o atención | Actor potencial pendiente de validación | Atender incidencias o casos no resueltos en línea | Orientar, revisar incidencias o derivar casos | Errores, indisponibilidad o resultados inciertos |
@@ -271,15 +272,19 @@ No forman parte del alcance confirmado:
 
 ### 9.1. DNI sin certificados digitales vigentes
 
-El ciudadano ingresa su DNI, pero el servicio devuelve una lista vacía. El sistema informa que no existen certificados disponibles para cancelar y finaliza el proceso sin solicitar autenticación.
+El ciudadano ingresa su DNI y el primer servicio confirma que no existen certificados disponibles para cancelar. El sistema informa el resultado y finaliza el proceso sin solicitar autenticación ni crear registros de certificados.
 
 ### 9.2. DNI con un solo certificado vigente
 
-El servicio devuelve un único certificado. El ciudadano se autentica y accede igualmente al paso de selección. El certificado no debe omitirse ni cancelarse automáticamente; el usuario debe seleccionarlo de forma expresa.
+El primer servicio confirma que existen certificados. El ciudadano se autentica y el segundo servicio devuelve un único certificado. El ciudadano accede igualmente al paso de selección; el certificado no debe omitirse ni cancelarse automáticamente y debe seleccionarlo de forma expresa.
 
 ### 9.3. DNI con varios certificados vigentes
 
-El servicio devuelve varias emisiones vigentes. Después de autenticarse, el ciudadano visualiza la lista y puede seleccionar uno, varios o todos los certificados disponibles.
+El primer servicio confirma que existen certificados. Después de autenticarse, el segundo servicio devuelve varias emisiones vigentes; el ciudadano visualiza la lista y puede seleccionar uno, varios o todos los certificados disponibles.
+
+### 9.3.1. Existencia positiva y listado posterior vacío
+
+El primer servicio confirma que existen certificados y el ciudadano se autentica correctamente, pero el segundo servicio devuelve una lista vacía porque la disponibilidad cambió entre ambas consultas. El ciudadano no puede continuar, el sistema informa que actualmente no existen certificados disponibles, no presenta el caso como error de autenticación y no inventa ningún certificado.
 
 ### 9.4. Robo
 
@@ -371,10 +376,11 @@ El proceso funcional esperado está compuesto por una pantalla de inicio y cinco
 
 1. El ciudadano ingresa su número de DNI.
 2. El sistema valida el formato básico.
-3. El sistema consulta el servicio de certificados.
-4. El servicio devuelve una lista de emisiones vigentes.
-5. Si la lista está vacía, el sistema informa que no existen certificados disponibles y finaliza el proceso.
-6. Si existe al menos un elemento, el sistema conserva la lista y permite continuar.
+3. El sistema consulta el primer servicio de existencia de certificados.
+4. El servicio devuelve un resultado positivo o negativo, sin lista ni datos individuales.
+5. Si el resultado es negativo, el sistema informa que no existen certificados disponibles y finaliza el proceso.
+6. Si el resultado es positivo, el sistema permite continuar hacia ID Perú sin crear registros de certificados.
+7. Si el resultado es inconcluso, el servicio no está disponible, ocurre un timeout o existe un error técnico, el sistema bloquea la continuidad y permite un reintento seguro sin asumir ausencia.
 
 ### 11.2. Paso 1: autenticación
 
@@ -382,18 +388,19 @@ El proceso funcional esperado está compuesto por una pantalla de inicio y cinco
 2. ID Perú devuelve el resultado de autenticación.
 3. El sistema verifica que la identidad autenticada corresponda al DNI ingresado.
 4. Si la autenticación falla o se cancela, la revocación no se ejecuta.
-5. Si la autenticación es correcta, se habilita el paso de selección.
+5. Si la autenticación es correcta, queda pendiente la consulta del listado detallado.
 
 ### 11.3. Paso 2: certificados vigentes
 
-1. El sistema muestra los certificados digitales vigentes obtenidos durante la consulta inicial.
-2. Cada elemento muestra información comprensible para diferenciarlo:
+1. El sistema consume el segundo servicio y obtiene la lista detallada de certificados digitales vigentes.
+2. Si la lista está vacía, informa que actualmente no existen certificados disponibles y no permite continuar.
+3. Si la lista contiene elementos, los conserva vinculados con la solicitud y muestra información comprensible para diferenciarlos:
    - Número de orden.
    - Fecha de creación.
    - Identificador o UUID, según la política de presentación.
-3. El paso se muestra incluso cuando exista un solo certificado.
-4. El ciudadano selecciona uno o varios certificados.
-5. El sistema exige al menos una selección para continuar.
+4. El paso se muestra incluso cuando exista un solo certificado.
+5. El ciudadano selecciona uno o varios certificados.
+6. El sistema exige al menos una selección para continuar.
 
 ### 11.4. Paso 3: motivo
 
@@ -471,7 +478,8 @@ Resultado y constancia
 | Cancelación inmediata | Característica por la cual la revocación se ejecuta después de la confirmación, sin evaluación administrativa posterior | Confirmado |
 | Autenticación | Proceso utilizado para verificar que quien realiza la operación es el titular | Confirmado |
 | ID Perú | Servicio externo utilizado para autenticar la identidad del ciudadano | Confirmado |
-| Consulta de certificados | Operación realizada para obtener las emisiones vigentes asociadas al DNI | Confirmado |
+| Consulta de existencia de certificados | Primera operación que confirma únicamente si el DNI tiene certificados disponibles para cancelar | Confirmado |
+| Listado de certificados vigentes | Segunda operación, posterior a la autenticación, que obtiene número de orden, fecha de creación y UUID | Confirmado |
 | Motivo de cancelación | Causa seleccionada por el ciudadano para registrar por qué realiza la operación | Confirmado |
 | Otro motivo | Alternativa que permite ingresar una causa no contemplada en el catálogo | Confirmado |
 | Confirmación | Manifestación expresa del ciudadano antes de ejecutar una operación inmediata e irreversible | Confirmado |
@@ -492,14 +500,14 @@ Resultado y constancia
 |---|---|---|
 | RN-01 | El servicio está dirigido a ciudadanos que actúan como personas naturales | Confirmado |
 | RN-02 | El proceso se inicia mediante el ingreso del número de DNI | Confirmado |
-| RN-03 | Antes de la autenticación se debe consultar la lista de certificados digitales vigentes | Confirmado |
-| RN-04 | El servicio de consulta debe devolver una lista y no solamente un valor verdadero o falso | Confirmado |
-| RN-05 | Cada elemento de la lista debe contener número de orden, fecha de creación y UUID | Confirmado |
-| RN-06 | Si la lista está vacía, el proceso no debe continuar hacia la autenticación | Confirmado |
-| RN-07 | Si existe al menos un certificado, el ciudadano puede continuar hacia la autenticación | Confirmado |
+| RN-03 | Antes de la autenticación se debe consultar únicamente la existencia de certificados disponibles | Confirmado |
+| RN-04 | El primer servicio debe devolver un resultado positivo o negativo y no una lista | Confirmado |
+| RN-05 | El primer servicio no debe devolver cantidad, número de orden, fecha de creación ni UUID | Confirmado |
+| RN-06 | Si el primer servicio confirma ausencia, el proceso no debe continuar hacia la autenticación | Confirmado |
+| RN-07 | Solo un resultado positivo confirmado permite continuar hacia la autenticación; errores e incertidumbre no equivalen a ausencia | Confirmado |
 | RN-08 | La autenticación del titular debe realizarse mediante ID Perú | Confirmado |
 | RN-09 | La identidad autenticada debe corresponder al DNI ingresado | Preliminar, necesario para seguridad |
-| RN-10 | La lista obtenida inicialmente debe estar disponible después de la autenticación | Confirmado |
+| RN-10 | Después de la autenticación, un segundo servicio debe obtener la lista con número de orden, fecha de creación y UUID | Confirmado |
 | RN-11 | El paso de selección debe mostrarse siempre, incluso cuando exista un solo certificado | Confirmado |
 | RN-12 | El ciudadano puede seleccionar uno o varios certificados | Confirmado |
 | RN-13 | El ciudadano debe seleccionar al menos un certificado para continuar | Confirmado |
@@ -529,6 +537,8 @@ Resultado y constancia
 | RN-37 | La selección queda inmutable después de la confirmación ciudadana | Confirmado |
 | RN-38 | Los certificados no seleccionados quedan fuera de la operación y no cambian de estado | Confirmado |
 | RN-39 | Un resultado incierto conserva la misma operación y clave de idempotencia hasta su reconciliación | Confirmado |
+| RN-40 | La consulta inicial no debe crear ni persistir registros de certificados individuales | Confirmado |
+| RN-41 | Si el primer servicio fue positivo y el listado posterior está vacío, el proceso se bloquea sin atribuir el resultado a una falla de autenticación | Confirmado |
 
 ---
 
@@ -689,13 +699,14 @@ Componentes institucionales o externos necesarios para:
 | Estado | Descripción | Transición principal |
 |---|---|---|
 | Iniciado | El ciudadano accede al servicio | Ingreso del DNI |
-| DNI ingresado | Se cuenta con un DNI con formato aceptable | Consulta de certificados |
-| Consultando certificados | Se está solicitando la lista al servicio externo | Respuesta del servicio |
-| Sin certificados disponibles | La lista está vacía | Finalización |
-| Certificados disponibles | Existe al menos un certificado | Inicio de autenticación |
+| DNI ingresado | Se cuenta con un DNI con formato aceptable | Consulta de existencia |
+| Consultando disponibilidad | Se está consultando si existe al menos un certificado disponible | Respuesta del primer servicio |
+| Sin certificados disponibles | El primer servicio confirmó ausencia | Finalización |
+| Autenticación pendiente | El primer servicio confirmó existencia, pero todavía no existe lista detallada | Inicio de autenticación |
 | En autenticación | El ciudadano se encuentra en ID Perú | Respuesta de ID Perú |
 | Autenticación fallida o cancelada | No se acreditó al titular | Reintento o finalización |
-| Autenticado | La identidad fue verificada | Selección de certificados |
+| Autenticado y listado pendiente | La identidad fue verificada, pero todavía debe ejecutarse el segundo servicio | Consulta detallada |
+| Certificados disponibles | El segundo servicio devolvió y el sistema persistió una lista no vacía | Selección de certificados |
 | En selección | El ciudadano revisa las emisiones vigentes | Selección de uno o varios elementos |
 | Certificados seleccionados | Existe al menos un UUID seleccionado | Registro del motivo |
 | Motivo registrado | Se cuenta con una causa válida | Revisión y confirmación |
@@ -727,15 +738,15 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 
 ## 16. Supuestos preliminares
 
-1. El servicio de consulta podrá obtener las emisiones vigentes asociadas a un DNI.
+1. El primer servicio podrá confirmar si existe al menos un certificado disponible asociado a un DNI.
 
-2. La respuesta del servicio será una lista.
+2. La respuesta funcional del primer servicio será positiva o negativa y no contendrá una lista.
 
-3. Cada elemento incluirá un número de orden, una fecha de creación y un UUID.
+3. Los errores, timeout, indisponibilidad y resultados inconclusos se diferenciarán de una respuesta negativa.
 
-4. Una lista vacía significará que no existe ningún certificado disponible para cancelar.
+4. Después de la autenticación, el segundo servicio podrá devolver una lista con número de orden, fecha de creación y UUID.
 
-5. La lista obtenida podrá mantenerse vinculada al proceso hasta el paso de selección.
+5. La lista obtenida por el segundo servicio podrá mantenerse vinculada a la solicitud hasta el paso de selección.
 
 6. ID Perú devolverá información suficiente para comprobar la identidad del titular.
 
@@ -801,8 +812,8 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 
 - El sistema procesará información de identificación personal.
 - Debe limitarse la exposición del DNI y de los datos personales.
-- La consulta se realiza antes de la autenticación, por lo que debe revisarse qué información puede mostrarse en esa etapa.
-- La lista puede obtenerse en la pantalla de inicio, pero debería mostrarse al ciudadano únicamente después de autenticarlo.
+- La consulta de existencia se realiza antes de la autenticación y no debe revelar cantidad ni información individual.
+- La lista detallada solo debe obtenerse después de autenticar al ciudadano mediante el segundo servicio.
 - Debe evaluarse si el UUID puede mostrarse completo o debe ocultarse parcialmente.
 - El periodo de conservación de listas, motivos, evidencias y resultados está pendiente.
 - Debe evitarse solicitar información confidencial dentro de Otro motivo.
@@ -872,14 +883,15 @@ Debe identificarse:
 - El término emisiones vigentes se utilizará para dar precisión conceptual.
 - No se utilizará el término sesiones activas para representar estos certificados.
 - El ciudadano ingresará su número de DNI al inicio.
-- El primer servicio web devolverá una lista de certificados, no solamente verdadero o falso.
-- Cada elemento tendrá número de orden, fecha de creación y UUID.
-- Si la lista está vacía, el proceso no continuará.
-- Si existe al menos un certificado, el ciudadano podrá continuar.
-- La consulta se realizará antes de la autenticación con ID Perú.
+- El primer servicio web devolverá únicamente si existen o no certificados disponibles para cancelar.
+- El primer servicio no devolverá lista, cantidad, número de orden, fecha de creación ni UUID.
+- Una ausencia confirmada impedirá continuar; un resultado positivo permitirá avanzar hacia ID Perú.
+- Un error, timeout, indisponibilidad o resultado inconcluso no se interpretará como ausencia.
+- La consulta de existencia se realizará antes de la autenticación con ID Perú.
 - ID Perú se utilizará para autenticar la identidad.
 - ID Perú no es el objeto de la cancelación.
-- Después de autenticarse, el ciudadano verá el paso de certificados vigentes.
+- Después de autenticarse, un segundo servicio devolverá la lista con número de orden, fecha de creación y UUID.
+- Después de obtener esa lista, el ciudadano verá el paso de certificados vigentes.
 - El paso de selección siempre se mostrará.
 - Esto también se aplica cuando exista un solo certificado.
 - El ciudadano podrá seleccionar uno o varios certificados.
@@ -911,8 +923,8 @@ Debe identificarse:
 2. **Criterio de vigencia y elegibilidad**
    Precisar qué estados hacen que un certificado aparezca en la lista.
 
-3. **Contrato del servicio de consulta**
-   Definir solicitud, estructura de respuesta, errores, códigos y límites.
+3. **Contratos de los servicios de certificados**
+   Definir el contrato booleano del primer servicio y, por separado, la solicitud, lista, errores, códigos y límites del segundo servicio posterior a la autenticación.
 
 4. **Semántica del número de orden**
    Confirmar si representa secuencia de emisión, posición de la lista u otro dato institucional.
@@ -933,7 +945,7 @@ Debe identificarse:
    Confirmar cómo se validará técnicamente.
 
 10. **Cambios de estado durante el flujo**
-    Definir qué ocurre si un certificado deja de estar disponible después de la consulta inicial.
+    Precisar reintentos y soporte cuando el primer servicio fue positivo y el segundo servicio devuelve una lista vacía; funcionalmente el proceso se bloquea sin tratarlo como error de autenticación.
 
 11. **Efectos exactos de la revocación**
     Determinar qué funciones dejarán de estar disponibles.
@@ -1110,9 +1122,9 @@ El proyecto consiste en un sistema web institucional para RENIEC, dirigido a per
 
 Un ciudadano puede tener una o más emisiones vigentes de certificados digitales generadas en momentos diferentes. En la interfaz, estas emisiones se presentan como certificados digitales vigentes. Cada certificado se identifica mediante un número de orden, una fecha de creación y un UUID único.
 
-El flujo comienza en una pantalla de inicio donde el ciudadano ingresa su DNI. Un primer servicio web devuelve una lista de certificados digitales vigentes. Si la lista está vacía, el proceso finaliza. Si contiene al menos un elemento, el ciudadano continúa con la autenticación mediante ID Perú.
+El flujo comienza en una pantalla de inicio donde el ciudadano ingresa su DNI. Un primer servicio web indica únicamente si existen certificados disponibles. Si confirma ausencia, el proceso finaliza; si confirma existencia, el ciudadano continúa con la autenticación mediante ID Perú. Los errores o resultados inciertos bloquean la continuidad sin interpretarse como ausencia.
 
-Después de autenticarse, se muestra el paso de selección de certificados. Este paso siempre se presenta, incluso cuando solo existe un certificado. El ciudadano debe seleccionar uno o varios certificados para continuar.
+Después de autenticarse, un segundo servicio obtiene la lista con número de orden, fecha de creación y UUID. Solo entonces se persisten y muestran los certificados en el paso de selección. Si la lista posterior está vacía, el proceso se bloquea sin considerarlo un error de autenticación. El paso siempre se presenta cuando existe al menos un certificado, incluso si solo hay uno, y el ciudadano debe seleccionar uno o varios para continuar.
 
 Luego selecciona el motivo de cancelación, revisa un resumen y confirma expresamente la operación. La selección queda inmutable. El sistema envía al servicio de revocación la lista completa de UUID seleccionados bajo una única clave de idempotencia. El servicio debe procesarla de forma atómica: el resultado es exitoso si revoca todos, fallido si no revoca ninguno o incierto mientras no pueda confirmarse uno de esos resultados.
 
@@ -1128,4 +1140,4 @@ Permanecen pendientes los contratos definitivos de los servicios, los estados ex
 
 ## 23. Contexto compacto para prompts
 
-> Proyecto web de RENIEC para que personas naturales cancelen inmediatamente uno o varios certificados digitales vigentes asociados a su DNI. Un ciudadano puede tener varias emisiones vigentes generadas en momentos distintos; en la interfaz se mostrarán como certificados digitales vigentes. El ciudadano ingresa su DNI en la pantalla de inicio y un servicio devuelve una lista de certificados con número de orden, fecha de creación y UUID. Si la lista está vacía, el proceso no continúa. Si existe al menos un certificado, el ciudadano se autentica mediante ID Perú. Después accede siempre al paso de selección, incluso cuando exista un solo certificado, y debe elegir uno o varios. Luego registra el motivo, revisa las consecuencias y confirma; desde ese momento la selección es inmutable. El servicio de revocación recibe la lista completa de UUID con una clave de idempotencia y aplica todos o ninguno. La operación puede ser exitosa, fallida o incierta, nunca parcial, y la constancia identifica el conjunto seleccionado y su resultado común. Los certificados no seleccionados no se alteran. Cada ingreso posterior desde inicio crea una solicitud y consulta nuevas; no recupera el progreso, la selección ni la constancia anterior, aunque el historial se conserva. En la interfaz debe utilizarse “cancelación de certificados digitales”; técnicamente la operación es una revocación. No se cancela la identidad civil, el DNI, el DNIe ni ID Perú. No debe utilizarse el término “sesiones activas” para representar las emisiones vigentes.
+> Proyecto web de RENIEC para que personas naturales cancelen inmediatamente uno o varios certificados digitales vigentes asociados a su DNI. El ciudadano ingresa su DNI y un primer servicio indica únicamente si existen certificados disponibles, sin devolver lista, cantidad ni datos individuales. Solo un resultado positivo permite continuar hacia ID Perú; los errores y la incertidumbre no equivalen a ausencia. Después de autenticar al ciudadano, un segundo servicio devuelve la lista con número de orden, fecha de creación y UUID. Si está vacía, el proceso se bloquea sin tratarlo como error de autenticación; si contiene elementos, se persisten y se muestra siempre el paso de selección, incluso cuando exista uno solo. El ciudadano elige uno o varios, registra el motivo, revisa y confirma; desde ese momento la selección es inmutable. El servicio de revocación recibe la lista completa de UUID bajo una clave de idempotencia y aplica todos o ninguno. La operación puede ser exitosa, fallida o incierta, nunca parcial, y la constancia identifica el conjunto seleccionado y su resultado común. Cada ingreso posterior desde inicio crea una solicitud nueva y no recupera progreso anterior. En la interfaz se usa “cancelación de certificados digitales”; técnicamente es una revocación. No se cancela la identidad civil, el DNI, el DNIe ni ID Perú.

@@ -32,6 +32,8 @@ Invoke-WebRequest http://localhost:8080/api/v1/system/status -Headers @{ "X-Corr
 
 La segunda respuesta debe ser `200`, contener backend/MySQL `UP` y devolver `X-Correlation-ID`.
 
+La operación inicial `POST /api/v1/cancellation-requests` consulta únicamente la existencia de certificados disponibles. Su respuesta no contiene lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del adaptador local se documentan en [`backend/README.md`](../backend/README.md).
+
 ## 3. Contrato y frontend
 
 Desde `/frontend`:
@@ -45,7 +47,7 @@ npm run test:integration
 npm run dev
 ```
 
-Abre `http://localhost:3000`. El indicador temporal debe mostrar “Integración disponible” y confirmar backend y MySQL. El navegador llama directamente a `http://localhost:8080/api/v1/system/status`; CORS permite el origen local exacto y expone la correlación.
+Abre `http://localhost:3000`. El formulario de inicio consume el contrato propio del backend y solo permite continuar cuando la existencia queda confirmada. El navegador también puede consultar `http://localhost:8080/api/v1/system/status`; CORS permite el origen local exacto y expone la correlación.
 
 ## Verificación completa
 
