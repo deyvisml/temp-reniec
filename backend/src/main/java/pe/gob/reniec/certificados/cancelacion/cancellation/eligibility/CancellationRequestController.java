@@ -23,7 +23,7 @@ import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
 
 @RestController
 @RequestMapping("/api/v1/cancellation-requests")
-@Tag(name = "Solicitudes de cancelación", description = "Inicio, recuperación y elegibilidad del flujo ciudadano.")
+@Tag(name = "Solicitudes de cancelación", description = "Inicio de nuevas solicitudes y elegibilidad del flujo ciudadano.")
 public class CancellationRequestController {
 
 	private final EligibilityInitiationService service;
@@ -33,8 +33,8 @@ public class CancellationRequestController {
 	}
 
 	@Operation(operationId = "initiateCancellationRequest",
-			summary = "Inicia o recupera una solicitud y consulta su elegibilidad",
-			description = "Valida el DNI, recupera una solicitud compatible cuando existe o crea una nueva, y consulta si hay certificados digitales susceptibles de cancelación. No devuelve certificados individuales ni expone el DNI completo.",
+			summary = "Inicia una nueva solicitud y consulta su elegibilidad",
+			description = "Valida el DNI, crea una solicitud nueva y consulta si hay certificados digitales susceptibles de cancelación. No reabre solicitudes anteriores, no devuelve certificados individuales ni expone el DNI completo.",
 			parameters = @Parameter(name = CorrelationIdFilter.HEADER_NAME, in = ParameterIn.HEADER,
 					description = "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
 					required = false, schema = @Schema(type = "string", maxLength = 64,
@@ -46,7 +46,7 @@ public class CancellationRequestController {
 					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
 							schema = @Schema(implementation = CancellationRequestResponse.class))),
 			@ApiResponse(responseCode = "400", description = "DNI, JSON o cuerpo inválido", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
-			@ApiResponse(responseCode = "409", description = "Consulta en curso o conflicto concurrente", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
+			@ApiResponse(responseCode = "409", description = "Conflicto controlado: ELIGIBILITY_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
 			@ApiResponse(responseCode = "415", description = "Tipo de contenido no admitido", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
 			@ApiResponse(responseCode = "500", description = "Error interno controlado", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
 			@ApiResponse(responseCode = "502", description = "Error controlado del proveedor de elegibilidad", headers = @Header(name = CorrelationIdFilter.HEADER_NAME, schema = @Schema(type = "string")), content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, schema = @Schema(implementation = ApiError.class))),
@@ -56,7 +56,7 @@ public class CancellationRequestController {
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<CancellationRequestResponse> initiate(
 			@io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
-					description = "DNI que inicia o recupera la solicitud. Se valida nuevamente en el backend.",
+				description = "DNI que inicia una solicitud nueva. Se valida nuevamente en el backend.",
 					content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
 							schema = @Schema(implementation = StartCancellationRequest.class)))
 			@Valid @RequestBody StartCancellationRequest body,

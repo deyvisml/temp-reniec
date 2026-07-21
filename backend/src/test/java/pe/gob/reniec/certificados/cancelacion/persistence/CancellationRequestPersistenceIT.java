@@ -9,6 +9,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -73,6 +74,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	void cleanTables() {
 		jdbcTemplate.update("DELETE FROM cancellation_audit_event");
 		jdbcTemplate.update("DELETE FROM cancellation_receipt");
+		jdbcTemplate.update("DELETE FROM cancellation_request_certificate");
 		jdbcTemplate.update("DELETE FROM revocation_operation");
 		jdbcTemplate.update("DELETE FROM identity_verification");
 		jdbcTemplate.update("DELETE FROM certificate_eligibility_check");
@@ -80,7 +82,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void cleanDatabaseRunsFlywayCreatesOnlyTheSixSimplifiedTablesAndReportsSafeHealth() throws Exception {
+	void cleanDatabaseRunsFlywayCreatesTheSevenDomainTablesAndReportsSafeHealth() throws Exception {
 		List<String> tables = jdbcTemplate.queryForList("""
 				SELECT table_name FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
@@ -96,27 +98,86 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				 'token_family_id', 'client_reference_hash', 'open_request_guard',
 				 'next_status_check_at', 'document_hash', 'template_version',
 				 'technical_code', 'technical_detail', 'public_reference', 'consent_version',
-				 'recoverable_until', 'expires_at', 'version', 'session_reference')
+				 'recoverable_until', 'expires_at', 'session_reference')
 				""", String.class);
 		Integer migrationCount = jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM flyway_schema_history WHERE success = TRUE", Integer.class);
+		List<String> tablesWithoutComments = jdbcTemplate.queryForList("""
+				SELECT table_name FROM information_schema.tables
+				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
+				AND TRIM(COALESCE(table_comment, '')) = ''
+				ORDER BY table_name
+				""", String.class);
+		List<String> columnsWithoutComments = jdbcTemplate.queryForList("""
+				SELECT CONCAT(table_name, '.', column_name) FROM information_schema.columns
+				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
+				AND TRIM(COALESCE(column_comment, '')) = ''
+				ORDER BY table_name, ordinal_position
+				""", String.class);
+		Integer documentedColumnCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.columns
+				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
+				AND TRIM(COALESCE(column_comment, '')) <> ''
+				""", Integer.class);
 		HttpResponse<String> health = HttpClient.newHttpClient().send(
 				HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/health")).GET().build(),
 				HttpResponse.BodyHandlers.ofString());
 
 		assertThat(tables).containsExactly(
 				"cancellation_audit_event", "cancellation_receipt",
-				"certificate_cancellation_request", "certificate_eligibility_check",
-				"identity_verification", "revocation_operation");
+				"cancellation_request_certificate", "certificate_cancellation_request",
+				"certificate_eligibility_check", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(1);
+		assertThat(migrationCount).isEqualTo(4);
+		assertThat(tablesWithoutComments).isEmpty();
+		assertThat(columnsWithoutComments).isEmpty();
+		assertThat(documentedColumnCount).isEqualTo(81);
 		assertThat(health.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(health.body()).contains("\"status\":\"UP\"")
 				.doesNotContain("jdbc", "mysql", "username", "password", "sql", "dni");
 	}
 
 	@Test
-	void initiatesEligibilityThroughHttpPersistsItAndRecoversConcurrentEligibleRequest() throws Exception {
+	void exposesExactSpanishCommentsAndPreservesRepresentativeColumnDefinitions() {
+		assertThat(tableComment("certificate_cancellation_request"))
+				.isEqualTo("Solicitud ciudadana que concentra el estado y resultado actual del trámite de cancelación");
+		assertThat(columnComment("certificate_cancellation_request", "dni"))
+				.isEqualTo("Número de DNI asociado a la solicitud ciudadana");
+		assertThat(columnComment("cancellation_request_certificate", "selected"))
+				.isEqualTo("Indica si el ciudadano seleccionó el certificado para cancelarlo");
+		assertThat(columnComment("revocation_operation", "idempotency_key"))
+				.isEqualTo("Clave única que evita ejecutar dos veces la misma operación técnica");
+		assertThat(columnComment("revocation_operation", "normalized_result"))
+				.isEqualTo("Resultado general normalizado de la operación técnica");
+		assertThat(columnComment("cancellation_receipt", "receipt_code"))
+				.isEqualTo("Código único asignado a la constancia");
+		assertThat(columnComment("cancellation_audit_event", "event_type"))
+				.isEqualTo("Tipo de evento relevante registrado por el backend");
+
+		Map<String, Object> requestId = columnDefinition("certificate_cancellation_request", "id");
+		assertThat(requestId).containsEntry("column_type", "bigint unsigned")
+				.containsEntry("is_nullable", "NO")
+				.containsEntry("extra", "auto_increment");
+
+		Map<String, Object> dni = columnDefinition("certificate_cancellation_request", "dni");
+		assertThat(dni).containsEntry("column_type", "char(8)")
+				.containsEntry("is_nullable", "NO")
+				.containsEntry("character_set_name", "ascii")
+				.containsEntry("collation_name", "ascii_bin");
+
+		Map<String, Object> selected = columnDefinition("cancellation_request_certificate", "selected");
+		assertThat(selected).containsEntry("column_type", "tinyint(1)")
+				.containsEntry("is_nullable", "NO")
+				.containsEntry("column_default", "0");
+
+		Map<String, Object> version = columnDefinition("cancellation_request_certificate", "version");
+		assertThat(version).containsEntry("column_type", "bigint unsigned")
+				.containsEntry("is_nullable", "NO")
+				.containsEntry("column_default", "0");
+	}
+
+	@Test
+	void serializesConcurrentEligibilityAndStartsANewRequestForALaterEntry() throws Exception {
 		String body = "{\"dni\":\"00000001\"}";
 		CountDownLatch start = new CountDownLatch(1);
 		try (var executor = Executors.newFixedThreadPool(2)) {
@@ -137,16 +198,38 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(1);
 
-		jdbcTemplate.update("UPDATE certificate_cancellation_request SET created_at = '2000-01-01 00:00:00' WHERE dni='00000001'");
-		HttpResponse<String> recovered = postCancellation(body);
-		assertThat(recovered.statusCode()).isEqualTo(200);
-		assertThat(recovered.body()).contains("\"reused\":true", "\"requestId\":")
-				.doesNotContain("requestReference", "00000001");
+		Long firstRequestId = jdbcTemplate.queryForObject(
+				"SELECT id FROM certificate_cancellation_request WHERE dni='00000001'", Long.class);
+		HttpResponse<String> fresh = postCancellation(body);
+		assertThat(fresh.statusCode()).isEqualTo(200);
+		assertThat(fresh.body()).contains("\"requestId\":")
+				.doesNotContain("reused", "requestReference", "00000001");
 		assertThat(jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM certificate_cancellation_request WHERE dni='00000001'", Integer.class))
-				.isEqualTo(1);
+				.isEqualTo(2);
 		assertThat(jdbcTemplate.queryForObject(
-				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(1);
+				"SELECT COUNT(*) FROM certificate_eligibility_check", Integer.class)).isEqualTo(2);
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT request_status FROM certificate_cancellation_request WHERE id=?",
+				String.class, firstRequestId)).isEqualTo("ABANDONED");
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_eligibility_check WHERE attempt_number=1", Integer.class))
+				.isEqualTo(2);
+	}
+
+	@Test
+	void blocksProtectedRequestWithoutDisclosingHistoricalData() throws Exception {
+		CertificateCancellationRequestEntity protectedRequest = saveRequest("00000001");
+		protectedRequest.transitionTo(CancellationRequestStatus.REVOCATION_IN_PROGRESS, null);
+		requestRepository.saveAndFlush(protectedRequest);
+
+		HttpResponse<String> response = postCancellation("{\"dni\":\"00000001\"}");
+
+		assertThat(response.statusCode()).isEqualTo(409);
+		assertThat(response.body()).contains("CANCELLATION_REQUEST_IN_PROGRESS", "correlationId")
+				.doesNotContain("00000001", "requestId", "constancia", "certificate");
+		assertThat(requestRepository.count()).isEqualTo(1);
+		assertThat(eligibilityRepository.count()).isZero();
 	}
 
 	@Test
@@ -326,6 +409,28 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 	private CertificateCancellationRequestEntity saveRequest(String dni) {
 		return requestRepository.saveAndFlush(new CertificateCancellationRequestEntity(dni));
+	}
+
+	private String tableComment(String tableName) {
+		return jdbcTemplate.queryForObject("""
+				SELECT table_comment FROM information_schema.tables
+				WHERE table_schema = DATABASE() AND table_name = ?
+				""", String.class, tableName);
+	}
+
+	private String columnComment(String tableName, String columnName) {
+		return jdbcTemplate.queryForObject("""
+				SELECT column_comment FROM information_schema.columns
+				WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+				""", String.class, tableName, columnName);
+	}
+
+	private Map<String, Object> columnDefinition(String tableName, String columnName) {
+		return jdbcTemplate.queryForMap("""
+				SELECT column_type, is_nullable, column_default, extra, character_set_name, collation_name
+				FROM information_schema.columns
+				WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+				""", tableName, columnName);
 	}
 
 	private HttpResponse<String> postCancellation(String body) throws Exception {

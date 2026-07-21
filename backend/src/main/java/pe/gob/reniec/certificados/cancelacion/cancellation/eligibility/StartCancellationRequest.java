@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-@Schema(description = "Datos requeridos para iniciar o recuperar una solicitud y consultar su elegibilidad.")
+@Schema(description = "Datos requeridos para iniciar una nueva solicitud y consultar su elegibilidad.")
 public record StartCancellationRequest(
 		@Schema(description = "Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo.",
 				minLength = 8, maxLength = 8, pattern = DniRule.REGEX)

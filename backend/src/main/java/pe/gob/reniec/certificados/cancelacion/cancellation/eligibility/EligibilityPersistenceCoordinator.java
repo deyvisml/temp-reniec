@@ -2,8 +2,6 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.eligibility;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.EnumSet;
-import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -21,12 +19,6 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Eligibili
 @Service
 public class EligibilityPersistenceCoordinator {
 
-	private static final Set<CancellationRequestStatus> ACTIVE = EnumSet.of(
-			CancellationRequestStatus.STARTED,
-			CancellationRequestStatus.CHECKING_ELIGIBILITY,
-			CancellationRequestStatus.ELIGIBLE,
-			CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
-
 	private final CertificateCancellationRequestRepository requests;
 	private final CertificateEligibilityCheckRepository checks;
 	private final Duration staleAttemptThreshold;
@@ -43,41 +35,53 @@ public class EligibilityPersistenceCoordinator {
 	@Transactional
 	public EligibilityPreparation prepare(String dni, String correlationId) {
 		Instant now = Instant.now();
-		CertificateCancellationRequestEntity request = requests
-				.findTopByDniAndRequestStatusInOrderByCreatedAtDesc(dni, ACTIVE)
-				.orElse(null);
-		boolean reused = request != null;
+		CertificateCancellationRequestEntity previous = requests.findTopByDniOrderByCreatedAtDesc(dni).orElse(null);
+		if (previous != null) classifyPrevious(previous, now);
 
-		if (request != null && isEligible(request)) {
-			return EligibilityPreparation.recovered(response(request, EligibilityOutcome.ELIGIBLE, true));
-		}
-
-		if (request != null && request.getRequestStatus() == CancellationRequestStatus.CHECKING_ELIGIBILITY) {
-			CertificateEligibilityCheckEntity latest = checks
-					.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
-			if (latest.getCheckStatus() == EligibilityCheckStatus.SUBMITTED
-					&& latest.getRequestedAt().isBefore(now.minus(staleAttemptThreshold))) {
-				latest.fail(EligibilityCheckResult.ERROR, now, "STALE_ATTEMPT");
-				request.recordEligibility(CurrentEligibilityResult.ERROR, CancellationRequestStatus.STARTED);
-				checks.saveAndFlush(latest);
-				requests.saveAndFlush(request);
-			}
-			else {
-				throw new EligibilityInProgressException();
-			}
-		}
-
-		if (request == null) {
-			request = requests.saveAndFlush(new CertificateCancellationRequestEntity(dni));
-		}
-
-		int attempt = checks.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId())
-				.map(previous -> previous.getAttemptNumber() + 1).orElse(1);
+		CertificateCancellationRequestEntity request = requests.saveAndFlush(
+				new CertificateCancellationRequestEntity(dni));
 		request.beginEligibility();
 		requests.saveAndFlush(request);
 		CertificateEligibilityCheckEntity check = checks.saveAndFlush(new CertificateEligibilityCheckEntity(
-				request, attempt, EligibilityCheckStatus.SUBMITTED, now, correlationId));
-		return EligibilityPreparation.started(request.getId(), check.getId(), reused);
+				request, 1, EligibilityCheckStatus.SUBMITTED, now, correlationId));
+		return new EligibilityPreparation(request.getId(), check.getId());
+	}
+
+	private void classifyPrevious(CertificateCancellationRequestEntity previous, Instant now) {
+		CancellationRequestStatus status = previous.getRequestStatus();
+		if (CancellationRequestInitiationPolicy.isProtected(status)) {
+			throw new CancellationRequestProtectedException();
+		}
+		if (CancellationRequestInitiationPolicy.isEligibilityInProgress(status)) {
+			closeStaleEligibilityOrReject(previous, now);
+			return;
+		}
+		if (CancellationRequestInitiationPolicy.isReplaceable(status)) {
+			abandon(previous);
+			return;
+		}
+		if (!CancellationRequestInitiationPolicy.isTerminalHistory(status)) {
+			throw new IllegalStateException("Unclassified cancellation request status: " + status);
+		}
+	}
+
+	private void closeStaleEligibilityOrReject(CertificateCancellationRequestEntity previous, Instant now) {
+		CertificateEligibilityCheckEntity latest = checks
+				.findFirstByRequest_IdOrderByAttemptNumberDesc(previous.getId()).orElseThrow();
+		if (latest.getCheckStatus() == EligibilityCheckStatus.SUBMITTED
+				&& !latest.getRequestedAt().isBefore(now.minus(staleAttemptThreshold))) {
+			throw new EligibilityInProgressException();
+		}
+		if (latest.getCheckStatus() == EligibilityCheckStatus.SUBMITTED) {
+			latest.fail(EligibilityCheckResult.ERROR, now, "STALE_ATTEMPT");
+			checks.saveAndFlush(latest);
+		}
+		abandon(previous);
+	}
+
+	private void abandon(CertificateCancellationRequestEntity request) {
+		request.transitionTo(CancellationRequestStatus.ABANDONED, null);
+		requests.saveAndFlush(request);
 	}
 
 	@Transactional
@@ -85,6 +89,12 @@ public class EligibilityPersistenceCoordinator {
 			EligibilityPreparation preparation, EligibilityGatewayResult gatewayResult) {
 		CertificateCancellationRequestEntity request = requests.findByIdForUpdate(preparation.requestId()).orElseThrow();
 		CertificateEligibilityCheckEntity check = checks.findByIdForUpdate(preparation.attemptId()).orElseThrow();
+		if (!check.getRequest().getId().equals(request.getId())
+				|| check.getCheckStatus() != EligibilityCheckStatus.SUBMITTED
+				|| request.getRequestStatus() != CancellationRequestStatus.CHECKING_ELIGIBILITY) {
+			throw new EligibilityConcurrencyException(
+					new IllegalStateException("Eligibility attempt is no longer active"));
+		}
 		Instant now = Instant.now();
 		EligibilityOutcome outcome = gatewayResult.outcome();
 		EligibilityCheckResult persisted = EligibilityCheckResult.valueOf(outcome.name());
@@ -97,13 +107,7 @@ public class EligibilityPersistenceCoordinator {
 		request.recordEligibility(CurrentEligibilityResult.valueOf(outcome.name()), statusFor(outcome));
 		checks.saveAndFlush(check);
 		requests.saveAndFlush(request);
-		return response(request, outcome, preparation.reused());
-	}
-
-	private boolean isEligible(CertificateCancellationRequestEntity request) {
-		return request.getEligibilityResult() == CurrentEligibilityResult.ELIGIBLE
-				&& (request.getRequestStatus() == CancellationRequestStatus.ELIGIBLE
-				|| request.getRequestStatus() == CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		return response(request, outcome);
 	}
 
 	private CancellationRequestStatus statusFor(EligibilityOutcome outcome) {
@@ -115,24 +119,13 @@ public class EligibilityPersistenceCoordinator {
 	}
 
 	private CancellationRequestResponse response(CertificateCancellationRequestEntity request,
-			EligibilityOutcome outcome, boolean reused) {
+			EligibilityOutcome outcome) {
 		boolean canContinue = outcome == EligibilityOutcome.ELIGIBLE;
 		return new CancellationRequestResponse(request.getId(), DniRule.masked(request.getDni()),
 				request.getRequestStatus(), outcome, canContinue,
-				canContinue ? EligibilityNextStep.IDENTITY_VERIFICATION : null, reused);
+				canContinue ? EligibilityNextStep.IDENTITY_VERIFICATION : null);
 	}
 
-	public record EligibilityPreparation(
-			Long requestId, Long attemptId, boolean reused, CancellationRequestResponse recoveredResponse) {
-
-		static EligibilityPreparation started(Long requestId, Long attemptId, boolean reused) {
-			return new EligibilityPreparation(requestId, attemptId, reused, null);
-		}
-
-		static EligibilityPreparation recovered(CancellationRequestResponse response) {
-			return new EligibilityPreparation(null, null, true, response);
-		}
-
-		boolean recovered() { return recoveredResponse != null; }
+	public record EligibilityPreparation(Long requestId, Long attemptId) {
 	}
 }

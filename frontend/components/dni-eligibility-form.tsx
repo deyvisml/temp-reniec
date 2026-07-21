@@ -73,7 +73,7 @@ export function DniEligibilityForm() {
       }
     } catch (error) {
       if (error instanceof HttpClientError && error.code === "REQUEST_ABORTED") return;
-      setView(errorView(error));
+      setView(buildEligibilityErrorView(error));
     } finally {
       if (controllerRef.current === controller) controllerRef.current = undefined;
       setPending(false);
@@ -161,7 +161,7 @@ export function DniEligibilityForm() {
   );
 }
 
-function errorView(error: unknown): Extract<ViewState, { kind: "error" }> {
+export function buildEligibilityErrorView(error: unknown): Extract<ViewState, { kind: "error" }> {
   if (!(error instanceof HttpClientError)) {
     return { kind: "error", title: "No pudimos completar la consulta", message: "Ocurrió un problema inesperado. Inténtalo nuevamente." };
   }
@@ -172,10 +172,17 @@ function errorView(error: unknown): Extract<ViewState, { kind: "error" }> {
     ELIGIBILITY_UNAVAILABLE: ["Servicio temporalmente no disponible", "No podemos consultar los certificados en este momento."],
     ELIGIBILITY_PROVIDER_ERROR: ["No pudimos completar la consulta", "El servicio presentó un inconveniente temporal."],
     ELIGIBILITY_IN_PROGRESS: ["La consulta ya está en proceso", "Espera unos segundos antes de intentarlo nuevamente."],
-    CONCURRENT_REQUEST: ["La solicitud fue actualizada", "Inténtalo nuevamente para recuperar su estado actual."],
+    CONCURRENT_REQUEST: ["No pudimos iniciar la solicitud", "Inténtalo nuevamente en unos momentos."],
+    CANCELLATION_REQUEST_IN_PROGRESS: ["No es posible iniciar otra solicitud", "Existe una operación que todavía debe finalizar. Inténtalo nuevamente más adelante."],
   };
   const [title, message] = messages[error.code] ?? ["No pudimos completar la consulta", "Inténtalo nuevamente en unos momentos."];
-  return { kind: "error", title, message, correlationId: error.correlationId };
+  return {
+    kind: "error",
+    title,
+    message,
+    correlationId: error.correlationId,
+    retryable: error.code !== "CANCELLATION_REQUEST_IN_PROGRESS",
+  };
 }
 
 function PersonIcon() { return <svg className={iconStroke} viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20c.5-4.2 2.7-6.2 6.5-6.2s6 2 6.5 6.2"/></svg>; }

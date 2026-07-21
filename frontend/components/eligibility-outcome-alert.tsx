@@ -22,6 +22,7 @@ export type EligibilityOutcome =
       title: string;
       message: string;
       correlationId?: string;
+      retryable?: boolean;
     };
 
 export type EligibilityOutcomeAction = {
@@ -93,8 +94,12 @@ export function getEligibilityOutcomePresentation(
         title: outcome.title,
         description: outcome.message,
         correlationId: outcome.correlationId,
-        primaryAction: { kind: "retry", label: "Reintentar consulta" },
-        secondaryAction: { kind: "reset", label: "Volver al inicio" },
+        primaryAction: outcome.retryable === false
+          ? { kind: "reset", label: "Aceptar" }
+          : { kind: "retry", label: "Reintentar consulta" },
+        secondaryAction: outcome.retryable === false
+          ? undefined
+          : { kind: "reset", label: "Volver al inicio" },
       };
 
     default:

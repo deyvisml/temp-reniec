@@ -97,6 +97,9 @@ public class RevocationOperationEntity {
 		}
 		operationStatus = Objects.requireNonNull(status, "status");
 		normalizedResult = Objects.requireNonNull(result, "result");
+		if (!operationStatus.name().equals(normalizedResult.name())) {
+			throw new IllegalArgumentException("Operation status and atomic result must match");
+		}
 		respondedAt = responseTime;
 		completedAt = completionTime;
 		this.errorCode = errorCode;

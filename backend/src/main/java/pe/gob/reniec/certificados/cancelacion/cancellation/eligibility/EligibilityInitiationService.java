@@ -35,15 +35,13 @@ public class EligibilityInitiationService {
 	public CancellationRequestResponse initiate(String dni, String correlationId) {
 		try {
 			EligibilityPreparation preparation = persistence.prepare(dni, correlationId);
-			if (preparation.recovered()) return preparation.recoveredResponse();
-
 			EligibilityGatewayResult result = execute(dni, preparation);
 			CancellationRequestResponse response = persistence.finalizeAttempt(preparation, result);
 			if (result.outcome() == EligibilityOutcome.UNAVAILABLE) throw new EligibilityUnavailableException();
 			if (result.outcome() == EligibilityOutcome.ERROR) throw new EligibilityProviderException();
 			return response;
 		}
-		catch (EligibilityInProgressException | EligibilityUnavailableException
+		catch (CancellationRequestProtectedException | EligibilityInProgressException | EligibilityUnavailableException
 				| EligibilityTimeoutException | EligibilityProviderException exception) {
 			throw exception;
 		}

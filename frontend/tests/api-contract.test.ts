@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { ApiError, CancellationRequestResponse, StartCancellationRequest, SystemStatus } from "@/lib/api/contracts";
@@ -24,11 +26,19 @@ describe("generated API aliases", () => {
       nextStep: "IDENTITY_VERIFICATION",
       requestId: 42,
       requestStatus: "PENDING_IDENTITY_VERIFICATION",
-      reused: false,
     };
     expect(request.dni).toHaveLength(8);
     expect(response.canContinue).toBe(true);
     expect(response.requestId).toBe(42);
     expect(CANCELLATION_REQUESTS_PATH).toBe("/api/v1/cancellation-requests");
+  });
+
+  it("keeps the committed contract free of progress-recovery semantics", () => {
+    const openApi = readFileSync(join(process.cwd(), "openapi", "backend-api.json"), "utf8");
+    const generated = readFileSync(join(process.cwd(), "lib", "api", "generated.ts"), "utf8");
+
+    expect(openApi).toContain("CANCELLATION_REQUEST_IN_PROGRESS");
+    expect(openApi).not.toMatch(/reused|publicReference|recupera una solicitud|inicio o recuperación/i);
+    expect(generated).not.toMatch(/reused|publicReference|recupera una solicitud|inicio o recuperación/i);
   });
 });

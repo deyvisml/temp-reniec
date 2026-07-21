@@ -55,7 +55,7 @@
         "type": "object"
       },
       "CancellationRequestResponse": {
-        "description": "Resultado normalizado del inicio o recuperación de una solicitud de cancelación.",
+        "description": "Resultado normalizado del inicio de una nueva solicitud de cancelación.",
         "properties": {
           "canContinue": {
             "description": "Indica si el backend autoriza continuar al siguiente paso.",
@@ -101,14 +101,21 @@
             "enum": [
               "STARTED",
               "CHECKING_ELIGIBILITY",
+              "NO_CERTIFICATES_AVAILABLE",
+              "CERTIFICATES_AVAILABLE",
               "NOT_ELIGIBLE",
               "ELIGIBLE",
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
+              "AUTHENTICATED_PENDING_SELECTION",
+              "CERTIFICATES_SELECTED",
               "REASON_REGISTERED",
               "PENDING_CONFIRMATION",
               "CONFIRMED",
               "REVOCATION_IN_PROGRESS",
+              "REVOCATION_SUCCEEDED",
+              "REVOCATION_FAILED",
+              "REVOCATION_OUTCOME_UNKNOWN",
               "COMPLETED",
               "FAILED",
               "OUTCOME_UNKNOWN",
@@ -117,11 +124,6 @@
             ],
             "example": "PENDING_IDENTITY_VERIFICATION",
             "type": "string"
-          },
-          "reused": {
-            "description": "Indica si se recuperó una solicitud compatible existente.",
-            "example": false,
-            "type": "boolean"
           }
         },
         "required": [
@@ -130,13 +132,12 @@
           "maskedDni",
           "nextStep",
           "requestId",
-          "requestStatus",
-          "reused"
+          "requestStatus"
         ],
         "type": "object"
       },
       "StartCancellationRequest": {
-        "description": "Datos requeridos para iniciar o recuperar una solicitud y consultar su elegibilidad.",
+        "description": "Datos requeridos para iniciar una nueva solicitud y consultar su elegibilidad.",
         "properties": {
           "dni": {
             "description": "Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo.",
@@ -255,7 +256,7 @@
     },
     "/api/v1/cancellation-requests": {
       "post": {
-        "description": "Valida el DNI, recupera una solicitud compatible cuando existe o crea una nueva, y consulta si hay certificados digitales susceptibles de cancelación. No devuelve certificados individuales ni expone el DNI completo.",
+        "description": "Valida el DNI, crea una solicitud nueva y consulta si hay certificados digitales susceptibles de cancelación. No reabre solicitudes anteriores, no devuelve certificados individuales ni expone el DNI completo.",
         "operationId": "initiateCancellationRequest",
         "parameters": [
           {
@@ -277,7 +278,7 @@
               }
             }
           },
-          "description": "DNI que inicia o recupera la solicitud. Se valida nuevamente en el backend.",
+          "description": "DNI que inicia una solicitud nueva. Se valida nuevamente en el backend.",
           "required": true
         },
         "responses": {
@@ -326,7 +327,7 @@
                 }
               }
             },
-            "description": "Consulta en curso o conflicto concurrente",
+            "description": "Conflicto controlado: ELIGIBILITY_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST",
             "headers": {
               "X-Correlation-ID": {
                 "schema": {
@@ -427,7 +428,7 @@
             }
           }
         },
-        "summary": "Inicia o recupera una solicitud y consulta su elegibilidad",
+        "summary": "Inicia una nueva solicitud y consulta su elegibilidad",
         "tags": [
           "Solicitudes de cancelación"
         ]
@@ -517,7 +518,7 @@
   },
   "tags": [
     {
-      "description": "Inicio, recuperación y elegibilidad de solicitudes ciudadanas.",
+      "description": "Inicio de nuevas solicitudes y elegibilidad ciudadana.",
       "name": "Solicitudes de cancelación"
     },
     {

@@ -149,10 +149,11 @@ class BackendHttpIntegrationTests {
 						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
 						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
 						"ActuatorHealthResponse", "ApiError", "X-Correlation-ID",
-						"VALIDATION_ERROR", "date-time", "[0-9]{8}",
+						"VALIDATION_ERROR", "CANCELLATION_REQUEST_IN_PROGRESS", "date-time", "[0-9]{8}",
 						"\"200\"", "\"400\"", "\"409\"", "\"415\"", "\"500\"",
 						"\"502\"", "\"503\"", "\"504\"")
 				.doesNotContain("/__test/", "/actuator/info", "/actuator/env", "securitySchemes",
+						"reused", "publicReference", "recupera una solicitud", "inicio o recuperación",
 						"00000001", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
 	}
 

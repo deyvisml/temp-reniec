@@ -18,6 +18,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.CancellationRequestProtectedException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityConcurrencyException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityInProgressException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityProviderException;
@@ -68,6 +69,13 @@ public final class GlobalExceptionHandler {
 			HttpServletRequest request) {
 		return respond(HttpStatus.CONFLICT, "CONCURRENT_REQUEST",
 				"La solicitud fue actualizada simultáneamente. Inténtalo nuevamente.", request);
+	}
+
+	@ExceptionHandler(CancellationRequestProtectedException.class)
+	ResponseEntity<ApiError> handleProtectedCancellationRequest(CancellationRequestProtectedException exception,
+			HttpServletRequest request) {
+		return respond(HttpStatus.CONFLICT, "CANCELLATION_REQUEST_IN_PROGRESS",
+				"No es posible iniciar una nueva solicitud en este momento. Inténtalo nuevamente más adelante.", request);
 	}
 
 	@ExceptionHandler(EligibilityUnavailableException.class)

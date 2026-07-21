@@ -57,6 +57,20 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     expect(error.correlationId).toBe("correlation-test");
   });
 
+  it("acknowledges a protected operation without offering retry or historical recovery", () => {
+    const presentation = getEligibilityOutcomePresentation({
+      kind: "error",
+      title: "No es posible iniciar otra solicitud",
+      message: "Existe una operación que todavía debe finalizar.",
+      correlationId: "protected-correlation",
+      retryable: false,
+    });
+
+    expect(presentation.primaryAction).toEqual({ kind: "reset", label: "Aceptar" });
+    expect(presentation.secondaryAction).toBeUndefined();
+    expect(presentation.description).not.toMatch(/recuper|constancia|certificado seleccionado/i);
+  });
+
   it("builds supported SweetAlert2 options without dynamic HTML", () => {
     const presentation = getEligibilityOutcomePresentation({
       kind: "eligible",

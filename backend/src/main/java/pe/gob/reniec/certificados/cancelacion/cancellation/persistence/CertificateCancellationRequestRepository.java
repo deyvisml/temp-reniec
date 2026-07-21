@@ -17,8 +17,7 @@ public interface CertificateCancellationRequestRepository
 			String dni, Collection<CancellationRequestStatus> statuses);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
-	Optional<CertificateCancellationRequestEntity> findTopByDniAndRequestStatusInOrderByCreatedAtDesc(
-			String dni, Collection<CancellationRequestStatus> statuses);
+	Optional<CertificateCancellationRequestEntity> findTopByDniOrderByCreatedAtDesc(String dni);
 
 	Optional<CertificateCancellationRequestEntity> findFirstByDniOrderByCreatedAtDesc(String dni);
 

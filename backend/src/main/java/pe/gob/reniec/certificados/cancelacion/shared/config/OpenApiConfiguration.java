@@ -31,7 +31,7 @@ public class OpenApiConfiguration {
 				.contact(new Contact().name("RENIEC")))
 				.tags(List.of(
 						new Tag().name("Solicitudes de cancelación")
-								.description("Inicio, recuperación y elegibilidad de solicitudes ciudadanas."),
+								.description("Inicio de nuevas solicitudes y elegibilidad ciudadana."),
 						new Tag().name("Estado técnico")
 								.description("Disponibilidad operativa del backend y sus dependencias.")));
 	}
@@ -41,7 +41,7 @@ public class OpenApiConfiguration {
 		return openApi -> {
 			openApi.setTags(List.of(
 					new Tag().name("Solicitudes de cancelación")
-							.description("Inicio, recuperación y elegibilidad de solicitudes ciudadanas."),
+							.description("Inicio de nuevas solicitudes y elegibilidad ciudadana."),
 					new Tag().name("Estado técnico")
 							.description("Disponibilidad operativa del backend y sus dependencias.")));
 			if (openApi.getPaths() == null || openApi.getPaths().get("/actuator/health") == null

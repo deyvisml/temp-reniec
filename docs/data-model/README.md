@@ -1,144 +1,156 @@
 # Modelo de datos de solicitudes de cancelación
 
-> La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica ejecutada como consecuencia de la confirmación de dicha solicitud.
+> La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica atómica ejecutada como consecuencia de la confirmación de dicha solicitud.
 
-El modelo tiene una tabla principal y cinco tablas relacionadas. No existe una tabla por pantalla, paso, estado, navegador o dispositivo. El estado actual se consulta directamente en la solicitud y la auditoría no es event sourcing.
+Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V4. El modelo efectivo contiene una tabla raíz y seis tablas relacionadas: siete tablas y 81 columnas de dominio. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
 
 ## Diagrama entidad-relación
 
 ```mermaid
 erDiagram
-    certificate_cancellation_request ||--o{ certificate_eligibility_check : "tiene intentos"
-    certificate_cancellation_request ||--o{ identity_verification : "tiene intentos"
-    certificate_cancellation_request ||--o{ revocation_operation : "origina operaciones"
+    certificate_cancellation_request ||--o{ certificate_eligibility_check : "registra intentos"
+    certificate_cancellation_request ||--o{ cancellation_request_certificate : "conserva certificados"
+    certificate_eligibility_check ||--o{ cancellation_request_certificate : "obtiene"
+    certificate_cancellation_request ||--o{ identity_verification : "registra intentos"
+    certificate_cancellation_request ||--o{ revocation_operation : "origina"
     certificate_cancellation_request ||--o{ cancellation_receipt : "conserva constancias"
-    certificate_cancellation_request ||--o{ cancellation_audit_event : "registra eventos"
     revocation_operation ||--o{ cancellation_receipt : "sustenta"
+    certificate_cancellation_request ||--o{ cancellation_audit_event : "registra eventos"
 ```
 
-Todas las claves primarias son `BIGINT UNSIGNED AUTO_INCREMENT`. Las claves foráneas usan el mismo tipo y no eliminan información en cascada.
+Las claves primarias son internas, numéricas y no constituyen autorización. Las claves foráneas no usan eliminación en cascada.
 
-## Por qué existe cada tabla
+## Responsabilidad de las siete tablas
 
-| Tabla | Responsabilidad | Motivo de separación |
+| Tabla | Responsabilidad | Justificación |
 | --- | --- | --- |
-| `certificate_cancellation_request` | Estado actual del trámite ciudadano. | Es la raíz y fuente directa del progreso. |
-| `certificate_eligibility_check` | Cada consulta de elegibilidad. | La consulta externa puede fallar o repetirse. |
-| `identity_verification` | Cada intento con ID Perú. | Una verificación puede cancelarse, fallar o repetirse. |
-| `revocation_operation` | Ejecución técnica idempotente. | La revocación no es lo mismo que la solicitud ciudadana y puede tener resultado incierto. |
-| `cancellation_receipt` | Generación y disponibilidad de constancias. | Una falla al generar la constancia no cambia una revocación confirmada. |
-| `cancellation_audit_event` | Trazabilidad cronológica mínima. | Conserva hechos relevantes sin reconstruir el estado actual. |
+| `certificate_cancellation_request` | Estado y progreso actual del trámite ciudadano. | Es la raíz conceptual y fuente directa del progreso. |
+| `certificate_eligibility_check` | Cada consulta inicial al servicio de certificados. | Una consulta puede fallar o repetirse de forma controlada. |
+| `cancellation_request_certificate` | Cada emisión vigente devuelta para una solicitud y su selección actual. | La consulta devuelve cero, uno o varios certificados y el ciudadano decide cuáles cancelar. |
+| `identity_verification` | Cada intento de autenticación con ID Perú. | La verificación puede cancelarse, fallar o repetirse. |
+| `revocation_operation` | Cada ejecución técnica idempotente y atómica de revocación. | Conserva el único resultado técnico del conjunto confirmado. |
+| `cancellation_receipt` | Generación y disponibilidad de la constancia. | Su falla no cambia una revocación ya confirmada. |
+| `cancellation_audit_event` | Trazabilidad cronológica mínima. | Conserva hechos relevantes sin implementar event sourcing. |
 
 ## Solicitud principal
 
-`certificate_cancellation_request` contiene únicamente:
+`certificate_cancellation_request` conserva el DNI, `request_status`, el resultado de consulta vigente, motivo, descripción de `OTHER`, confirmación, resultado final y fechas técnicas. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
 
-| Columna | Descripción |
-| --- | --- |
-| `id` | Identificador numérico de la solicitud y referencia usada por la aplicación. No autentica ni autoriza. |
-| `dni` | DNI completo de ocho dígitos, legible dentro de MySQL. |
-| `request_status` | Estado actual y paso alcanzado, controlado por el backend. |
-| `eligibility_result` | Resultado vigente de elegibilidad. |
-| `reason_code` | Motivo controlado seleccionado por el ciudadano. |
-| `other_reason` | Descripción legible y limitada cuando el motivo es `OTHER`. |
-| `confirmed_at` | Momento en que se confirmó expresamente la solicitud. |
-| `final_outcome` | Resultado final normalizado, cuando exista. |
-| `created_at` | Fecha UTC de creación. |
-| `updated_at` | Fecha UTC de última actualización. |
+La solicitud no contiene colecciones JPA automáticas. Los intentos, certificados, operaciones y constancias se consultan con sus repositorios cuando un caso de uso los requiere.
 
-No contiene UUID público, versión de consentimiento, fecha de recuperación, fecha de expiración, paso duplicado ni versión optimista.
+## Certificados consultados y selección
 
-## Tablas relacionadas
+`cancellation_request_certificate` contiene la solicitud propietaria, el intento que obtuvo el certificado, número de orden, fecha de emisión, UUID canónico, disponibilidad, fecha de consulta, selección, fecha de selección, versión optimista y fechas técnicas.
 
-| Tabla | Columnas funcionales principales |
-| --- | --- |
-| `certificate_eligibility_check` | `request_id`, intento, estado, resultado, referencia externa, fechas, error y correlación. |
-| `identity_verification` | `request_id`, intento, proveedor, estado, referencia externa, coincidencia del DNI, fechas, error y correlación. |
-| `revocation_operation` | `request_id`, clave de idempotencia, intento, estado, referencia externa, fechas, resultado, error y correlación. |
-| `cancellation_receipt` | `request_id`, `revocation_operation_id`, código, estado, referencia de almacenamiento, fechas y error. |
-| `cancellation_audit_event` | `request_id`, tipo, estado anterior/nuevo, resultado, correlación, origen y fecha. |
+Una solicitud puede tener cero, uno o varios certificados. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, certificate_uuid)` es único y la clave foránea compuesta `(request_id, eligibility_check_id)` impide asociar una consulta perteneciente a otra solicitud.
 
-## Recuperación del progreso
+`selected` y `selected_at` siempre son coherentes. Antes de confirmar pueden seleccionarse uno, varios o todos los certificados disponibles. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación y no cambian de disponibilidad por la revocación.
 
-Para el MVP, una solicitud sin finalizar siempre puede retomarse, independientemente del tiempo transcurrido:
+Las filas seleccionadas constituyen el conjunto atómico: sus UUID se envían juntos bajo una única clave de idempotencia. No se crea una tabla snapshot porque las mismas filas quedan inmutables tras la confirmación.
 
-1. El ciudadano vuelve a proporcionar su DNI.
-2. El backend busca la solicitud más reciente del DNI en un estado retomable.
-3. `request_status` indica directamente el paso alcanzado.
-4. Se continúa sobre la misma solicitud.
+## Operación de revocación atómica
 
-No existe `cancellation_request_session`, no se crean filas por navegador o dispositivo y no se evalúa una fecha límite. Las solicitudes completadas, abandonadas o fallidas permanecen como historial.
+`revocation_operation` conserva la llamada técnica global, la clave única de idempotencia, el estado, las referencias y fechas técnicas, y `normalized_result` como resultado autoritativo. Los únicos resultados normalizados son:
 
-JWT se diseñará en una tarea independiente. Conocer `id` no demuestra identidad ni autoriza operaciones sensibles.
+- `SUCCEEDED`: todos los certificados seleccionados fueron revocados.
+- `FAILED`: ninguno de los certificados seleccionados fue revocado.
+- `OUTCOME_UNKNOWN`: todavía no puede confirmarse éxito ni fallo.
+
+No existe `PARTIAL` ni se calculan resultados mezclando filas independientes. Una respuesta diferente por UUID contradice el contrato de todos o ninguno y debe rechazarse como incompatible. `OUTCOME_UNKNOWN` conserva la misma operación y clave de idempotencia para reconciliación, y bloquea una ejecución incompatible.
+
+No existe `certificate_revocation_result`: duplicar un resultado común por cada certificado añadiría relaciones, columnas y concurrencia sin aportar información. El conjunto afectado se obtiene de las filas seleccionadas y el resultado se obtiene de la operación.
+
+## Constancia
+
+`cancellation_receipt` se asocia con la solicitud y la operación que la sustenta. La constancia debe identificar los certificados seleccionados y reflejar el único resultado común. El documento no se guarda como BLOB. Un fallo documental no transforma una revocación atómica ya confirmada en fallo.
 
 ## Estados controlados
 
-- Solicitud: `STARTED`, `CHECKING_ELIGIBILITY`, `NOT_ELIGIBLE`, `ELIGIBLE`, `PENDING_IDENTITY_VERIFICATION`, `IDENTITY_VERIFIED`, `REASON_REGISTERED`, `PENDING_CONFIRMATION`, `CONFIRMED`, `REVOCATION_IN_PROGRESS`, `COMPLETED`, `FAILED`, `OUTCOME_UNKNOWN`, `RECEIPT_AVAILABLE` y `ABANDONED`.
-- Elegibilidad: `NOT_CHECKED`, `ELIGIBLE`, `NOT_ELIGIBLE`, `UNAVAILABLE`, `INCONCLUSIVE` y `ERROR`.
-- Motivos: `THEFT`, `LOSS`, `DEVICE_OR_NUMBER_CHANGE`, `SUSPECTED_UNAUTHORIZED_USE` y `OTHER`.
-- Identidad: `STARTED`, `VERIFIED`, `REJECTED`, `CANCELLED`, `IDENTITY_MISMATCH` y `ERROR`.
-- Revocación: `PREPARED`, `SUBMITTED`, `SUCCEEDED`, `FAILED` y `OUTCOME_UNKNOWN`.
-- Constancia: `PENDING`, `GENERATING`, `AVAILABLE` y `FAILED`.
+- Solicitud vigente: `NO_CERTIFICATES_AVAILABLE`, `CERTIFICATES_AVAILABLE`, `AUTHENTICATED_PENDING_SELECTION`, `CERTIFICATES_SELECTED`, `REVOCATION_IN_PROGRESS`, `REVOCATION_SUCCEEDED`, `REVOCATION_FAILED` y `REVOCATION_OUTCOME_UNKNOWN`.
+- Solicitud heredada: se conservan estados V1 como `STARTED`, `ELIGIBLE`, `NOT_ELIGIBLE`, `COMPLETED`, `FAILED` y `OUTCOME_UNKNOWN` para compatibilidad.
+- Disponibilidad: `AVAILABLE`, `NO_LONGER_AVAILABLE`, `REVOCATION_PENDING`, `REVOKED`, `REVOCATION_FAILED` y `OUTCOME_UNKNOWN`.
+- Resultado de operación: `SUCCEEDED`, `FAILED` y `OUTCOME_UNKNOWN`.
 
-Los valores son enums del backend almacenados como `VARCHAR`; no hay tablas catálogo.
+Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas catálogo.
 
-## Integridad, concurrencia e índices
+## Integridad, índices y concurrencia
 
-- `(request_id, attempt_number)` es único para elegibilidad, identidad y revocación.
-- `idempotency_key` y `receipt_code` son únicos.
-- Las claves foráneas impiden registros relacionados sin solicitud.
-- Los checks se limitan al DNI, intentos positivos y orden temporal básico.
-- `idx_request_dni_status_created` localiza la solicitud más reciente por DNI y estado.
-- Los índices restantes recuperan los últimos intentos, operación actual, constancia e historial.
-- El inicio bloquea explícitamente la solicitud más reciente del DNI para evitar solicitudes activas duplicadas.
-- No se usan columnas `version`, columnas generadas, procedimientos ni triggers.
+- Los intentos usan unicidad `(request_id, attempt_number)`.
+- `idempotency_key`, `receipt_code` y `(request_id, certificate_uuid)` son únicos según su responsabilidad.
+- Las claves compuestas impiden vincular intentos pertenecientes a solicitudes diferentes.
+- Los checks verifican UUID canónico, fechas coherentes y consistencia de selección.
+- Los índices permiten listar certificados por solicitud, consultar seleccionados o disponibles y recuperar intentos e historial.
+- `@Version` protege la fila de certificado que puede modificarse concurrentemente antes de confirmar.
+- Un conflicto de versión se rechaza para que el caso de uso recargue el estado; no hay reintentos automáticos generales.
+- Finalizar conserva certificados, selecciones, operaciones, constancias y auditoría. El borrado físico queda restringido mientras exista historial relacionado.
 
 ## Datos y seguridad
 
-El DNI se guarda una sola vez como `CHAR(8)` para que el esquema sea transparente e inspeccionable. Esta decisión no autoriza exponerlo fuera de MySQL:
+El UUID se almacena una sola vez, en la fila del certificado, con formato canónico legible. No se crean columnas `_cipher`, hashes duplicados ni versiones de clave sin infraestructura institucional confirmada.
 
-- No incluir DNI ni motivo libre en logs, errores, URLs, métricas o endpoints técnicos.
+- No registrar DNI, UUID, motivos libres, tokens, biometría ni payloads externos completos.
+- No mostrar datos de certificados antes de autenticar al ciudadano.
+- Conocer un identificador interno o UUID no autentica ni autoriza una revocación.
+- No almacenar PDF como BLOB; la constancia usa una referencia de almacenamiento.
 - Restringir el acceso directo a MySQL según el ambiente.
-- No guardar JWT, refresh tokens, contraseñas, credenciales, biometría, fotografías ni payloads externos completos.
-- No almacenar archivos PDF como BLOB; `storage_reference` apuntará al almacenamiento que se defina posteriormente.
-- No autorizar una operación sensible únicamente porque el cliente conozca el `requestId`.
 
-## Idempotencia y auditoría
+## Nuevas solicitudes e historial
 
-La revocación usa una `idempotency_key` única. Un resultado `OUTCOME_UNKNOWN` permanece en la misma operación hasta su reconciliación y no crea automáticamente otra revocación.
+Cada envío del DNI desde la página de inicio representa una intención nueva. El backend bloquea la solicitud más reciente del DNI únicamente para tomar una decisión segura:
 
-La auditoría es append-only desde la aplicación, pero la solicitud sigue siendo la fuente de verdad. Los eventos no se reproducen para reconstruir el estado.
+1. Si la solicitud anterior todavía no fue confirmada, la marca `ABANDONED` y crea otra solicitud.
+2. Si la solicitud anterior es terminal, conserva su historial y crea otra solicitud.
+3. Si existe una consulta en curso, una revocación confirmada activa o un resultado incierto, bloquea temporalmente el nuevo inicio para evitar duplicidades.
+
+Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso, certificados, selección o constancia. No existe `cancellation_request_session` ni persistencia por navegador o dispositivo.
+
+## Migraciones Flyway
+
+- `V1__create_cancellation_request_model.sql` permanece inmutable y crea las seis tablas originales.
+- `V2__add_request_certificates_and_revocation_results.sql` agrega el certificado de solicitud y la estructura individual que entonces estaba prevista.
+- `V3__add_spanish_schema_comments.sql` documenta en español las ocho tablas y 95 columnas existentes en V3.
+- `V4__enforce_atomic_certificate_revocation.sql` elimina `certificate_revocation_result` y las dos claves candidatas que solo soportaban sus relaciones.
+- Una base vacía ejecuta V1 a V4 y termina con siete tablas y 81 columnas de dominio.
+- Una base existente en V3 ejecuta V4 sin modificar solicitudes, consultas, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
+
+Flyway no revierte migraciones automáticamente. Cualquier cambio posterior requiere una nueva migración hacia adelante.
+
+## Comentarios del esquema
+
+Las descripciones se almacenan como `TABLE_COMMENT` y `COLUMN_COMMENT` nativos de MySQL y son visibles desde MySQL Workbench. Toda tabla y columna efectiva conserva un comentario en español. Las reglas funcionales detalladas continúan en `docs/context/PROJECT_CONTEXT.md`.
+
+Toda migración futura que cree una tabla o columna de dominio debe incluir en esa misma migración un comentario conciso en español y ampliar la prueba de cobertura.
 
 ## Consultas de inspección
 
 ```sql
--- Solicitudes recientes de un DNI y su progreso actual.
-SELECT id, dni, request_status, eligibility_result, reason_code, created_at, updated_at
-FROM certificate_cancellation_request
-WHERE dni = '12345678'
-ORDER BY created_at DESC;
+-- Tablas y descripciones vigentes.
+SELECT table_name, table_comment
+FROM information_schema.tables
+WHERE table_schema = DATABASE()
+  AND table_name <> 'flyway_schema_history'
+ORDER BY table_name;
 
--- Intentos de elegibilidad de una solicitud.
-SELECT attempt_number, check_status, normalized_result, requested_at, responded_at
-FROM certificate_eligibility_check
+-- Certificados obtenidos y conjunto confirmado.
+SELECT order_number, emission_created_at, certificate_uuid,
+       availability_status, selected, selected_at
+FROM cancellation_request_certificate
 WHERE request_id = 1
-ORDER BY attempt_number DESC;
+ORDER BY emission_created_at, id;
 
--- Revocación, constancia y auditoría.
-SELECT id, idempotency_key, operation_status, normalized_result, completed_at
-FROM revocation_operation WHERE request_id = 1 ORDER BY attempt_number DESC;
+-- Operaciones atómicas y su resultado común.
+SELECT id, idempotency_key, operation_status, normalized_result,
+       correlation_id, created_at, updated_at
+FROM revocation_operation
+WHERE request_id = 1
+ORDER BY id;
 
-SELECT receipt_code, generation_status, storage_reference, available_at
-FROM cancellation_receipt WHERE request_id = 1;
-
-SELECT event_type, previous_status, new_status, result, occurred_at
-FROM cancellation_audit_event WHERE request_id = 1 ORDER BY occurred_at, id;
+-- Constancia asociada con la operación.
+SELECT c.receipt_code, c.generation_status, c.generated_at,
+       r.normalized_result
+FROM cancellation_receipt c
+JOIN revocation_operation r ON r.id = c.revocation_operation_id
+WHERE c.request_id = 1;
 ```
 
-Los DNI de ejemplo son ficticios y no deben copiarse con datos reales a tickets, logs o conversaciones.
-
-## Línea base Flyway
-
-El proyecto permanece en etapa local y el volumen inspeccionado antes de esta simplificación contenía únicamente los fixtures ficticios `00000001` y `00000002`, sin sesiones, identidad, revocaciones, constancias ni auditoría. Por ello se consolidó una única `V1` limpia con seis tablas.
-
-Una base local que ejecutó la V1 anterior debe recrearse solamente si sus datos son desechables. Si existe información relevante, no se debe limpiar ni reparar el historial: debe diseñarse una migración hacia adelante específica.
+Los valores son ficticios. La integración real de revocación, la pantalla de selección y la generación de la constancia pertenecen a incrementos posteriores.

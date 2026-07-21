@@ -1,19 +1,56 @@
 # Referencias visuales del flujo ciudadano
 
-Estas imágenes son las referencias visuales principales para implementar las vistas del sistema de cancelación de certificados digitales:
+Estas imágenes son las referencias visuales principales para implementar las vistas del sistema de cancelación de certificados digitales. El flujo vigente contiene una pantalla de inicio y cinco pasos numerados.
 
-- [`home.png`](./home.png): página de inicio, ingreso del DNI y consulta inicial de certificados digitales.
-- [`step-1.png`](./step-1.png): verificación de identidad mediante ID Perú.
-- [`step-2.png`](./step-2.png): selección del motivo de cancelación.
-- [`step-3.png`](./step-3.png): revisión, consentimiento y confirmación.
-- [`step-4-final.png`](./step-4-final.png): resultado final y constancia.
+## Flujo vigente
+
+| Vista | Función |
+| --- | --- |
+| [`home.png`](./home.png) | Página de inicio, ingreso del DNI y consulta inicial de certificados digitales vigentes. |
+| [`step-1.png`](./step-1.png) | Paso 1: autenticación del ciudadano mediante ID Perú. |
+| [`step-2.png`](./step-2.png) | Paso 2: selección de uno o varios certificados digitales vigentes. |
+| [`step-3.png`](./step-3.png) | Paso 3: selección del motivo de cancelación. |
+| [`step-4.png`](./step-4.png) | Paso 4: revisión de la información, consentimiento y confirmación. |
+| [`step-5-final.png`](./step-5-final.png) | Paso 5: resultado de la revocación y constancia. |
+
+## Consulta y selección de certificados
+
+El servicio de consulta inicial devuelve una lista de **emisiones vigentes**. En la interfaz ciudadana, cada emisión se presenta como un **certificado digital vigente** y contiene, como mínimo, número de orden, fecha de creación y UUID.
+
+- Una lista vacía impide continuar.
+- La lista obtenida debe conservarse vinculada con la solicitud de cancelación.
+- Los certificados no se muestran antes de autenticar al ciudadano mediante ID Perú.
+- Después de la autenticación siempre se presenta el paso de selección, incluso cuando exista un solo certificado.
+- El ciudadano debe seleccionar al menos un certificado para continuar.
+- Los certificados no seleccionados quedan fuera de la operación y permanecen vigentes.
+- La revocación recibe únicamente la lista de UUID seleccionados.
+- Después de la confirmación, la selección queda inmutable.
+- El servicio de revocación procesa la lista completa con semántica de todos o ninguno y devuelve un único resultado: exitoso, fallido o incierto.
+- No existe un resultado parcial. Una respuesta mixta por certificado contradice el contrato esperado y debe rechazarse como incompatible.
+- La constancia debe identificar los certificados seleccionados y reflejar el resultado común de la operación.
+
+Estas reglas describen el comportamiento funcional esperado, pero no definen los contratos técnicos definitivos de los servicios externos.
+
+## Inconsistencias conocidas en imágenes reutilizadas
+
+Algunas imágenes conservan elementos del diseño anterior. Se mantienen sin modificación como referencias de composición, jerarquía visual y estilo; sus textos o steppers contradictorios no son reglas funcionales vigentes.
+
+| Imagen | Inconsistencia conocida | Interpretación vigente |
+| --- | --- | --- |
+| `step-1.png` | Muestra un stepper de cuatro pasos que omite la selección de certificados. | Autenticación es el paso 1 de cinco y selección es el paso 2. |
+| `step-3.png` | Presenta “Motivo” como paso 2 dentro de un flujo de cuatro pasos. | Motivo corresponde al paso 3 de cinco. |
+| `step-4.png` | Presenta confirmación como paso 3 y afirma que se cancelarán todos los certificados asociados al DNI. | Confirmación corresponde al paso 4 y comprende únicamente el conjunto seleccionado, que se procesará de forma atómica. |
+| `step-5-final.png` | Presenta constancia como paso 4 y contiene textos que no distinguen claramente el conjunto seleccionado ni la regla atómica. | Resultado y constancia corresponden al paso 5; deben listar los seleccionados y mostrar un único resultado exitoso, fallido o incierto. |
+
+La numeración y los textos internos se corregirán al implementar cada vista. No deben editarse ni regenerarse estas imágenes dentro de tareas documentales.
 
 ## Fuentes y reglas de uso
 
-- [`PROJECT_CONTEXT.md`](../context/PROJECT_CONTEXT.md) es la fuente principal para comprender el dominio, el alcance, los actores, las reglas de negocio, los estados y las restricciones.
+- [`PROJECT_CONTEXT.md`](../context/PROJECT_CONTEXT.md) es la única fuente funcional principal y vigente para comprender el dominio, alcance, actores, reglas de negocio, estados y restricciones.
 - Las imágenes de este directorio son las referencias visuales principales para implementar las vistas.
 - Los diseños no deben utilizarse para inventar reglas funcionales que no estén confirmadas en `PROJECT_CONTEXT.md`.
-- Cuando exista una contradicción funcional entre una imagen y `PROJECT_CONTEXT.md`, prevalece `PROJECT_CONTEXT.md` y la diferencia debe registrarse como pendiente de validación antes de implementarla.
-- Toda tarea posterior relacionada con el dominio o las interfaces debe revisar `PROJECT_CONTEXT.md` y estas referencias visuales antes de implementar cambios.
+- Cuando exista una contradicción funcional entre una imagen y `PROJECT_CONTEXT.md`, prevalece `PROJECT_CONTEXT.md`. La diferencia debe registrarse como pendiente de validación o corrección de interfaz.
+- Toda tarea posterior relacionada con el dominio o las interfaces debe revisar `PROJECT_CONTEXT.md` y la imagen correspondiente antes de implementar cambios.
+- Los documentos que describen la implementación técnica actual pueden registrar temporalmente un comportamiento anterior, pero no sustituyen el contexto funcional vigente y deben señalar esa divergencia.
 
 Las imágenes deben conservarse sin modificaciones, regeneraciones ni rediseños mientras funcionen como fuentes de referencia del proyecto.

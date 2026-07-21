@@ -4,9 +4,7 @@
 ## Purpose
 
 Define the minimal, executable, maintainable, and non-functional technical foundation for the system backend.
-
 ## Requirements
-
 ### Requirement: Executable single-module backend project
 The repository SHALL contain a single-module Maven project at `/backend` using Java 21, Spring Boot 4.1.0, executable JAR packaging, Maven Wrapper 3.9.16, and the institutional base package `pe.gob.reniec.certificados.cancelacion`. The project SHALL compile without external services and SHALL start when its configured MySQL database is available and Flyway has successfully validated or migrated the schema.
 
@@ -23,11 +21,11 @@ The repository SHALL contain a single-module Maven project at `/backend` using J
 - **THEN** startup fails in a controlled manner without exposing credentials or silently creating an alternative persistence mechanism
 
 ### Requirement: Minimal managed dependencies
-The backend SHALL use Spring Boot's managed web MVC, validation, Actuator, Spring Data JPA, Flyway MySQL, and MySQL driver support; Springdoc OpenAPI's API-only WebMVC starter required to publish the implemented `/api/v1/**` contract; plus the minimum Spring Boot and MySQL Testcontainers test support required by the implemented foundation, cancellation-request persistence model, and technical integration. It MUST NOT add Swagger UI, security, messaging, cache, alternate database, external-integration, distributed-tracing, cryptographic, document-generation, SDK-generation, or other preventive dependencies.
+The backend SHALL use Spring Boot's managed web MVC, validation, Actuator, Spring Data JPA, Flyway MySQL, and MySQL driver support; Springdoc OpenAPI's WebMVC UI starter 3.0.3 required to publish and explore the implemented API contract; plus the minimum Spring Boot and MySQL Testcontainers test support required by the implemented foundation, cancellation-request persistence model, technical integration, and API-documentation verification. It MUST NOT add a second OpenAPI generator, a UI kit unrelated to Swagger, security, messaging, cache, alternate database, external-integration, distributed-tracing, cryptographic, document-generation, SDK-generation, or other preventive dependencies.
 
 #### Scenario: Dependency set is reviewed
 - **WHEN** the Maven dependency declarations are inspected
-- **THEN** every direct dependency is required for HTTP serving, validation, health, MySQL persistence and migrations, OpenAPI contract publication, or the specified tests and no out-of-scope starter is present
+- **THEN** every direct dependency is required for HTTP serving, validation, health, MySQL persistence and migrations, OpenAPI and Swagger UI publication, or the specified tests, the API-only and UI springdoc starters do not coexist, and no out-of-scope starter is present
 
 ### Requirement: Simple feature-oriented structure
 The backend SHALL place the application class at the root of the institutional package and SHALL create only packages and classes used by the current technical foundation. Shared error and web concerns MAY be grouped under focused packages, while empty cancellation, domain, application, persistence, integration, or API layers MUST NOT be created.
@@ -134,28 +132,35 @@ The backend SHALL retain fast tests that verify context startup, the health resp
 - **THEN** baseline tests and MySQL persistence integration tests pass without a manually configured database or functional integration
 
 ### Requirement: Concise local operation documentation
-The backend SHALL contain a concise README covering prerequisites, one-time creation of ignored `backend/.env` from the committed local example, the distinction between default host port `3307` and MySQL container port `3306`, adjustment of `DB_PORT` when another local conflict exists, Docker Compose configuration validation, commands to start, inspect, stop, and destructively reset the local MySQL 8.4 service, Maven Wrapper commands to compile, test, package, verify, and run, the health URL, the `local` and `test` profiles, every supported environment variable, Flyway schema ownership, persistence-test container requirements, and the procedure for recreating only a disposable local database. It SHALL state the sensitive-data logging restrictions, prohibit automatic cleanup of databases containing relevant information, distinguish local example credentials from production configuration, and note that production configuration is deferred.
+The backend SHALL contain a concise README covering prerequisites, one-time creation of ignored `backend/.env` from the committed local example, local MySQL lifecycle, Maven Wrapper build and verification commands, health and application API URLs, `/v3/api-docs`, `/v3/api-docs.yaml`, the local Swagger UI URL, profile-specific documentation exposure, supported environment variables, Flyway ownership, persistence-test requirements, correlation, sensitive-data restrictions, and the rule that every new or modified endpoint MUST update OpenAPI documentation and its contract tests before it is complete. It SHALL state that Swagger UI is a local development tool, that no authentication scheme is documented until one exists, and that production exposure remains deferred.
 
-#### Scenario: New contributor uses Compose alongside native MySQL
-- **WHEN** a contributor with native MySQL reserved on `3306`, Java 21, and a compatible Docker Compose runtime follows the backend README from a clean checkout
-- **THEN** the contributor can create the private local environment file once, validate and start Compose on `3307`, build and test the backend, start it with the local profile, and obtain a successful health response without stopping native MySQL or repeatedly assigning database variables
+#### Scenario: Contributor explores the local API
+- **WHEN** a contributor starts MySQL and the backend with the documented local profile
+- **THEN** the README enables the contributor to open Swagger UI, inspect the machine-readable documents, identify all current operations and execute the endpoints that accept direct local testing
 
-#### Scenario: Contributor resolves another port collision
-- **WHEN** the default host port `3307` is unavailable
-- **THEN** the README directs the contributor to select a free `DB_PORT` in the ignored `.env` and verify the resolved host-to-container mapping before starting the backend
-
-#### Scenario: Contributor stops local MySQL without losing data
-- **WHEN** a contributor follows the normal stop procedure after changing the published port
-- **THEN** the MySQL container is removed while its named volume and migrated data are preserved
-
-#### Scenario: Contributor resets a disposable local database
-- **WHEN** a contributor confirms that the local database contains no relevant information and follows the separately documented destructive reset procedure
-- **THEN** only the local Compose volume is removed and Flyway can build the redesigned schema from empty on the next backend startup without an undocumented repair command
+#### Scenario: Contributor reviews production boundaries
+- **WHEN** a contributor reads the documentation-exposure guidance
+- **THEN** it is clear that OpenAPI and Swagger UI are disabled by default, production exposure is undecided, and no nonexistent security mechanism is represented
 
 ### Requirement: Technical-foundation-only boundary
-The backend foundation MAY contain MySQL, Flyway, Testcontainers, the simplified six-table cancellation-request persistence model specified by `cancellation-request-persistence-model`, the versioned technical integration API, a development-only Docker Compose service containing MySQL 8.4, and the citizen eligibility endpoint and use case specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, public-reference UUIDs, consent versions, recovery or expiration windows, automatic request expiration, or generic optimistic-version columns; containerize backend or frontend; add application Dockerfiles or PowerShell startup scripts; or introduce functional JWT or refresh-token behavior, real ID PerÃº, real certificate-lookup, revocation, document-storage or other external integrations, complete progress-recovery UI, cancellation reason or confirmation behavior, PDF generation, production deployment, administrative modules, microservices, queues, event sourcing, CQRS, a multi-module Maven build, another database, Redis, workflow stored procedures, complex triggers, generated guard columns, unassessed tables, or unused layers.
+The backend foundation MAY contain MySQL, Flyway, Testcontainers, the eight-table cancellation-request persistence model specified by `cancellation-request-persistence-model`, incremental V2 migrations, optimistic versions limited to the new mutable certificate and individual-result rows, the versioned technical integration API, a development-only Docker Compose service containing MySQL 8.4, and the citizen eligibility endpoint and use case specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, public-reference UUIDs, consent versions, recovery or expiration windows, automatic request expiration, or generic optimistic-version columns; containerize backend or frontend; add application Dockerfiles or PowerShell startup scripts; or introduce functional JWT or refresh-token behavior, real ID Perú, real certificate lookup, selection UI or endpoint, real or mock revocation execution, document storage or other new external integrations, complete progress-recovery UI, PDF generation, production deployment, administrative modules, microservices, queues, event sourcing, CQRS, a multi-module Maven build, another database, Redis, workflow stored procedures, complex triggers, generated guard columns, selection-only tables, unassessed tables, or unused layers.
 
 #### Scenario: Completed change is reviewed for scope
-- **WHEN** the implementation diff, Compose model, runtime routes, migration and JPA model are inspected
-- **THEN** they contain the technical backend foundation, six justified persistence tables, direct request-state recovery, the technical integration, citizen eligibility, tests and documentation, with no session table, anticipatory columns, later citizen-flow stage, real external integration, production deployment configuration or administrative capability
+- **WHEN** the implementation diff, migration history, JPA model, repositories, tests, runtime routes, and dependencies are inspected
+- **THEN** they contain the existing backend foundation plus two justified persistence tables and their incremental migration, with no changed API behavior, frontend work, external service call, session infrastructure, production configuration, or administrative capability
+
+### Requirement: Development-only Swagger UI exposure
+The backend SHALL provide Swagger UI at the documented path when the `local` profile is active and SHALL keep Swagger UI and OpenAPI disabled in common configuration. The test profile SHALL expose the machine-readable OpenAPI document for automated verification while keeping the interactive UI disabled unless a dedicated test explicitly enables it. This change MUST NOT define production exposure.
+
+#### Scenario: Local developer opens Swagger UI
+- **WHEN** the backend runs with the `local` profile and valid MySQL configuration
+- **THEN** the documented Swagger UI URL loads successfully and consumes the generated OpenAPI document
+
+#### Scenario: Backend runs without a development profile
+- **WHEN** the backend runs using common configuration without an explicit documentation-enabled profile
+- **THEN** neither Swagger UI nor the OpenAPI document is exposed
+
+#### Scenario: Automated contract tests run
+- **WHEN** the backend test profile executes documentation tests
+- **THEN** `/v3/api-docs` is available to the tests and Swagger UI remains disabled except in the isolated UI availability test
 

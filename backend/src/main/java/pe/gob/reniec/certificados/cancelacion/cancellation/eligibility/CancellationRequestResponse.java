@@ -3,7 +3,7 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.eligibility;
 import io.swagger.v3.oas.annotations.media.Schema;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
 
-@Schema(description = "Resultado normalizado del inicio o recuperación de una solicitud de cancelación.")
+@Schema(description = "Resultado normalizado del inicio de una nueva solicitud de cancelación.")
 public record CancellationRequestResponse(
 		@Schema(description = "Identificador interno de la solicitud. No funciona como credencial ni autorización.", example = "125", requiredMode = Schema.RequiredMode.REQUIRED)
 		Long requestId,
@@ -17,7 +17,5 @@ public record CancellationRequestResponse(
 		boolean canContinue,
 		@Schema(description = "Siguiente paso autorizado. Es nulo cuando no se permite continuar.", nullable = true,
 				example = "IDENTITY_VERIFICATION", requiredMode = Schema.RequiredMode.REQUIRED)
-		EligibilityNextStep nextStep,
-		@Schema(description = "Indica si se recuperó una solicitud compatible existente.", example = "false", requiredMode = Schema.RequiredMode.REQUIRED)
-		boolean reused) {
+		EligibilityNextStep nextStep) {
 }
