@@ -26,12 +26,12 @@ public class OpenApiConfiguration {
 	OpenAPI cancellationCertificatesOpenApi() {
 		return new OpenAPI().info(new Info()
 				.title("API de cancelación de certificados digitales")
-				.description("API institucional para consultar elegibilidad e iniciar el flujo ciudadano de cancelación de certificados digitales. La documentación no representa mecanismos de seguridad todavía no implementados.")
+				.description("API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox; no se documentan autenticación ni autorización todavía inexistentes.")
 				.version("v1")
 				.contact(new Contact().name("RENIEC")))
 				.tags(List.of(
 						new Tag().name("Solicitudes de cancelación")
-								.description("Inicio de nuevas solicitudes y elegibilidad ciudadana."),
+								.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
 						new Tag().name("Estado técnico")
 								.description("Disponibilidad operativa del backend y sus dependencias.")));
 	}
@@ -41,7 +41,7 @@ public class OpenApiConfiguration {
 		return openApi -> {
 			openApi.setTags(List.of(
 					new Tag().name("Solicitudes de cancelación")
-							.description("Inicio de nuevas solicitudes y elegibilidad ciudadana."),
+							.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
 					new Tag().name("Estado técnico")
 							.description("Disponibilidad operativa del backend y sus dependencias.")));
 			if (openApi.getPaths() == null || openApi.getPaths().get("/actuator/health") == null

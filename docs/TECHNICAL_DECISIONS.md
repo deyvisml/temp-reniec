@@ -43,6 +43,8 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 ## Integraciones y alcance
 
 - Las integraciones externas se definirán mediante interfaces y usarán mocks reemplazables mientras no existan contratos oficiales.
+- La consulta pública inicial está protegida por Google reCAPTCHA v2 Checkbox. El frontend conserva el token solo en memoria y el backend lo valida mediante un puerto antes de persistir o consultar disponibilidad.
+- La integración Google usa `RestClient`, timeout acotado y allowlist exacta de hostnames. No persiste CAPTCHA, IP ni payloads, y no incorpora reintentos, circuit breaker, fingerprinting o rate limiting en memoria.
 - No se inventarán contratos para ID Perú, la consulta de certificados ni la revocación.
 - No se incluirán módulos administrativos ni funcionalidades fuera del flujo ciudadano.
 

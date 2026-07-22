@@ -1,6 +1,6 @@
 # Backend de cancelación de certificados digitales
 
-Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano para iniciar una solicitud y consultar si existen certificados disponibles mediante un mock local reemplazable.
+Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano protegido por Google reCAPTCHA v2 Checkbox para iniciar una solicitud y consultar si existen certificados disponibles mediante un mock local reemplazable.
 
 ## Requisitos previos
 
@@ -97,8 +97,14 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `AVAILABILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta de existencia interrumpida. |
 | `AVAILABILITY_TIMEOUT` | `1s` | Tiempo máximo del primer servicio de disponibilidad. |
 | `AVAILABILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
+| `RECAPTCHA_SECRET_KEY` | Obligatoria en `local` | Clave privada v2; solo backend y nunca una variable `NEXT_PUBLIC_*`. |
+| `RECAPTCHA_VERIFY_URI` | Endpoint oficial de Google | URI HTTPS de `siteverify`. |
+| `RECAPTCHA_TIMEOUT` | `3s` | Timeout positivo de conexión y lectura. |
+| `RECAPTCHA_ALLOWED_HOSTNAMES` | `localhost` | Lista exacta, separada por comas, de hostnames aceptados. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
+
+Cuando se utilicen las claves oficiales de prueba de Google, configura localmente `RECAPTCHA_ALLOWED_HOSTNAMES=localhost,testkey.google.com`: esas claves reportan `testkey.google.com` en la respuesta de verificación. No incluyas ese hostname ni credenciales de prueba en producción.
 
 No confirmes `.env` ni credenciales reales en el repositorio y no uses variables públicas del frontend para secretos. La configuración productiva permanece fuera de este entorno local.
 
@@ -129,9 +135,9 @@ Flyway es el único propietario del esquema y aplica el historial V1–V5 hasta 
 
 ## Perfiles
 
-- `local`: importa opcionalmente `.env`, conecta mediante `DB_*`, usa logs de aplicación más detallados y habilita OpenAPI y Swagger UI.
-- `test`: puerto aleatorio; habilita OpenAPI para verificación automatizada, mantiene Swagger UI deshabilitada normalmente, excluye persistencia en las pruebas rápidas y entrega MySQL efímero mediante Testcontainers a las `*IT`.
-- Sin perfil: OpenAPI y Swagger UI permanecen deshabilitados.
+- `local`: importa opcionalmente `.env`, conecta mediante `DB_*`, activa el adaptador Google real, usa logs de aplicación más detallados y habilita OpenAPI y Swagger UI. Una configuración reCAPTCHA incompleta impide el arranque.
+- `test`: puerto aleatorio y adaptador anti-bot determinista sin red; habilita OpenAPI para verificación automatizada, mantiene Swagger UI deshabilitada y entrega MySQL efímero mediante Testcontainers a las `*IT`.
+- Sin perfil: OpenAPI y Swagger UI permanecen deshabilitados y la consulta pública falla de forma cerrada, sin bypass.
 
 La configuración de producción permanece diferida.
 
@@ -159,7 +165,9 @@ Un endpoint no se considera terminado mientras la documentación generada difier
 
 ## Inicio ciudadano y mock de disponibilidad
 
-`POST /api/v1/cancellation-requests` recibe exclusivamente JSON con un DNI de ocho dígitos. Crea una solicitud, registra el intento y determina solamente si existe al menos un certificado disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni crea certificados individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; el DNI completo no aparece en URLs, errores ni logs.
+`POST /api/v1/cancellation-requests` recibe JSON con un DNI de ocho dígitos y `recaptchaToken`. El backend valida primero la evidencia con Google; solo después crea una solicitud, registra el intento y determina si existe al menos un certificado disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni persiste el token, ni crea certificados individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; DNI, token y secret no aparecen en URLs, errores ni logs.
+
+Los errores anti-bot son `RECAPTCHA_REQUIRED`, `RECAPTCHA_REJECTED`, `RECAPTCHA_EXPIRED_OR_DUPLICATE`, `RECAPTCHA_UNAVAILABLE`, `RECAPTCHA_TIMEOUT` y `RECAPTCHA_INVALID_RESPONSE`. Ninguno se interpreta como ausencia de certificados. El adaptador usa `RestClient`, formulario `secret`/`response`, timeout acotado y comparación exacta de hostname; no envía la IP del ciudadano, no reintenta y no incorpora circuit breaker.
 
 El adaptador de perfiles `local` y `test` es determinista y no representa el contrato institucional:
 
@@ -172,7 +180,7 @@ El adaptador de perfiles `local` y `test` es determinista y no representa el con
 | `00000005` | Error técnico controlado |
 | `00000006` | Timeout |
 
-Cualquier otro DNI válido devuelve `NOT_AVAILABLE`. Son fixtures sintéticos sin relación con ciudadanos reales. Ningún fixture produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada. La lista detallada corresponde a un segundo servicio futuro, posterior a ID Perú, y no se implementa ni se simula en este incremento.
+Cualquier otro DNI válido devuelve `INCONCLUSIVE`; solo el fixture `00000002` representa una ausencia confirmada. Son fixtures sintéticos sin relación con ciudadanos reales. Ningún fixture produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada. La lista detallada corresponde a un segundo servicio futuro, posterior a ID Perú, y no se implementa ni se simula en este incremento.
 
 ## Detener y reiniciar MySQL local
 

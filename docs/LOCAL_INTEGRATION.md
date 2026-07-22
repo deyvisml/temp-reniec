@@ -23,7 +23,7 @@ En otra terminal, desde `/backend`:
 .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-El perfil importa opcionalmente `backend/.env`; Flyway migra o valida el esquema al iniciar. Comprueba ambas rutas:
+El perfil importa opcionalmente `backend/.env`; Flyway migra o valida el esquema al iniciar y el adaptador Google exige `RECAPTCHA_SECRET_KEY`. Comprueba ambas rutas:
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/actuator/health
@@ -32,7 +32,7 @@ Invoke-WebRequest http://localhost:8080/api/v1/system/status -Headers @{ "X-Corr
 
 La segunda respuesta debe ser `200`, contener backend/MySQL `UP` y devolver `X-Correlation-ID`.
 
-La operación inicial `POST /api/v1/cancellation-requests` consulta únicamente la existencia de certificados disponibles. Su respuesta no contiene lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del adaptador local se documentan en [`backend/README.md`](../backend/README.md).
+La operación inicial `POST /api/v1/cancellation-requests` valida reCAPTCHA antes de cualquier escritura y consulta únicamente la existencia de certificados disponibles. Su respuesta no contiene token, lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del servicio de disponibilidad se documentan en [`backend/README.md`](../backend/README.md).
 
 ## 3. Contrato y frontend
 
@@ -48,6 +48,16 @@ npm run dev
 ```
 
 Abre `http://localhost:3000`. El formulario de inicio consume el contrato propio del backend y solo permite continuar cuando la existencia queda confirmada. El navegador también puede consultar `http://localhost:8080/api/v1/system/status`; CORS permite el origen local exacto y expone la correlación.
+
+## Prueba manual de reCAPTCHA v2 Checkbox
+
+El proyecto institucional de referencia usa `@google-recaptcha/react` 2.4.2, verificación server-to-server con `siteverify` y el par oficial de pruebas publicado por Google. En este proyecto se adaptaron esos tres elementos a Next.js/Spring Boot, pero no se copiaron su estado global, React Query, circuit breaker ni modo de bypass frontend.
+
+Para probar manualmente, coloca la site key oficial de pruebas en `frontend/.env.local` como `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` y su secret correspondiente en `backend/.env` como `RECAPTCHA_SECRET_KEY`. Ambas rutas están ignoradas y los valores no deben agregarse a `.env.example`, código, capturas o commits. Configura localmente `RECAPTCHA_ALLOWED_HOSTNAMES=localhost,testkey.google.com`, reinicia ambas aplicaciones, completa la casilla y envía un DNI ficticio. Las claves oficiales de prueba reportan `testkey.google.com` como hostname de la verificación, aunque el formulario se ejecute en `localhost`; Google también muestra una advertencia visual indicando que la clave es de prueba.
+
+Verifica con teclado en anchos móvil y escritorio: foco visible en la casilla, botón bloqueado antes del desafío, un solo envío, y widget nuevo después de cada resultado o error. Las claves oficiales de prueba aceptan desafíos de desarrollo y están expresamente prohibidas en producción. `testkey.google.com` también debe limitarse al entorno local; producción requiere claves propias restringidas al dominio institucional y una allowlist externa que contenga únicamente los hostnames reales.
+
+Esta integración no agrega migraciones, tablas, columnas ni repositorios: la evidencia anti-bot es efímera y nunca llega a MySQL.
 
 ## Verificación completa
 

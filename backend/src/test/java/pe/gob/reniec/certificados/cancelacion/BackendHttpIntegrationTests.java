@@ -1,6 +1,7 @@
 package pe.gob.reniec.certificados.cancelacion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.IOException;
 import java.net.URI;
@@ -23,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityPersistenceCoordinator;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -41,7 +42,7 @@ class BackendHttpIntegrationTests {
 	SystemStatusService systemStatusService;
 
 	@MockitoBean
-	EligibilityPersistenceCoordinator eligibilityPersistenceCoordinator;
+	AvailabilityPersistenceCoordinator availabilityPersistenceCoordinator;
 
 	private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -88,6 +89,29 @@ class BackendHttpIntegrationTests {
 				.contains("\"path\":\"/__test/validation\"")
 				.contains("\"correlationId\":\"" + correlationId + "\"")
 				.doesNotContain("trace", "exception", "MethodArgumentNotValidException");
+	}
+
+	@Test
+	void missingCaptchaUsesDedicatedSafeErrorBeforePersistence() throws Exception {
+		HttpResponse<String> response = postCancellation("{\"dni\":\"00000001\"}", "captcha-required-test");
+
+		assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+		assertThat(response.headers().firstValue(CorrelationIdFilter.HEADER_NAME)).contains("captcha-required-test");
+		assertThat(response.body()).contains("\"code\":\"RECAPTCHA_REQUIRED\"")
+				.doesNotContain("00000001", "recaptchaToken", "trace", "exception");
+		verifyNoInteractions(availabilityPersistenceCoordinator);
+	}
+
+	@Test
+	void rejectedCaptchaPreservesCorrelationAndDoesNotPrepareRequest() throws Exception {
+		HttpResponse<String> response = postCancellation(
+				"{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-invalid\"}",
+				"captcha-rejected-test");
+
+		assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+		assertThat(response.body()).contains("\"code\":\"RECAPTCHA_REJECTED\"", "captcha-rejected-test")
+				.doesNotContain("test-recaptcha-invalid", "00000001", "trace", "exception");
+		verifyNoInteractions(availabilityPersistenceCoordinator);
 	}
 
 	@Test
@@ -149,14 +173,16 @@ class BackendHttpIntegrationTests {
 						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
 						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
 						"ActuatorHealthResponse", "ApiError", "X-Correlation-ID",
-						"VALIDATION_ERROR", "CANCELLATION_REQUEST_IN_PROGRESS", "date-time", "[0-9]{8}",
+						"VALIDATION_ERROR", "RECAPTCHA_REQUIRED", "RECAPTCHA_REJECTED",
+						"RECAPTCHA_EXPIRED_OR_DUPLICATE", "RECAPTCHA_UNAVAILABLE", "RECAPTCHA_TIMEOUT",
+						"RECAPTCHA_INVALID_RESPONSE", "CANCELLATION_REQUEST_IN_PROGRESS", "date-time", "[0-9]{8}",
 						"\"200\"", "\"400\"", "\"409\"", "\"415\"", "\"500\"",
 						"availabilityResult", "AVAILABLE", "NOT_AVAILABLE", "INCONCLUSIVE", "UNAVAILABLE", "ERROR",
 						"\"502\"", "\"503\"", "\"504\"")
 				.doesNotContain("/__test/", "/actuator/info", "/actuator/env", "securitySchemes",
 						"reused", "publicReference", "recupera una solicitud", "inicio o recuperación",
 						"eligibilityResult", "certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount",
-						"00000001", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
+						"00000001", "test-recaptcha-valid", "RECAPTCHA_SECRET_KEY", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
 	}
 
 	@Test
@@ -173,5 +199,13 @@ class BackendHttpIntegrationTests {
 
 	private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {
 		return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> postCancellation(String body, String correlationId) throws Exception {
+		return send(HttpRequest.newBuilder(uri("/api/v1/cancellation-requests"))
+				.header(HttpHeaders.CONTENT_TYPE, "application/json")
+				.header(CorrelationIdFilter.HEADER_NAME, correlationId)
+				.POST(HttpRequest.BodyPublishers.ofString(body))
+				.build());
 	}
 }

@@ -21,6 +21,8 @@ app:
     timeout: 100ms
     mock:
       simulated-timeout: 300ms
+  recaptcha:
+    mode: mock
 
 server:
   port: 0

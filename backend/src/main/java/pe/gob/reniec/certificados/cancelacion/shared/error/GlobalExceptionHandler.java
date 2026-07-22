@@ -18,13 +18,15 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.CancellationRequestProtectedException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityConcurrencyException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityInProgressException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityProviderException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityTimeoutException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityUnavailableException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestProtectedException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestConcurrencyException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityCheckInProgressException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityProviderException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityTimeoutException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityUnavailableException;
 import pe.gob.reniec.certificados.cancelacion.system.DependencyUnavailableException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.RecaptchaFailure;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.RecaptchaVerificationException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -33,7 +35,33 @@ public final class GlobalExceptionHandler {
 
 	@ExceptionHandler({ MethodArgumentNotValidException.class, HandlerMethodValidationException.class })
 	ResponseEntity<ApiError> handleValidation(Exception exception, HttpServletRequest request) {
+		if (exception instanceof MethodArgumentNotValidException validation
+				&& validation.getBindingResult().getFieldErrors("recaptchaToken").stream()
+						.anyMatch(error -> error.getRejectedValue() == null
+								|| String.valueOf(error.getRejectedValue()).isBlank())) {
+			return respond(HttpStatus.BAD_REQUEST, "RECAPTCHA_REQUIRED",
+					"Completa la verificación de seguridad para continuar.", request);
+		}
 		return respond(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "La solicitud contiene datos inválidos.", request);
+	}
+
+	@ExceptionHandler(RecaptchaVerificationException.class)
+	ResponseEntity<ApiError> handleRecaptcha(RecaptchaVerificationException exception, HttpServletRequest request) {
+		RecaptchaFailure failure = exception.failure();
+		return switch (failure) {
+			case REQUIRED -> respond(HttpStatus.BAD_REQUEST, "RECAPTCHA_REQUIRED",
+					"Completa la verificación de seguridad para continuar.", request);
+			case REJECTED -> respond(HttpStatus.BAD_REQUEST, "RECAPTCHA_REJECTED",
+					"No pudimos validar la verificación de seguridad. Complétala nuevamente.", request);
+			case EXPIRED_OR_DUPLICATE -> respond(HttpStatus.BAD_REQUEST, "RECAPTCHA_EXPIRED_OR_DUPLICATE",
+					"La verificación de seguridad expiró o ya fue utilizada. Complétala nuevamente.", request);
+			case UNAVAILABLE -> respond(HttpStatus.SERVICE_UNAVAILABLE, "RECAPTCHA_UNAVAILABLE",
+					"La verificación de seguridad no está disponible temporalmente.", request);
+			case TIMEOUT -> respond(HttpStatus.GATEWAY_TIMEOUT, "RECAPTCHA_TIMEOUT",
+					"La verificación de seguridad tardó demasiado. Inténtalo nuevamente.", request);
+			case INVALID_RESPONSE -> respond(HttpStatus.BAD_GATEWAY, "RECAPTCHA_INVALID_RESPONSE",
+					"No fue posible confirmar la verificación de seguridad. Inténtalo nuevamente.", request);
+		};
 	}
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
@@ -57,15 +85,15 @@ public final class GlobalExceptionHandler {
 				"El tipo de contenido no está permitido.", request);
 	}
 
-	@ExceptionHandler(EligibilityInProgressException.class)
-	ResponseEntity<ApiError> handleEligibilityInProgress(EligibilityInProgressException exception,
+	@ExceptionHandler(AvailabilityCheckInProgressException.class)
+	ResponseEntity<ApiError> handleAvailabilityCheckInProgress(AvailabilityCheckInProgressException exception,
 			HttpServletRequest request) {
-		return respond(HttpStatus.CONFLICT, "ELIGIBILITY_IN_PROGRESS",
+		return respond(HttpStatus.CONFLICT, "AVAILABILITY_CHECK_IN_PROGRESS",
 				"La consulta ya se está procesando. Inténtalo nuevamente en unos segundos.", request);
 	}
 
-	@ExceptionHandler(EligibilityConcurrencyException.class)
-	ResponseEntity<ApiError> handleEligibilityConcurrency(EligibilityConcurrencyException exception,
+	@ExceptionHandler(CancellationRequestConcurrencyException.class)
+	ResponseEntity<ApiError> handleCancellationRequestConcurrency(CancellationRequestConcurrencyException exception,
 			HttpServletRequest request) {
 		return respond(HttpStatus.CONFLICT, "CONCURRENT_REQUEST",
 				"La solicitud fue actualizada simultáneamente. Inténtalo nuevamente.", request);
@@ -78,24 +106,24 @@ public final class GlobalExceptionHandler {
 				"No es posible iniciar una nueva solicitud en este momento. Inténtalo nuevamente más adelante.", request);
 	}
 
-	@ExceptionHandler(EligibilityUnavailableException.class)
-	ResponseEntity<ApiError> handleEligibilityUnavailable(EligibilityUnavailableException exception,
+	@ExceptionHandler(AvailabilityUnavailableException.class)
+	ResponseEntity<ApiError> handleAvailabilityUnavailable(AvailabilityUnavailableException exception,
 			HttpServletRequest request) {
-		return respond(HttpStatus.SERVICE_UNAVAILABLE, "ELIGIBILITY_UNAVAILABLE",
+		return respond(HttpStatus.SERVICE_UNAVAILABLE, "AVAILABILITY_UNAVAILABLE",
 				"No podemos consultar los certificados en este momento. Inténtalo más tarde.", request);
 	}
 
-	@ExceptionHandler(EligibilityTimeoutException.class)
-	ResponseEntity<ApiError> handleEligibilityTimeout(EligibilityTimeoutException exception,
+	@ExceptionHandler(AvailabilityTimeoutException.class)
+	ResponseEntity<ApiError> handleAvailabilityTimeout(AvailabilityTimeoutException exception,
 			HttpServletRequest request) {
-		return respond(HttpStatus.GATEWAY_TIMEOUT, "ELIGIBILITY_TIMEOUT",
+		return respond(HttpStatus.GATEWAY_TIMEOUT, "AVAILABILITY_TIMEOUT",
 				"La consulta tardó demasiado. Inténtalo nuevamente.", request);
 	}
 
-	@ExceptionHandler(EligibilityProviderException.class)
-	ResponseEntity<ApiError> handleEligibilityProvider(EligibilityProviderException exception,
+	@ExceptionHandler(AvailabilityProviderException.class)
+	ResponseEntity<ApiError> handleAvailabilityProvider(AvailabilityProviderException exception,
 			HttpServletRequest request) {
-		return respond(HttpStatus.BAD_GATEWAY, "ELIGIBILITY_PROVIDER_ERROR",
+		return respond(HttpStatus.BAD_GATEWAY, "AVAILABILITY_PROVIDER_ERROR",
 				"No fue posible completar la consulta. Inténtalo nuevamente.", request);
 	}
 

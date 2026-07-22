@@ -119,7 +119,7 @@ Each initial certificate-availability attempt SHALL be stored in `certificate_av
 - **THEN** the database rejects the duplicate
 
 ### Requirement: Repeatable privacy-limited identity verification
-Each ID PerÃº attempt SHALL be stored in `identity_verification` using numeric identifiers and a numeric request foreign key. It SHALL contain attempt number, provider, status, optional external reference, DNI-match result, start/completion times, optional error or cancellation code, correlation identifier, and creation time. It MUST NOT store a verified-identity hash, biometric data, photographs, provider tokens, credentials, or complete provider responses. `(request_id, attempt_number)` SHALL be unique.
+Each ID Perú attempt SHALL be stored in `identity_verification` using numeric identifiers and a numeric request foreign key. It SHALL contain attempt number, provider, status, optional external reference, DNI-match result, start/completion times, optional error or cancellation code, correlation identifier, and creation time. It MUST NOT store a verified-identity hash, biometric data, photographs, provider tokens, credentials, or complete provider responses. `(request_id, attempt_number)` SHALL be unique.
 
 #### Scenario: Identity verification is repeated
 - **WHEN** a citizen retries identity verification

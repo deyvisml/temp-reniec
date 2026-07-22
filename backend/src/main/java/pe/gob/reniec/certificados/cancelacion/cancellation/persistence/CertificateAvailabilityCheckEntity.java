@@ -1,5 +1,6 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.persistence;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -71,18 +72,35 @@ public class CertificateAvailabilityCheckEntity {
 	}
 
 	public void complete(AvailabilityCheckResult result, Instant responseTime, String externalReference) {
-		normalizedResult = Objects.requireNonNull(result, "result");
+		ensureSubmitted();
+		Objects.requireNonNull(result, "result");
+		if (result == AvailabilityCheckResult.UNAVAILABLE || result == AvailabilityCheckResult.ERROR) {
+			throw new IllegalArgumentException("A failed result cannot complete an availability check");
+		}
+		normalizedResult = result;
 		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
-		this.externalReference = externalReference;
+		this.externalReference = optionalAsciiText(externalReference, "externalReference", 128);
 		errorCode = null;
 		checkStatus = AvailabilityCheckStatus.COMPLETED;
 	}
 
 	public void fail(AvailabilityCheckResult result, Instant responseTime, String errorCode) {
-		normalizedResult = Objects.requireNonNull(result, "result");
+		ensureSubmitted();
+		Objects.requireNonNull(result, "result");
+		if (result != AvailabilityCheckResult.UNAVAILABLE && result != AvailabilityCheckResult.ERROR) {
+			throw new IllegalArgumentException("A successful result cannot fail an availability check");
+		}
+		normalizedResult = result;
 		respondedAt = Objects.requireNonNull(responseTime, "responseTime");
-		this.errorCode = requireText(errorCode, "errorCode");
+		this.errorCode = requireAsciiText(errorCode, "errorCode", 64);
+		externalReference = null;
 		checkStatus = AvailabilityCheckStatus.FAILED;
+	}
+
+	private void ensureSubmitted() {
+		if (checkStatus != AvailabilityCheckStatus.SUBMITTED) {
+			throw new IllegalStateException("Only a submitted availability check can be finalized");
+		}
 	}
 
 	@PrePersist
@@ -95,7 +113,21 @@ public class CertificateAvailabilityCheckEntity {
 
 	private static String requireText(String value, String name) {
 		if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
-		return value;
+		return value.trim();
+	}
+
+	private static String requireAsciiText(String value, String name, int maxLength) {
+		String text = requireText(value, name);
+		if (text.length() > maxLength) throw new IllegalArgumentException(name + " is too long");
+		if (!StandardCharsets.US_ASCII.newEncoder().canEncode(text)) {
+			throw new IllegalArgumentException(name + " must contain ASCII characters");
+		}
+		return text;
+	}
+
+	private static String optionalAsciiText(String value, String name, int maxLength) {
+		if (value == null || value.isBlank()) return null;
+		return requireAsciiText(value, name, maxLength);
 	}
 
 	public Long getId() { return id; }

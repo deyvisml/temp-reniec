@@ -26,6 +26,13 @@ app:
     timeout: ${AVAILABILITY_TIMEOUT:1s}
     mock:
       simulated-timeout: ${AVAILABILITY_MOCK_SIMULATED_TIMEOUT:2s}
+  recaptcha:
+    mode: google
+    google:
+      secret-key: ${RECAPTCHA_SECRET_KEY}
+      verify-uri: ${RECAPTCHA_VERIFY_URI:https://www.google.com/recaptcha/api/siteverify}
+      timeout: ${RECAPTCHA_TIMEOUT:3s}
+      allowed-hostnames: ${RECAPTCHA_ALLOWED_HOSTNAMES:localhost}
 
 logging:
   level:

@@ -178,7 +178,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 	@Test
 	void serializesConcurrentAvailabilityAndStartsANewRequestForALaterEntry() throws Exception {
-		String body = "{\"dni\":\"00000001\"}";
+		String body = "{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-valid\"}";
 		CountDownLatch start = new CountDownLatch(1);
 		try (var executor = Executors.newFixedThreadPool(2)) {
 			var first = executor.submit(() -> { start.await(); return postCancellation(body); });
@@ -225,7 +225,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		protectedRequest.transitionTo(CancellationRequestStatus.REVOCATION_IN_PROGRESS, null);
 		requestRepository.saveAndFlush(protectedRequest);
 
-		HttpResponse<String> response = postCancellation("{\"dni\":\"00000001\"}");
+		HttpResponse<String> response = postCancellation("{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
 
 		assertThat(response.statusCode()).isEqualTo(409);
 		assertThat(response.body()).contains("CANCELLATION_REQUEST_IN_PROGRESS", "correlationId")
@@ -236,7 +236,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 	@Test
 	void rejectsInvalidDniWithoutPersistenceAndReturnsCorrelation() throws Exception {
-		HttpResponse<String> response = postCancellation("{\"dni\":\"1234\"}");
+		HttpResponse<String> response = postCancellation("{\"dni\":\"1234\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
 		assertThat(response.statusCode()).isEqualTo(400);
 		assertThat(response.body()).contains("VALIDATION_ERROR", "correlationId")
 				.doesNotContain("1234");
@@ -245,27 +245,41 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void persistsEveryDeterministicAlternativeOutcomeWithControlledHttpSemantics() throws Exception {
-		HttpResponse<String> notEligible = postCancellation("{\"dni\":\"00000002\"}");
-		HttpResponse<String> unavailable = postCancellation("{\"dni\":\"00000003\"}");
-		HttpResponse<String> inconclusive = postCancellation("{\"dni\":\"00000004\"}");
-		HttpResponse<String> technical = postCancellation("{\"dni\":\"00000005\"}");
-		HttpResponse<String> timeout = postCancellation("{\"dni\":\"00000006\"}");
+	void rejectedCaptchaCreatesNeitherRequestNorAvailabilityAttempt() throws Exception {
+		HttpResponse<String> response = postCancellation(
+				"{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-invalid\"}");
 
-		assertThat(notEligible.statusCode()).isEqualTo(200);
-		assertThat(notEligible.body()).contains("NOT_AVAILABLE").doesNotContain("00000002");
+		assertThat(response.statusCode()).isEqualTo(400);
+		assertThat(response.body()).contains("RECAPTCHA_REJECTED", "correlationId")
+				.doesNotContain("test-recaptcha-invalid", "00000001");
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_cancellation_request", Integer.class)).isZero();
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM certificate_availability_check", Integer.class)).isZero();
+	}
+
+	@Test
+	void persistsEveryDeterministicAlternativeOutcomeWithControlledHttpSemantics() throws Exception {
+		HttpResponse<String> notAvailable = postCancellation("{\"dni\":\"00000002\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
+		HttpResponse<String> unavailable = postCancellation("{\"dni\":\"00000003\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
+		HttpResponse<String> inconclusive = postCancellation("{\"dni\":\"00000004\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
+		HttpResponse<String> technical = postCancellation("{\"dni\":\"00000005\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
+		HttpResponse<String> timeout = postCancellation("{\"dni\":\"00000006\",\"recaptchaToken\":\"test-recaptcha-valid\"}");
+
+		assertThat(notAvailable.statusCode()).isEqualTo(200);
+		assertThat(notAvailable.body()).contains("NOT_AVAILABLE").doesNotContain("00000002");
 		assertThat(unavailable.statusCode()).isEqualTo(503);
-		assertThat(unavailable.body()).contains("ELIGIBILITY_UNAVAILABLE").doesNotContain("00000003");
+		assertThat(unavailable.body()).contains("AVAILABILITY_UNAVAILABLE").doesNotContain("00000003");
 		assertThat(inconclusive.statusCode()).isEqualTo(200);
 		assertThat(inconclusive.body()).contains("INCONCLUSIVE").doesNotContain("00000004");
 		assertThat(technical.statusCode()).isEqualTo(502);
-		assertThat(technical.body()).contains("ELIGIBILITY_PROVIDER_ERROR").doesNotContain("00000005");
+		assertThat(technical.body()).contains("AVAILABILITY_PROVIDER_ERROR").doesNotContain("00000005");
 		assertThat(timeout.statusCode()).isEqualTo(504);
-		assertThat(timeout.body()).contains("ELIGIBILITY_TIMEOUT").doesNotContain("00000006");
+		assertThat(timeout.body()).contains("AVAILABILITY_TIMEOUT").doesNotContain("00000006");
 		assertThat(requestRepository.count()).isEqualTo(5);
 		assertThat(availabilityRepository.count()).isEqualTo(5);
 		assertThat(certificateCount()).isZero();
-		assertThat(notEligible.body() + unavailable.body() + inconclusive.body() + technical.body() + timeout.body())
+		assertThat(notAvailable.body() + unavailable.body() + inconclusive.body() + technical.body() + timeout.body())
 				.doesNotContain("certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount");
 	}
 

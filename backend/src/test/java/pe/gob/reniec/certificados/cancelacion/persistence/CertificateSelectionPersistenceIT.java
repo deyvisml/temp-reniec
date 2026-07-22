@@ -24,8 +24,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.CancellationRequestResponse;
-import pe.gob.reniec.certificados.cancelacion.cancellation.eligibility.EligibilityInitiationService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestResponse;
+import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestInitiationService;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFinalOutcome;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReasonCode;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptEntity;
@@ -53,7 +53,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	@Autowired CancellationRequestCertificateRepository certificateRepository;
 	@Autowired RevocationOperationRepository operationRepository;
 	@Autowired CancellationReceiptRepository receiptRepository;
-	@Autowired EligibilityInitiationService eligibilityInitiationService;
+	@Autowired CancellationRequestInitiationService cancellationRequestInitiationService;
 	@Autowired EntityManagerFactory entityManagerFactory;
 	@Autowired JdbcTemplate jdbcTemplate;
 
@@ -235,7 +235,8 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 				CancellationFinalOutcome.REVOCATION_SUCCEEDED);
 		requestRepository.saveAndFlush(historical.request());
 
-		CancellationRequestResponse fresh = eligibilityInitiationService.initiate("00000001", "corr-fresh");
+		CancellationRequestResponse fresh = cancellationRequestInitiationService.initiate(
+				"00000001", "test-recaptcha-valid", "corr-fresh");
 
 		assertThat(fresh.requestId()).isNotEqualTo(historical.request().getId());
 		assertThat(requestRepository.findById(historical.request().getId())).get()
