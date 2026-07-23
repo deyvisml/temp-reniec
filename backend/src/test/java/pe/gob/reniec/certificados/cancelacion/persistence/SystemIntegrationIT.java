@@ -75,8 +75,9 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 		assertThat(response.body())
 				.contains("/api/v1/system/status", "/api/v1/cancellation-requests", "/actuator/health",
 						"SystemStatusResponse", "StartCancellationRequest", "ApiError", "availabilityResult",
-						"AVAILABLE", "NOT_AVAILABLE", "503", "X-Correlation-ID")
-				.doesNotContain("/actuator/info", "/__test/", "securitySchemes", "eligibilityResult",
+						"AVAILABLE", "NOT_AVAILABLE", "503", "X-Correlation-ID",
+						"/api/v1/identity-verifications", "FlowCookie", "securitySchemes")
+				.doesNotContain("/actuator/info", "/__test/", "bearerFormat", "eligibilityResult",
 						"certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount");
 	}
 

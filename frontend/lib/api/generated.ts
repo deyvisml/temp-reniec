@@ -1,4 +1,68 @@
 export interface paths {
+    "/api/v1/idperu/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Procesa el retorno GET de ID Perú
+         * @description Recibe el retorno del navegador, valida el intento y siempre redirige con HTTP 303 a una ruta frontend fija.
+         */
+        get: operations["handleIdentityCallbackGet"];
+        put?: never;
+        /**
+         * Procesa el retorno POST de ID Perú
+         * @description Recibe el formulario del proveedor, aplica el mismo caso de uso y siempre redirige con HTTP 303 a una ruta frontend fija.
+         */
+        post: operations["handleIdentityCallbackPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inicia la autenticación con ID Perú
+         * @description Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.
+         */
+        post: operations["startIdentityVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity-verifications/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invalida la autorización temporal local
+         * @description Invalida el jti persistido y elimina la cookie; no inventa un contrato de logout remoto.
+         */
+        post: operations["logoutIdentityVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cancellation-requests": {
         parameters: {
             query?: never;
@@ -39,6 +103,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity-verifications/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Consulta el estado de autenticación actual
+         * @description Resuelve el intento desde la cookie HttpOnly, valida la autorización y consume el resultado de presentación del callback.
+         */
+        get: operations["getCurrentIdentityVerification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/actuator/health": {
         parameters: {
             query?: never;
@@ -63,6 +147,42 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Formato común y seguro de los errores controlados de la API. */
+        ApiError: {
+            /**
+             * @description Código público y estable del error.
+             * @example VALIDATION_ERROR
+             */
+            code: string;
+            /**
+             * @description Mensaje comprensible sin detalles internos.
+             * @example La solicitud contiene datos inválidos.
+             */
+            message: string;
+            /**
+             * Format: date-time
+             * @description Fecha y hora UTC del error.
+             * @example 2026-07-20T18:30:00Z
+             */
+            timestamp: string;
+            /**
+             * @description Ruta de la solicitud que produjo el error.
+             * @example /api/v1/cancellation-requests
+             */
+            path: string;
+            /**
+             * @description Identificador de correlación para soporte y trazabilidad.
+             * @example 7a5f3f75-3bd2-4c47-90fc-6cfc79f1ec2d
+             */
+            correlationId: string;
+        };
+        IdentityStartResponse: {
+            /**
+             * Format: uri
+             * @description URL de autorización construida por el backend.
+             */
+            authorizationUrl: string;
+        };
         /** @description Datos requeridos para iniciar una nueva solicitud y consultar si existen certificados disponibles. */
         StartCancellationRequest: {
             /** @description Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo. */
@@ -107,35 +227,6 @@ export interface components {
              */
             nextStep: "IDENTITY_VERIFICATION" | null;
         };
-        /** @description Formato común y seguro de los errores controlados de la API. */
-        ApiError: {
-            /**
-             * @description Código público y estable del error.
-             * @example VALIDATION_ERROR
-             */
-            code: string;
-            /**
-             * @description Mensaje comprensible sin detalles internos.
-             * @example La solicitud contiene datos inválidos.
-             */
-            message: string;
-            /**
-             * Format: date-time
-             * @description Fecha y hora UTC del error.
-             * @example 2026-07-20T18:30:00Z
-             */
-            timestamp: string;
-            /**
-             * @description Ruta de la solicitud que produjo el error.
-             * @example /api/v1/cancellation-requests
-             */
-            path: string;
-            /**
-             * @description Identificador de correlación para soporte y trazabilidad.
-             * @example 7a5f3f75-3bd2-4c47-90fc-6cfc79f1ec2d
-             */
-            correlationId: string;
-        };
         /** @description Estado técnico del backend y su conexión con MySQL */
         SystemStatusResponse: {
             /**
@@ -155,6 +246,25 @@ export interface components {
              */
             timestamp: string;
         };
+        CurrentIdentityResponse: {
+            /**
+             * @description Estado normalizado del intento de identidad.
+             * @enum {string}
+             */
+            status: "STARTED" | "VERIFIED" | "REJECTED" | "CANCELLED" | "EXPIRED" | "IDENTITY_MISMATCH" | "ERROR";
+            /** @description Indica si la autorización temporal permite continuar. */
+            canContinue: boolean;
+            /**
+             * @description Siguiente paso autorizado.
+             * @enum {string}
+             */
+            nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION";
+            /**
+             * @description Resultado efímero del último callback, consumido una sola vez para presentación.
+             * @enum {string|null}
+             */
+            callbackOutcome?: "CANCELLED" | "REJECTED" | "IDENTITY_MISMATCH" | "EXPIRED" | "TIMEOUT" | "UNAVAILABLE" | "ERROR" | null;
+        };
         /** @description Estado agregado y seguro publicado por Spring Boot Actuator. */
         ActuatorHealthResponse: {
             /**
@@ -172,6 +282,121 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    handleIdentityCallbackGet: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                session_state?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retorno procesado y redirección controlada */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    handleIdentityCallbackPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    code?: string;
+                    state?: string;
+                    session_state?: string;
+                    error?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Retorno procesado y redirección controlada */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startIdentityVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description URL de autorización preparada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityStartResponse"];
+                };
+            };
+            /** @description Continuidad ausente o inválida */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description La verificación no puede iniciarse en el estado actual */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Integración no disponible */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    logoutIdentityVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     initiateCancellationRequest: {
         parameters: {
             query?: never;
@@ -315,6 +540,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    getCurrentIdentityVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentIdentityResponse"];
                 };
             };
         };

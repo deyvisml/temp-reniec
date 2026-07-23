@@ -9,23 +9,6 @@ import {
 } from "@/components/availability-outcome-alert";
 
 describe("SweetAlert2 eligibility outcome feedback", () => {
-  it("maps an eligible result to an explicit authorized continuation", () => {
-    const presentation = getAvailabilityOutcomePresentation({
-      kind: "available",
-      continuePath: "/verificacion-identidad?requestId=42",
-      maskedDni: "******01",
-    });
-
-    expect(presentation.tone).toBe("positive");
-    expect(presentation.primaryAction).toEqual({
-      kind: "continue",
-      label: "Continuar con la verificación",
-      href: "/verificacion-identidad?requestId=42",
-    });
-    expect(presentation.secondaryAction?.kind).toBe("reset");
-    expect(presentation.description).toContain("******01");
-  });
-
   it("maps a not-eligible result to a calm terminal reset", () => {
     const presentation = getAvailabilityOutcomePresentation({ kind: "not-available" });
 
@@ -73,21 +56,17 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("builds supported SweetAlert2 options without dynamic HTML", () => {
-    const presentation = getAvailabilityOutcomePresentation({
-      kind: "available",
-      continuePath: "/verificacion-identidad?requestId=42",
-      maskedDni: "<img src=x onerror=alert(1)>",
-    });
+    const presentation = getAvailabilityOutcomePresentation({ kind: "not-available" });
     const options = getAvailabilitySweetAlertOptions(presentation, false);
 
     expect(options.titleText).toBe(presentation.title);
-    expect(options.text).toContain("<img src=x onerror=alert(1)>");
+    expect(options.text).toBe(presentation.description);
     expect(options).not.toHaveProperty("html");
     expect(options).not.toHaveProperty("title");
     expect(options.allowOutsideClick).toBe(false);
     expect(options.allowEscapeKey).toBe(true);
     expect(options.buttonsStyling).toBe(false);
-    expect(options.showCancelButton).toBe(true);
+    expect(options.showCancelButton).toBe(false);
     expect(options.customClass?.confirmButton).toContain("min-h-12");
     expect(options.customClass?.popup).toContain("max-h-[calc(100dvh-2rem)]");
   });
@@ -100,24 +79,8 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
   });
 
   it("resolves only explicit or safe dismiss actions", () => {
-    const eligible = getAvailabilityOutcomePresentation({
-      kind: "available",
-      continuePath: "/verificacion-identidad?requestId=42",
-    });
     const inconclusive = getAvailabilityOutcomePresentation({ kind: "inconclusive" });
 
-    expect(
-      resolveAvailabilityAlertAction(eligible, {
-        isConfirmed: true,
-        dismiss: undefined,
-      })?.kind,
-    ).toBe("continue");
-    expect(
-      resolveAvailabilityAlertAction(eligible, {
-        isConfirmed: false,
-        dismiss: "cancel",
-      })?.kind,
-    ).toBe("reset");
     expect(
       resolveAvailabilityAlertAction(inconclusive, {
         isConfirmed: true,
@@ -153,6 +116,11 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     expect(alertSource).not.toContain("<dialog");
     expect(alertSource).not.toContain("sweetalert2-react-content");
     expect(formSource).toContain("AvailabilityOutcomeAlert");
+    expect(formSource).toContain("onContinue()");
+    expect(formSource).not.toContain("window.location.assign");
+    expect(formSource).not.toContain('kind: "available"');
+    expect(alertSource).not.toContain("Puedes continuar con la verificación de identidad");
+    expect(alertSource).not.toContain("La lista se consultará después");
     expect(formSource).not.toContain("EligibilityOutcomeDialog");
     expect(formSource).not.toContain("ResultPanel");
   });

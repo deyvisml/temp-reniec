@@ -20,13 +20,12 @@ public final class MockCertificateAvailabilityAdapter implements CertificateAvai
 	@Override
 	public AvailabilityResult checkAvailability(String dni) {
 		return switch (dni) {
-			case "00000001" -> completed(AvailabilityOutcome.AVAILABLE);
 			case "00000002" -> completed(AvailabilityOutcome.NOT_AVAILABLE);
 			case "00000003" -> failed(AvailabilityOutcome.UNAVAILABLE, "MOCK_UNAVAILABLE");
 			case "00000004" -> completed(AvailabilityOutcome.INCONCLUSIVE);
 			case "00000005" -> failed(AvailabilityOutcome.ERROR, "MOCK_TECHNICAL_ERROR");
 			case "00000006" -> timeout();
-			default -> completed(AvailabilityOutcome.INCONCLUSIVE);
+			default -> completed(AvailabilityOutcome.AVAILABLE);
 		};
 	}
 

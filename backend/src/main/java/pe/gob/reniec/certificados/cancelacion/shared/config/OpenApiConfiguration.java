@@ -3,6 +3,8 @@ package pe.gob.reniec.certificados.cancelacion.shared.config;
 import java.util.List;
 
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.headers.Header;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
@@ -24,14 +26,19 @@ public class OpenApiConfiguration {
 
 	@Bean
 	OpenAPI cancellationCertificatesOpenApi() {
-		return new OpenAPI().info(new Info()
+		return new OpenAPI().components(new Components().addSecuritySchemes("FlowCookie",
+				new SecurityScheme().type(SecurityScheme.Type.APIKEY).in(SecurityScheme.In.COOKIE)
+						.name("cancelacion_flow").description("Continuidad temporal HttpOnly emitida por el backend; no es una sesión permanente.")))
+				.info(new Info()
 				.title("API de cancelación de certificados digitales")
-				.description("API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox; no se documentan autenticación ni autorización todavía inexistentes.")
+				.description("API institucional para iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox y la autenticación usa ID Perú con continuidad temporal HttpOnly.")
 				.version("v1")
 				.contact(new Contact().name("RENIEC")))
 				.tags(List.of(
 						new Tag().name("Solicitudes de cancelación")
 								.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
+						new Tag().name("Verificación de identidad")
+								.description("Inicio, callback, estado e invalidación temporal de ID Perú."),
 						new Tag().name("Estado técnico")
 								.description("Disponibilidad operativa del backend y sus dependencias.")));
 	}
@@ -42,6 +49,8 @@ public class OpenApiConfiguration {
 			openApi.setTags(List.of(
 					new Tag().name("Solicitudes de cancelación")
 							.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
+					new Tag().name("Verificación de identidad")
+							.description("Inicio, callback, estado e invalidación temporal de ID Perú."),
 					new Tag().name("Estado técnico")
 							.description("Disponibilidad operativa del backend y sus dependencias.")));
 			if (openApi.getPaths() == null || openApi.getPaths().get("/actuator/health") == null

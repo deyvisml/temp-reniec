@@ -1,6 +1,6 @@
 # Frontend — Cancelación de certificados digitales
 
-Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. La página de inicio valida el DNI, exige Google reCAPTCHA v2 Checkbox y consulta la disponibilidad mediante el backend; las etapas posteriores todavía no están implementadas.
+Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. `/cancelacion` es la entrada del trámite. En desarrollo local, el paso 1 de autenticación se presenta y permanece en `/autorizacion` porque ese es el origen registrado para las credenciales de prueba de ID Perú; en producción el paso permanece en `/cancelacion`.
 
 ## Requisitos e inicio
 
@@ -65,10 +65,12 @@ Consulta [`docs/LOCAL_INTEGRATION.md`](../docs/LOCAL_INTEGRATION.md) para el ord
 
 ## Consulta local
 
-Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El botón solo se habilita con DNI válido, token actual y ningún envío en curso. DNI y token no se guardan en almacenamiento web, cookies persistentes ni URL. El widget se reinicia tras cada intento, expiración o error y no hay reintentos automáticos. Solo un resultado disponible muestra la transición preparada hacia verificación de identidad mediante `requestId`; este identificador no autentica ni autoriza.
+Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El botón solo se habilita con DNI válido, token actual y ningún envío en curso. DNI y token no se guardan en almacenamiento web ni URL. Solo un resultado disponible permite avanzar: con `NEXT_PUBLIC_APP_ENV=local` el navegador pasa de `/cancelacion` a `/autorizacion`; en producción la vista cambia dentro de `/cancelacion`. La continuidad viaja exclusivamente en una cookie HttpOnly y el frontend no puede leerla ni persistirla.
+
+`/`, `/verificacion-identidad` y `/verificacion-identidad/retorno` existen únicamente como redirecciones hacia `/cancelacion`. `/autorizacion` renderiza el mismo componente compartido del flujo cuando el ambiente es local y redirige a `/cancelacion` fuera de local. Ningún DNI, `requestId`, certificado o resultado de autenticación se transporta en la URL. Una recarga consulta solo el contexto temporal vigente del backend; no recupera solicitudes terminadas ni progreso histórico.
 
 ## Cliente HTTP
 
 `lib/http-client.ts` centraliza `fetch`, JSON, cookies futuras, correlación, timeout de ocho segundos, cancelación y errores seguros. No incorpora JWT, reintentos, interceptores, sesión, almacenamiento ni librerías HTTP externas.
 
-La portada se basa en `docs/ui-reference/home.png` y el contexto funcional prevalece sobre cualquier detalle visual contradictorio. JWT, ID Perú, motivo, confirmación, revocación, constancia y despliegue productivo permanecen fuera de alcance.
+La portada se basa en `docs/ui-reference/home.png` y el paso 1 en `docs/ui-reference/step-1.png`, corrigiendo el stepper a cinco pasos. El contexto funcional prevalece sobre cualquier detalle visual contradictorio. El listado del paso 2, motivo, confirmación, revocación, constancia y despliegue productivo permanecen fuera de alcance.

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -13,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,10 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Revocatio
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.FlowTokenService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityFailure;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityIntegrationException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityVerificationService;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "debug=false")
@@ -67,6 +74,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	@Autowired CancellationReceiptRepository receiptRepository;
 	@Autowired CancellationAuditEventRepository auditRepository;
 	@Autowired JdbcTemplate jdbcTemplate;
+	@Autowired IdentityVerificationService identityService;
+	@Autowired FlowTokenService flowTokenService;
 
 	@LocalServerPort int port;
 
@@ -79,6 +88,161 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM identity_verification");
 		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
+	}
+
+	@Test
+	void mockIdentityFlowConsumesStateOnceAndIssuesPersistedTemporaryAuthorization() {
+		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+
+		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
+		URI authorization = identityService.start(init.value(), "identity-flow-it");
+		String state = java.util.Arrays.stream(authorization.getRawQuery().split("&"))
+				.filter(value -> value.startsWith("state=")).findFirst()
+				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8)).orElseThrow();
+
+		IdentityVerificationService.CallbackResult callback = identityService.callback(
+				"mock-code", state, "mock-session", null);
+		assertThat(callback.verified()).isTrue();
+		assertThat(identityService.current(callback.token().value()).canContinue()).isTrue();
+
+		IdentityVerificationEntity verification = identityRepository
+				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
+		assertThat(verification.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.VERIFIED);
+		assertThat(verification.getDniMatchResult()).isEqualTo(IdentityMatchResult.MATCH);
+		assertThat(verification.getPkceVerifierProtected()).isNull();
+		assertThat(verification.getAuthorizationJtiHash()).hasSize(64);
+		assertThatThrownBy(() -> identityService.callback("mock-code", state, "mock-session", null))
+				.isInstanceOf(IdentityIntegrationException.class);
+
+		CertificateCancellationRequestEntity completed = requestRepository.findById(request.getId()).orElseThrow();
+		completed.transitionTo(CancellationRequestStatus.COMPLETED, null);
+		requestRepository.saveAndFlush(completed);
+		assertThat(identityService.current(callback.token().value()).canContinue()).isFalse();
+	}
+
+	@Test
+	void rejectsASecondIdentityStartWhileTheCurrentAttemptRemainsValid() {
+		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+
+		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
+		identityService.start(init.value(), "first-identity-start");
+
+		assertThatThrownBy(() -> identityService.start(init.value(), "duplicate-identity-start"))
+				.isInstanceOfSatisfying(IdentityIntegrationException.class,
+						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.IN_PROGRESS));
+		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
+				.get().extracting(IdentityVerificationEntity::getAttemptNumber).isEqualTo(1);
+	}
+
+	@Test
+	void malformedOptionalCallbackValuesFinishTheAttemptWithoutOverflowingPersistence() {
+		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+
+		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
+		URI authorization = identityService.start(init.value(), "callback-boundary-it");
+		String state = java.util.Arrays.stream(authorization.getRawQuery().split("&"))
+				.filter(value -> value.startsWith("state="))
+				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8))
+				.findFirst().orElseThrow();
+
+		IdentityVerificationService.CallbackResult result = identityService.callback(
+				"mock-code", state, "x".repeat(257), null);
+
+		assertThat(result.verified()).isFalse();
+		assertThat(result.status()).isEqualTo("ERROR");
+		IdentityVerificationEntity verification = identityRepository
+				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
+		assertThat(verification.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.ERROR);
+		assertThat(verification.getErrorOrCancellationCode()).isEqualTo("INVALID_CALLBACK");
+		assertThat(verification.getProviderSessionState()).isNull();
+	}
+
+	@Test
+	void httpMockFlowRotatesTheCookieAndEnablesCertificateSelection() throws Exception {
+		HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
+		HttpResponse<String> initiation = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/cancellation-requests"))
+				.header("Content-Type", "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(
+						"{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-valid\"}"))
+				.build(), HttpResponse.BodyHandlers.ofString());
+		String initiationCookie = cookiePair(initiation);
+
+		HttpResponse<String> start = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/identity-verifications"))
+				.header("Cookie", initiationCookie)
+				.POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+		java.util.regex.Matcher authorization = java.util.regex.Pattern
+				.compile("\\\"authorizationUrl\\\":\\\"([^\\\"]+)\\\"").matcher(start.body());
+		assertThat(authorization.find()).isTrue();
+		URI authorizationUri = URI.create(authorization.group(1));
+		String state = java.util.Arrays.stream(authorizationUri.getRawQuery().split("&"))
+				.filter(value -> value.startsWith("state="))
+				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8))
+				.findFirst().orElseThrow();
+
+		HttpResponse<String> callback = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/idperu/callback?code=mock-code&state="
+						+ java.net.URLEncoder.encode(state, StandardCharsets.UTF_8)
+						+ "&session_state=mock-session"))
+				.GET().build(),
+				HttpResponse.BodyHandlers.ofString());
+		assertThat(callback.statusCode()).withFailMessage("Callback body: %s", callback.body()).isEqualTo(303);
+		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/cancelacion");
+		String authorizationCookie = cookiePair(callback);
+
+		HttpResponse<String> current = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/identity-verifications/current"))
+				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+
+		assertThat(initiation.statusCode()).isEqualTo(200);
+		assertThat(start.statusCode()).isEqualTo(200);
+		assertThat(current.statusCode()).isEqualTo(200);
+		assertThat(current.body()).contains("\"status\":\"VERIFIED\"", "\"canContinue\":true",
+				"\"nextStep\":\"CERTIFICATE_SELECTION\"")
+				.doesNotContain("00000001", "mock-code", state);
+		assertThat(initiationCookie).isNotEqualTo(authorizationCookie);
+	}
+
+	@Test
+	void invalidBrowserCallbackRedirectsWithoutExposingTheApiErrorDocument() throws Exception {
+		HttpResponse<String> callback = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+						+ "/api/v1/idperu/callback?code=provider-code&state=unknown-state"))
+						.GET().build(), HttpResponse.BodyHandlers.ofString());
+
+		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
+		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/cancelacion");
+		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
+				.contains("idperu_callback_outcome=ERROR", "HttpOnly", "SameSite=Lax")
+				.doesNotContain("provider-code", "unknown-state"));
+		assertThat(callback.body()).isEmpty();
+	}
+
+	@Test
+	void postCallbackRemainsCompatibleAndRedirectsWithoutTechnicalBody() throws Exception {
+		String form = "code=provider-code&state=unknown-state&session_state=provider-session";
+		HttpResponse<String> callback = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/v1/idperu/callback"))
+						.header("Content-Type", "application/x-www-form-urlencoded")
+						.POST(HttpRequest.BodyPublishers.ofString(form)).build(),
+						HttpResponse.BodyHandlers.ofString());
+
+		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
+		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/cancelacion");
+		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
+				.contains("idperu_callback_outcome=ERROR", "HttpOnly", "SameSite=Lax")
+				.doesNotContain("provider-code", "unknown-state", "provider-session"));
+		assertThat(callback.body()).isEmpty();
 	}
 
 	@Test
@@ -128,10 +292,10 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				"cancellation_request_certificate", "certificate_availability_check",
 				"certificate_cancellation_request", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(5);
+		assertThat(migrationCount).isEqualTo(6);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
-		assertThat(documentedColumnCount).isEqualTo(80);
+		assertThat(documentedColumnCount).isEqualTo(92);
 		assertThat(health.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(health.body()).contains("\"status\":\"UP\"")
 				.doesNotContain("jdbc", "mysql", "username", "password", "sql", "dni");
@@ -463,5 +627,9 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 
 	private Integer certificateCount() {
 		return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM cancellation_request_certificate", Integer.class);
+	}
+
+	private static String cookiePair(HttpResponse<?> response) {
+		return response.headers().firstValue("Set-Cookie").orElseThrow().split(";", 2)[0];
 	}
 }

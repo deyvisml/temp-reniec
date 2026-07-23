@@ -6,13 +6,13 @@ import {
   buildAvailabilityErrorView,
   buildRecaptchaErrorMessage,
   canSubmitInitialQuery,
-  buildIdentityPath,
   isConsistentInitialResponse,
   validateDni,
 } from "@/components/dni-availability-form";
 import type { CancellationRequestResponse } from "@/lib/api/contracts";
 import { startCancellationRequest } from "@/lib/api/cancellation-requests";
 import { HttpClientError } from "@/lib/http-client";
+import { CANCELLATION_FLOW_ROUTE } from "@/lib/routes";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -26,10 +26,10 @@ describe("DNI eligibility entry", () => {
     expect(validateDni("１２３４５６７８")).toContain("8 dígitos");
   });
 
-  it("builds the next path with only the request id", () => {
-    const path = buildIdentityPath(42);
-    expect(path).toBe("/verificacion-identidad?requestId=42");
-    expect(path).not.toContain("12345678");
+  it("uses one canonical route without exposing request identifiers", () => {
+    expect(CANCELLATION_FLOW_ROUTE).toBe("/cancelacion");
+    expect(CANCELLATION_FLOW_ROUTE).not.toContain("42");
+    expect(CANCELLATION_FLOW_ROUTE).not.toContain("12345678");
   });
 
   it("rejects inconsistent or privacy-unsafe initial responses", () => {
@@ -119,6 +119,8 @@ describe("DNI eligibility entry", () => {
     expect(source).not.toMatch(/document\.cookie|console\.(log|info|debug)/);
     expect(source).not.toMatch(/restore|rehydrat|reanud|recuperar/i);
     expect(source).toContain("submissionInFlightRef.current");
+    expect(source).toContain("onContinue()");
+    expect(source).not.toContain("window.location.assign");
     expect(source).toContain("setRecaptchaToken(\"\")");
     expect(source).toContain("setRecaptchaResetKey");
   });

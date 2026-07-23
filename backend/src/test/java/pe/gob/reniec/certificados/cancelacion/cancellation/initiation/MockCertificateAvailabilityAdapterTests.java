@@ -13,14 +13,15 @@ class MockCertificateAvailabilityAdapterTests {
 			new MockCertificateAvailabilityAdapter(Duration.ofMillis(1));
 
 	@Test
-	void mapsEveryDocumentedFixtureDeterministically() {
+	void mapsNormalDnisToAvailableAndEverySpecialFixtureDeterministically() {
 		assertOutcome("00000001", AvailabilityOutcome.AVAILABLE);
 		assertOutcome("00000002", AvailabilityOutcome.NOT_AVAILABLE);
 		assertOutcome("00000003", AvailabilityOutcome.UNAVAILABLE);
 		assertOutcome("00000004", AvailabilityOutcome.INCONCLUSIVE);
 		assertOutcome("00000005", AvailabilityOutcome.ERROR);
 		assertOutcome("00000006", AvailabilityOutcome.UNAVAILABLE);
-		assertOutcome("12345678", AvailabilityOutcome.INCONCLUSIVE);
+		assertOutcome("12345678", AvailabilityOutcome.AVAILABLE);
+		assertOutcome("87654321", AvailabilityOutcome.AVAILABLE);
 	}
 
 	@Test

@@ -14,16 +14,12 @@ import { RecaptchaCheckbox, RECAPTCHA_SITE_KEY } from "@/components/recaptcha-ch
 export const DNI_PATTERN = /^[0-9]{8}$/;
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
-const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline shadow-[0_12px_24px_#a8003c27] transition-[transform,box-shadow,filter] hover:not-disabled:-translate-y-0.5 hover:not-disabled:saturate-[1.08] hover:not-disabled:shadow-[0_16px_30px_#a8003c35] disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
+const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
 
 export function validateDni(value: string): string | undefined {
   if (!value) return "Ingresa tu número de DNI.";
   if (!DNI_PATTERN.test(value)) return "El DNI debe contener exactamente 8 dígitos numéricos.";
   return undefined;
-}
-
-export function buildIdentityPath(requestId: number): string {
-  return `/verificacion-identidad?requestId=${requestId}`;
 }
 
 export function canSubmitInitialQuery(
@@ -62,7 +58,7 @@ export function isConsistentInitialResponse(response: CancellationRequestRespons
 
 type ViewState = { kind: "form" } | AvailabilityOutcomeView;
 
-export function DniAvailabilityForm() {
+export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) {
   const [dni, setDni] = useState("");
   const [fieldError, setFieldError] = useState<string>();
   const [pending, setPending] = useState(false);
@@ -128,11 +124,7 @@ export function DniAvailabilityForm() {
 
       if (response.availabilityResult === "AVAILABLE") {
         setDni("");
-        setView({
-          kind: "available",
-          continuePath: buildIdentityPath(response.requestId),
-          maskedDni: response.maskedDni,
-        });
+        onContinue();
       } else if (response.availabilityResult === "NOT_AVAILABLE") {
         setDni("");
         setView({ kind: "not-available" });
@@ -250,7 +242,6 @@ export function DniAvailabilityForm() {
       {view.kind !== "form" ? (
         <AvailabilityOutcomeAlert
           outcome={view}
-          onContinue={(href) => window.location.assign(href)}
           onRetry={() => setView({ kind: "form" })}
           onReset={reset}
         />

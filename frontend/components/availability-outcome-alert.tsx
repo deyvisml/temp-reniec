@@ -14,7 +14,6 @@ const secondaryActionClasses =
   "min-h-12 w-full cursor-pointer rounded-lg border border-[#b8c6df] bg-white px-5 py-3 font-extrabold text-[#164aa8] transition-colors hover:bg-[#f3f7fd] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none";
 
 export type AvailabilityOutcomeView =
-  | { kind: "available"; continuePath?: string; maskedDni?: string }
   | { kind: "not-available" }
   | { kind: "inconclusive" }
   | {
@@ -26,13 +25,12 @@ export type AvailabilityOutcomeView =
     };
 
 export type AvailabilityOutcomeAction = {
-  kind: "continue" | "retry" | "reset";
+  kind: "retry" | "reset";
   label: string;
-  href?: string;
 };
 
 export type AvailabilityOutcomePresentation = {
-  tone: "positive" | "informative" | "warning";
+  tone: "informative" | "warning";
   title: string;
   description: string;
   correlationId?: string;
@@ -44,31 +42,6 @@ export function getAvailabilityOutcomePresentation(
   outcome: AvailabilityOutcomeView,
 ): AvailabilityOutcomePresentation {
   switch (outcome.kind) {
-    case "available":
-      if (!outcome.continuePath) {
-        return {
-          tone: "warning",
-          title: "No pudimos preparar el siguiente paso",
-          description:
-            "La consulta terminó, pero no fue posible iniciar la verificación de identidad. Vuelve al formulario e inténtalo nuevamente.",
-          primaryAction: { kind: "reset", label: "Volver al formulario" },
-        };
-      }
-
-      return {
-        tone: "positive",
-        title: "Puedes continuar con la verificación de identidad",
-        description: outcome.maskedDni
-          ? `Confirmamos que existen certificados disponibles para el DNI ${outcome.maskedDni}. La lista se consultará después de verificar tu identidad.`
-          : "Confirmamos que existen certificados disponibles. La lista se consultará después de verificar tu identidad.",
-        primaryAction: {
-          kind: "continue",
-          label: "Continuar con la verificación",
-          href: outcome.continuePath,
-        },
-        secondaryAction: { kind: "reset", label: "Volver al inicio" },
-      };
-
     case "not-available":
       return {
         tone: "informative",
@@ -161,16 +134,13 @@ export function resolveAvailabilityAlertAction(
 
 export function AvailabilityOutcomeAlert({
   outcome,
-  onContinue,
   onRetry,
   onReset,
 }: {
   outcome: AvailabilityOutcomeView;
-  onContinue: (href: string) => void;
   onRetry: () => void;
   onReset: () => void;
 }) {
-  const continueEvent = useEffectEvent(onContinue);
   const retryEvent = useEffectEvent(onRetry);
   const resetEvent = useEffectEvent(onReset);
 
@@ -197,7 +167,6 @@ export function AvailabilityOutcomeAlert({
       const action = resolveAvailabilityAlertAction(presentation, result);
       if (!action) return;
 
-      if (action.kind === "continue" && action.href) continueEvent(action.href);
       if (action.kind === "retry") retryEvent();
       if (action.kind === "reset") resetEvent();
     })();
@@ -212,13 +181,11 @@ export function AvailabilityOutcomeAlert({
 }
 
 const toneIcons = {
-  positive: "success",
   informative: "info",
   warning: "warning",
 } satisfies Record<AvailabilityOutcomePresentation["tone"], SweetAlertIcon>;
 
 const toneIconColors = {
-  positive: "#08764a",
   informative: "#1749a8",
   warning: "#9a5600",
 } satisfies Record<AvailabilityOutcomePresentation["tone"], string>;

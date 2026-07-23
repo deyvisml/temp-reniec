@@ -27,6 +27,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.Availabili
 import pe.gob.reniec.certificados.cancelacion.system.DependencyUnavailableException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.RecaptchaFailure;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.RecaptchaVerificationException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityFailure;
+import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityIntegrationException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -61,6 +63,21 @@ public final class GlobalExceptionHandler {
 					"La verificación de seguridad tardó demasiado. Inténtalo nuevamente.", request);
 			case INVALID_RESPONSE -> respond(HttpStatus.BAD_GATEWAY, "RECAPTCHA_INVALID_RESPONSE",
 					"No fue posible confirmar la verificación de seguridad. Inténtalo nuevamente.", request);
+		};
+	}
+
+	@ExceptionHandler(IdentityIntegrationException.class)
+	ResponseEntity<ApiError> handleIdentity(IdentityIntegrationException exception, HttpServletRequest request) {
+		IdentityFailure failure = exception.failure();
+		return switch (failure) {
+			case UNAUTHORIZED -> respond(HttpStatus.UNAUTHORIZED, "IDENTITY_CONTINUITY_REQUIRED", "Inicia nuevamente el proceso para continuar.", request);
+			case IN_PROGRESS -> respond(HttpStatus.CONFLICT, "IDENTITY_VERIFICATION_IN_PROGRESS", "La verificación de identidad ya está en curso.", request);
+			case INVALID_STATE, CALLBACK_REPLAYED, INVALID_CALLBACK -> respond(HttpStatus.BAD_REQUEST, "IDENTITY_CALLBACK_INVALID", "No fue posible validar el retorno de identidad.", request);
+			case STATE_EXPIRED -> respond(HttpStatus.BAD_REQUEST, "IDENTITY_ATTEMPT_EXPIRED", "La autenticación expiró. Inténtalo nuevamente.", request);
+			case TIMEOUT -> respond(HttpStatus.GATEWAY_TIMEOUT, "IDENTITY_PROVIDER_TIMEOUT", "ID Perú tardó demasiado en responder.", request);
+			case UNAVAILABLE -> respond(HttpStatus.SERVICE_UNAVAILABLE, "IDENTITY_PROVIDER_UNAVAILABLE", "ID Perú no está disponible temporalmente.", request);
+			case CONFIGURATION -> respond(HttpStatus.SERVICE_UNAVAILABLE, "IDENTITY_NOT_CONFIGURED", "La autenticación no está disponible temporalmente.", request);
+			default -> respond(HttpStatus.BAD_GATEWAY, "IDENTITY_PROVIDER_ERROR", "No fue posible completar la autenticación.", request);
 		};
 	}
 

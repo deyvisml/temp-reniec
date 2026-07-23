@@ -8,6 +8,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -21,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
@@ -159,14 +162,22 @@ class BackendHttpIntegrationTests {
 
 		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
 		String document = response.body();
+		Path generatedContract = Path.of("target", "openapi", "backend-api.json");
+		Files.createDirectories(generatedContract.getParent());
+		Files.writeString(generatedContract, document);
 		Set<String> applicationPaths = requestMappingHandlerMapping.getHandlerMethods().keySet().stream()
 				.flatMap(mapping -> mapping.getPatternValues().stream())
 				.filter(path -> path.startsWith("/api/v1/"))
 				.collect(Collectors.toSet());
 
-		assertThat(applicationPaths)
-				.containsExactlyInAnyOrder("/api/v1/system/status", "/api/v1/cancellation-requests");
-		applicationPaths.forEach(path -> assertThat(document).contains("\"" + path + "\""));
+		assertThat(applicationPaths).containsExactlyInAnyOrder(
+				"/api/v1/system/status", "/api/v1/cancellation-requests",
+				"/api/v1/identity-verifications", "/api/v1/idperu/callback",
+				"/api/v1/identity-verifications/current", "/api/v1/identity-verifications/logout",
+				"/api/v1/identity-verifications/mock/authorize");
+		applicationPaths.stream()
+				.filter(path -> !path.startsWith("/api/v1/identity-verifications/mock/"))
+				.forEach(path -> assertThat(document).contains("\"" + path + "\""));
 
 		assertThat(document)
 				.contains("\"/actuator/health\"", "getSystemStatus", "initiateCancellationRequest",
@@ -178,8 +189,11 @@ class BackendHttpIntegrationTests {
 						"RECAPTCHA_INVALID_RESPONSE", "CANCELLATION_REQUEST_IN_PROGRESS", "date-time", "[0-9]{8}",
 						"\"200\"", "\"400\"", "\"409\"", "\"415\"", "\"500\"",
 						"availabilityResult", "AVAILABLE", "NOT_AVAILABLE", "INCONCLUSIVE", "UNAVAILABLE", "ERROR",
+						"startIdentityVerification", "handleIdentityCallback", "getCurrentIdentityVerification",
+						"logoutIdentityVerification", "FlowCookie", "Verificación de identidad",
 						"\"502\"", "\"503\"", "\"504\"")
-				.doesNotContain("/__test/", "/actuator/info", "/actuator/env", "securitySchemes",
+				.doesNotContain("/__test/", "/actuator/info", "/actuator/env",
+						"/api/v1/identity-verifications/mock/authorize",
 						"reused", "publicReference", "recupera una solicitud", "inicio o recuperación",
 						"eligibilityResult", "certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount",
 						"00000001", "test-recaptcha-valid", "RECAPTCHA_SECRET_KEY", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
@@ -199,6 +213,16 @@ class BackendHttpIntegrationTests {
 
 	private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {
 		return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	void idPeruCallbackAcceptsGetAndPostOnTheRegisteredPath() {
+		Set<RequestMethod> methods = requestMappingHandlerMapping.getHandlerMethods().entrySet().stream()
+				.filter(entry -> entry.getKey().getPatternValues().contains("/api/v1/idperu/callback"))
+				.flatMap(entry -> entry.getKey().getMethodsCondition().getMethods().stream())
+				.collect(Collectors.toSet());
+
+		assertThat(methods).containsExactlyInAnyOrder(RequestMethod.GET, RequestMethod.POST);
 	}
 
 	private HttpResponse<String> postCancellation(String body, String correlationId) throws Exception {

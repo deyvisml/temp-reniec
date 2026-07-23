@@ -1,0 +1,15 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+app:
+  frontend-base-url: ${APP_FRONTEND_BASE_URL}
+  backend-base-url: ${APP_BACKEND_BASE_URL}
+  id-peru:
+    mode: real
+    version: v2
+    client-id: ${ID_PERU_CLIENT_ID}
+    client-secret: ${ID_PERU_CLIENT_SECRET}
+    referer: ${ID_PERU_REFERER}
+    flow-secret: ${ID_PERU_FLOW_SECRET}

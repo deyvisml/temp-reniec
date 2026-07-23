@@ -3,9 +3,7 @@
 ## Purpose
 
 Define the minimal, executable, maintainable, accessible, and non-functional technical foundation for the system frontend.
-
 ## Requirements
-
 ### Requirement: Executable single-package frontend project
 The repository SHALL contain a private single-package npm project at `/frontend` using Node.js 24 LTS, Next.js 16.2.10, React and React DOM 19.2.7, TypeScript 6.0.2, App Router, and a committed npm lockfile. The project SHALL type-check, build, start, and serve without a database, backend process, or external service.
 
@@ -18,11 +16,11 @@ The repository SHALL contain a private single-package npm project at `/frontend`
 - **THEN** Next.js starts the production build and serves the application successfully without the backend running
 
 ### Requirement: Minimal dependency and folder set
-The frontend SHALL retain only `next`, `react`, and `react-dom` as direct production dependencies and SHALL have only the TypeScript/types, Tailwind/PostCSS, Vitest, and `openapi-typescript` development tooling required by the implemented foundation and API contract synchronization. It MUST NOT add UI kits, icon libraries, HTTP libraries, form libraries, runtime validation libraries, state managers, DOM test environments, E2E tools, SDK generators, or preventive dependencies. Every committed source directory and contract artifact SHALL have a current purpose.
+The frontend SHALL retain only `next`, `react`, `react-dom`, `sweetalert2`, and the maintained Google reCAPTCHA v2 Checkbox React integration as direct production dependencies. Development tooling SHALL remain limited to TypeScript/types, Tailwind/PostCSS, Vitest and `openapi-typescript` required by implemented behavior. It MUST NOT add UI kits, icon libraries, HTTP libraries, form libraries, runtime validation libraries, state managers, DOM test environments, E2E tools, SDK generators or preventive dependencies. Every dependency, source directory and contract artifact SHALL have a current purpose.
 
 #### Scenario: Dependency and source tree are reviewed
 - **WHEN** `package.json` and the source tree are inspected
-- **THEN** every dependency and directory supports the current shell, technical integration, OpenAPI type synchronization, or tests and no empty feature, future-route, or speculative layer exists
+- **THEN** each dependency supports the current shell, DNI flow, maintained result alert, reCAPTCHA widget, technical integration, contract synchronization or tests and no broad framework or unused abstraction was added
 
 ### Requirement: App Router root shell
 The frontend SHALL use App Router with a root layout that declares Spanish as the document language and renders a skip link, textual institutional header, main content landmark with a stable target, polite global-message region, adaptive container, and minimal footer. The layout SHALL define base title and description metadata and MUST NOT reproduce the complete reference designs.
@@ -84,15 +82,19 @@ The frontend SHALL provide `loading.tsx`, `not-found.tsx`, `error.tsx`, and `glo
 - **THEN** a neutral Spanish loading message is exposed with `role="status"`
 
 ### Requirement: Explicit server and public environment variables
-The frontend SHALL document `BACKEND_URL` as the server-only backend base URL, `NEXT_PUBLIC_BACKEND_URL` as the non-sensitive browser-visible backend base URL, and `NEXT_PUBLIC_APP_ENV` as a non-sensitive public environment label, with safe local values `http://localhost:8080`, `http://localhost:8080`, and `local`. `.env.example` SHALL contain only these variables, `.env.local` SHALL be ignored, and documentation SHALL state that browser-exposed variables are embedded at build time and MUST NOT contain secrets.
+The frontend SHALL document `BACKEND_URL` as the server-only backend base URL; `NEXT_PUBLIC_BACKEND_URL`, `NEXT_PUBLIC_APP_ENV` and `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` as non-sensitive browser-visible values; and the local backend URLs/environment label already established. `.env.example` SHALL contain only safe values or placeholders, `.env.local` SHALL be ignored, and documentation SHALL state that public variables are embedded at build time. No backend reCAPTCHA secret, production credential or test bypass SHALL be exposed through a `NEXT_PUBLIC_` variable.
 
 #### Scenario: Local environment is configured
-- **WHEN** a contributor copies `.env.example` to `.env.local` without changes
-- **THEN** server code and browser code resolve the local backend URL, the page displays the `local` label, and no secret is exposed
+- **WHEN** a contributor copies `.env.example` to `.env.local` and supplies an approved development site key
+- **THEN** backend addresses, environment label and widget configuration resolve without exposing the backend secret
+
+#### Scenario: Public site key is absent
+- **WHEN** the frontend builds or starts without `NEXT_PUBLIC_RECAPTCHA_SITE_KEY`
+- **THEN** the application remains buildable but the form fails closed with a controlled unavailable state
 
 #### Scenario: Browser bundle is reviewed
-- **WHEN** frontend browser configuration is inspected
-- **THEN** it contains only the public backend address and environment label and no credential, token, database value, or server-only secret
+- **WHEN** frontend source, generated assets and browser configuration are inspected
+- **THEN** they contain only the public site key, public backend address and environment label and no secret, verification token, database value or test-mode bypass
 
 ### Requirement: Native JSON HTTP client foundation
 The frontend SHALL provide one small fetch-based `requestJson<T>` client and typed `HttpClientError`. The client SHALL resolve relative API paths against server-only `BACKEND_URL` on the server and `NEXT_PUBLIC_BACKEND_URL` in the browser; preserve caller options and headers; request JSON; use `credentials: "include"`; generate and send a valid `X-Correlation-ID` unless the caller supplies one; return parsed or empty success data with the response correlation; enforce an 8-second default timeout; and respect caller cancellation. It SHALL defensively interpret the generated backend error shape and expose public status, code, message, and correlation for HTTP, network, timeout, aborted, and invalid-response failures. It MUST NOT implement authorization, JWT, refresh, interceptors, automatic retries, session storage, body logging, cookie management, or a third-party HTTP library.

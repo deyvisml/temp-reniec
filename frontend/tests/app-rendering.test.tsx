@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import RootLayout, { metadata } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import HomePage from "@/app/page";
+import CancellationPage from "@/app/cancelacion/page";
+import { CancellationEntry } from "@/components/cancellation-entry";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -11,7 +16,7 @@ afterEach(() => {
 
 describe("base application rendering", () => {
   it("renders the real citizen home and accessible DNI form", () => {
-    const html = renderToStaticMarkup(<HomePage />);
+    const html = renderToStaticMarkup(<CancellationEntry onContinue={() => undefined} />);
 
     expect(html).toContain("Cancelación de <span>certificados digitales</span>");
     expect(html).toContain("Ingresa tu DNI para comenzar");
@@ -45,7 +50,13 @@ describe("base application rendering", () => {
     const html = renderToStaticMarkup(<NotFound />);
 
     expect(html).toContain("Recurso no encontrado");
-    expect(html).toContain('href="/"');
+    expect(html).toContain('href="/cancelacion"');
     expect(html).toContain("Volver al inicio");
+  });
+
+  it("renders the canonical flow coordinator", () => {
+    const page = renderToStaticMarkup(<CancellationPage />);
+    expect(page).toContain("Preparando el trámite");
+    expect(page).toContain('aria-busy="true"');
   });
 });

@@ -3,7 +3,6 @@
 ## Purpose
 
 Define the citizen-facing home, DNI validation, cancellation-request initiation, and normalized certificate-eligibility consultation that begin the cancellation journey.
-
 ## Requirements
 ### Requirement: Citizen home communicates the service accurately
 The `/` route SHALL present an accessible, responsive citizen-facing home page based on `docs/ui-reference/home.png` and SHALL describe the initial action as checking whether certificates are available for cancellation. It MUST NOT state or imply that this stage obtains a detailed list, reveal a certificate count, expose or select individual certificates, or cancel the DNI, civil identity, physical document, DNIe or ID Perú account. Its existing institutional composition, DNI form, feedback, responsive behavior, semantic structure and visible focus SHALL remain intact.
@@ -32,19 +31,23 @@ The frontend and backend SHALL accept a DNI only when it contains exactly eight 
 - **THEN** the frontend permits submission and the backend accepts the value for case-use processing
 
 ### Requirement: Versioned request initiation contract
-The backend SHALL expose `POST /api/v1/cancellation-requests` with a JSON DNI body to create a new request and determine whether at least one certificate is currently available for cancellation. A functional success response SHALL include the new numeric `requestId`, masked DNI, current request status, normalized `availabilityResult`, `canContinue`, and `nextStep`. It MUST NOT expose an eligibility alias, provider boolean, full DNI, certificate collection, count, order number, creation date, UUID, historical request identifier or public-reference UUID. `requestId` MUST NOT authenticate or authorize a caller by itself.
+The backend SHALL expose `POST /api/v1/cancellation-requests` with a JSON body containing an eight-digit DNI and nonblank `recaptchaToken` to create a new request and determine whether at least one certificate is currently available for cancellation. CAPTCHA verification SHALL succeed before any request is created. A functional success response SHALL include the new numeric `requestId`, masked DNI, current request status, normalized `availabilityResult`, `canContinue`, and `nextStep`. It MUST NOT expose or echo CAPTCHA evidence, an eligibility alias, provider boolean, full DNI, certificate collection, count, order number, creation date, UUID, historical request identifier or public-reference UUID. `requestId` MUST NOT authenticate or authorize a caller by itself.
 
 #### Scenario: Availability is confirmed
-- **WHEN** a valid DNI produces `AVAILABLE`
-- **THEN** the endpoint returns a newly created request with `canContinue=true`, `nextStep=IDENTITY_VERIFICATION`, and no certificate-level data
+- **WHEN** a valid DNI and accepted CAPTCHA produce `AVAILABLE`
+- **THEN** the endpoint returns a newly created request with `canContinue=true`, `nextStep=IDENTITY_VERIFICATION`, and no CAPTCHA or certificate-level data
 
 #### Scenario: Absence is confirmed
-- **WHEN** a valid DNI produces `NOT_AVAILABLE`
-- **THEN** the endpoint returns a controlled functional response with continuation blocked and no certificate-level data
+- **WHEN** a valid DNI and accepted CAPTCHA produce `NOT_AVAILABLE`
+- **THEN** the endpoint returns a controlled functional response with continuation blocked and no CAPTCHA or certificate-level data
 
 #### Scenario: Request body is malformed
-- **WHEN** the endpoint receives invalid JSON or an unsupported content type
-- **THEN** it returns the common API error format with a stable code and correlation identifier
+- **WHEN** the endpoint receives invalid JSON, an unsupported content type, an invalid DNI or missing/oversized CAPTCHA evidence
+- **THEN** it returns the common API error format with a stable code and correlation identifier without creating a request
+
+#### Scenario: CAPTCHA is rejected
+- **WHEN** request fields are valid but backend CAPTCHA verification fails
+- **THEN** it returns a controlled CAPTCHA error before request creation or certificate-availability consultation
 
 ### Requirement: Eligibility integration is replaceable and normalized
 The initial use case SHALL depend on an internal certificate-availability gateway rather than a provider-specific DTO. The external provider's `true` SHALL normalize to `AVAILABLE` and `false` to `NOT_AVAILABLE`. The internal model SHALL also distinguish `INCONCLUSIVE`, `UNAVAILABLE`, and `ERROR`, with only an optional external reference and controlled technical code. Provider exceptions, invalid responses, transport failure and timeout MUST NOT normalize to `NOT_AVAILABLE`. Complete external payloads and certificate objects MUST NOT be persisted or returned.
@@ -66,19 +69,19 @@ The initial use case SHALL depend on an internal certificate-availability gatewa
 - **THEN** a new adapter can implement the gateway without changing the use-case outcome model or frontend contract
 
 ### Requirement: Local eligibility mock is deterministic
-Local and test profiles SHALL provide a deterministic availability mock with documented fictitious DNI fixtures for `AVAILABLE`, `NOT_AVAILABLE`, `INCONCLUSIVE`, `UNAVAILABLE`, timeout and technical error. It MUST NOT use randomness, real citizen data, certificate counts or certificate objects, and its default result SHALL be documented.
+Local and test profiles SHALL provide a deterministic availability mock whose normal result for any valid DNI not reserved as a special fixture is `AVAILABLE`. Documented fictitious fixtures SHALL produce `NOT_AVAILABLE`, `INCONCLUSIVE`, `UNAVAILABLE`, timeout and technical error. The mock MUST NOT use randomness, obtain real citizen data, produce certificate counts or return certificate objects, and it MUST NOT be active outside local or test profiles.
 
-#### Scenario: Documented fixture is used repeatedly
-- **WHEN** the same fictitious DNI is submitted more than once under equivalent state
-- **THEN** the mock produces the same availability outcome each time
+#### Scenario: Normal valid DNI is submitted
+- **WHEN** the local mock receives a valid DNI that is not a documented special fixture
+- **THEN** it deterministically returns `AVAILABLE` so the same DNI can be verified by the selected ID Perú adapter
 
-#### Scenario: Positive fixture is inspected
-- **WHEN** the fixture configured as available is executed
-- **THEN** its result contains no order number, creation date, UUID or certificate collection
+#### Scenario: Documented alternative fixture is used repeatedly
+- **WHEN** the same fictitious DNI reserved for a non-success scenario is submitted more than once under equivalent state
+- **THEN** the mock produces the same documented outcome each time
 
-#### Scenario: Unlisted valid DNI is submitted
-- **WHEN** the local mock receives a valid DNI not listed as a special fixture
-- **THEN** it returns the documented deterministic default result
+#### Scenario: Positive result is inspected
+- **WHEN** availability is confirmed for a normal valid DNI
+- **THEN** the result contains no order number, creation date, UUID or certificate collection
 
 ### Requirement: Eligibility attempts and current state remain consistent
 The backend SHALL prepare, execute, and finalize certificate-availability checks through short transactional phases. Each new request SHALL start its own attempt numbering, persist every started attempt with correlation, invoke external I/O without holding the database lock, and finalize the attempt only while it remains submitted and its request remains current. The initial operation MUST NOT insert or update `cancellation_request_certificate` rows.
@@ -168,15 +171,15 @@ The DNI form SHALL allow only one active submission per mounted form instance. I
 - **THEN** the client aborts the request and does not update stale UI state
 
 ### Requirement: Continuation is emitted only for eligible requests
-The backend SHALL set `canContinue=true` and `nextStep=IDENTITY_VERIFICATION` only when certificate availability is positively confirmed for the current active request. Negative, inconclusive, unavailable, timeout and technical outcomes SHALL block navigation. The frontend SHALL prepare `/verificacion-identidad` using only `requestId` and SHALL never include the DNI or certificate data in the URL.
+The backend SHALL set `canContinue=true` and `nextStep=IDENTITY_VERIFICATION` only when certificate availability is positively confirmed for the current active request. Negative, inconclusive, unavailable, timeout and technical outcomes SHALL block continuation. The frontend SHALL render the identity-verification step within the canonical `/cancelacion` route and SHALL NOT place the request identifier, DNI, certificate data or step name in the URL.
 
 #### Scenario: Positive availability authorizes transition
 - **WHEN** the frontend receives the expected positive response
-- **THEN** it enables the controlled transition using `requestId` and no DNI or certificate value
+- **THEN** it renders identity verification within `/cancelacion` without changing the visible URL or exposing request data
 
 #### Scenario: Any other result is received
 - **WHEN** availability is negative or cannot be confirmed
-- **THEN** the frontend exposes no continuation control and does not navigate
+- **THEN** the frontend exposes no continuation control, remains at `/cancelacion` and presents the controlled outcome
 
 ### Requirement: DNI exposure is minimized outside MySQL
 The system SHALL persist the DNI only in the consolidated request column, derive masked presentation from it, and MUST NOT place the full value in logs, metrics, error bodies, URLs, OpenAPI examples, browser storage, cookies, or technical endpoints. The frontend SHALL clear the input value after a terminal response or controlled reset.
@@ -190,21 +193,25 @@ The system SHALL persist the DNI only in the consolidated request column, derive
 - **THEN** the DNI is absent from local storage, session storage, cookies, and visited URLs
 
 ### Requirement: Initial anti-abuse controls remain simple
-The endpoint SHALL enforce strict media type, body size, DNI format, bounded timeout, active-request deduplication, and in-progress attempt deduplication. The change MUST NOT introduce an in-memory per-IP limiter presented as a production control; final distributed rate limiting and perimeter controls SHALL remain documented for a later infrastructure decision.
+The endpoint SHALL enforce Google reCAPTCHA v2 Checkbox verification, strict media type, bounded body and token size, DNI format, bounded external timeouts, active-request deduplication, and in-progress attempt deduplication. The change MUST NOT introduce an in-memory per-IP limiter presented as a production control, fingerprinting, automatic CAPTCHA retries or a circuit breaker used only by this integration; final distributed rate limiting and perimeter controls SHALL remain documented for a later infrastructure decision.
 
-#### Scenario: Automated duplicate burst targets one DNI
-- **WHEN** multiple equivalent submissions overlap
-- **THEN** validation, database serialization, and in-progress conflict handling prevent multiplication of active requests and provider calls
+#### Scenario: Automated submission lacks accepted CAPTCHA
+- **WHEN** a client submits valid-looking DNI data without evidence accepted by the backend
+- **THEN** no request, availability attempt or provider call is created
+
+#### Scenario: Automated duplicate burst has accepted CAPTCHA
+- **WHEN** multiple equivalent submissions overlap after valid anti-bot verification
+- **THEN** frontend guarding, database serialization, and in-progress conflict handling prevent multiplication of active requests and availability-provider calls
 
 ### Requirement: Functional contract remains synchronized
-The OpenAPI document SHALL describe initiation of a new request and certificate-existence query, the normalized availability response, numeric `requestId`, correlation header, and every expected common error. It MUST NOT expose `eligibilityResult`, a raw provider boolean, a certificate collection, count, order number, creation date or UUID. Frontend generated types SHALL be regenerated from that document and contract drift checks SHALL remain mandatory.
+The OpenAPI document SHALL describe initiation of a new request and certificate-existence query, required `recaptchaToken`, the normalized availability response, numeric `requestId`, correlation header, and every expected common and CAPTCHA error. It MUST NOT expose token examples containing real evidence, the backend secret, `eligibilityResult`, a raw provider boolean, a certificate collection, count, order number, creation date or UUID. Frontend generated types SHALL be regenerated from that document and contract drift checks SHALL remain mandatory.
 
 #### Scenario: Initial contract is inspected
 - **WHEN** the OpenAPI operation and schemas are reviewed
-- **THEN** they clearly identify existence-only semantics and contain no certificate-level response property
+- **THEN** they require CAPTCHA evidence, identify existence-only semantics and contain no secret, reusable token or certificate-level response property
 
 #### Scenario: Generated contract is stale
-- **WHEN** the snapshot or TypeScript declarations retain the old eligibility field or detailed certificate data
+- **WHEN** the snapshot or TypeScript declarations omit `recaptchaToken`, retain the old eligibility field or include detailed certificate data
 - **THEN** contract verification fails
 
 ### Requirement: End-to-end behavior is verified at appropriate layers
@@ -255,3 +262,18 @@ A new initiation SHALL be rejected while the same DNI has a live eligibility cal
 #### Scenario: Prior revocation becomes terminal
 - **WHEN** the previous operation reaches a confirmed terminal result and the citizen initiates again
 - **THEN** a new request is allowed and historical operation and constancia rows remain unchanged
+
+### Requirement: Positive availability creates only a current-browser identity handoff
+The initial query SHALL treat `AVAILABLE` as permission to begin identity verification, not as verified identity or authorization for certificate listing. Its successful response SHALL establish the short-lived current-browser continuation required by the identity step, and the frontend SHALL navigate to `/verificacion-identidad` without DNI, request ID or certificate data in the URL.
+
+#### Scenario: Availability is positive
+- **WHEN** the protected initial query returns `AVAILABLE`
+- **THEN** the browser can enter the identity page but cannot access the post-authentication listing boundary
+
+#### Scenario: Availability is not positive
+- **WHEN** the initial result is negative, inconclusive or technical failure
+- **THEN** no identity continuation is established and ID Perú cannot be started
+
+#### Scenario: Continuation is copied to another browser
+- **WHEN** a citizen opens the identity route elsewhere without the HttpOnly continuation
+- **THEN** the prior request is not recovered and the initial query must be repeated

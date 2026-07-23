@@ -14,6 +14,8 @@ springdoc:
     enabled: false
 
 app:
+  frontend-base-url: http://localhost:3000
+  backend-base-url: http://localhost:8080
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   availability:
@@ -23,6 +25,10 @@ app:
       simulated-timeout: 300ms
   recaptcha:
     mode: mock
+  id-peru:
+    mode: mock
+    flow-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    mock-scenario: MATCH
 
 server:
   port: 0

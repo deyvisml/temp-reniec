@@ -143,15 +143,19 @@ The backend SHALL retain concise local instructions for MySQL, build, tests, hea
 - **THEN** the second service is identified as future work and no invented endpoint or environment variable is presented as current
 
 ### Requirement: Technical-foundation-only boundary
-The backend foundation MAY contain MySQL, Flyway, Testcontainers, the corrected seven-table cancellation-request model, forward migrations through the availability correction, the versioned technical API, local MySQL Compose, Swagger/OpenAPI and the initial certificate-availability endpoint specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, recovery windows or speculative guards; containerize the applications; implement JWT, ID Perú, the post-authentication listing service, its contract or attempt table, selection UI or endpoint, real revocation execution, document generation, production deployment, administration, microservices, queues, event sourcing, CQRS, another database or unused layers.
+The backend foundation MAY contain MySQL, Flyway, Testcontainers, the corrected seven-table cancellation-request model, forward migrations through the availability correction, the versioned technical API, local MySQL Compose, Swagger/OpenAPI, the initial certificate-availability endpoint specified by `citizen-eligibility-entry`, and the Google reCAPTCHA v2 verification adapter specified by `initial-query-recaptcha-protection`. It MUST NOT persist CAPTCHA evidence or request sessions, add recovery windows or speculative guards, containerize the applications, implement JWT, ID Perú, the post-authentication listing service, its contract or attempt table, selection UI or endpoint, real revocation execution, document generation, production deployment, administration, microservices, queues, event sourcing, CQRS, another database or unused layers.
 
-#### Scenario: Completed correction is reviewed for scope
-- **WHEN** migration history, JPA model, routes, gateway, OpenAPI, frontend contract and dependencies are inspected
-- **THEN** the existing foundation contains an existence-only first service and preserves the certificate table for later listing without implementing that listing or adding a dependency
+#### Scenario: Protected foundation is reviewed for scope
+- **WHEN** routes, configuration, ports, adapters, OpenAPI, frontend contract and dependencies are inspected
+- **THEN** the foundation validates CAPTCHA before the existence-only first service and preserves the certificate table for later listing without implementing any later flow
 
-#### Scenario: Dependency set is reviewed
-- **WHEN** Maven and npm dependency declarations are compared before and after the change
-- **THEN** no new runtime or preventive dependency was added for the service separation
+#### Scenario: Backend dependency set is reviewed
+- **WHEN** Maven dependencies are compared before and after the change
+- **THEN** Google verification uses Spring HTTP functionality already provided by the web starter and adds no preventive resilience, security or CAPTCHA SDK dependency
+
+#### Scenario: Persistence schema is reviewed
+- **WHEN** Flyway migrations and JPA entities are compared before and after the change
+- **THEN** no table or column was added for CAPTCHA tokens, responses, IP addresses or challenge metadata
 
 ### Requirement: Development-only Swagger UI exposure
 The backend SHALL provide Swagger UI at the documented path when the `local` profile is active and SHALL keep Swagger UI and OpenAPI disabled in common configuration. The test profile SHALL expose the machine-readable OpenAPI document for automated verification while keeping the interactive UI disabled unless a dedicated test explicitly enables it. This change MUST NOT define production exposure.
@@ -167,3 +171,40 @@ The backend SHALL provide Swagger UI at the documented path when the `local` pro
 #### Scenario: Automated contract tests run
 - **WHEN** the backend test profile executes documentation tests
 - **THEN** `/v3/api-docs` is available to the tests and Swagger UI remains disabled except in the isolated UI availability test
+
+### Requirement: ID Perú configuration is external, validated and environment-specific
+The backend SHALL bind typed ID Perú and flow-authorization properties for mode, credentials, provider URIs, issuer, redirect/return URIs, authentication mechanism, max age, Referer, timeouts, artifact TTLs, allowed algorithms and internal cryptographic keys. Real mode SHALL fail closed on missing or unsafe values; examples and documentation SHALL contain placeholders only.
+
+#### Scenario: Local mock starts with no institutional credentials
+- **WHEN** the local profile selects mock mode
+- **THEN** the backend starts with deterministic fictitious configuration and makes no call to ID Perú
+
+#### Scenario: Real mode is incomplete
+- **WHEN** a mandatory secret, registered URI, issuer, mechanism or cryptographic key is absent
+- **THEN** startup or identity initialization fails with a controlled non-secret configuration message
+
+#### Scenario: Production selects unsafe mode or URI
+- **WHEN** production uses mock mode or a non-HTTPS provider endpoint
+- **THEN** configuration is rejected
+
+### Requirement: Maintained JOSE support is minimal and centralized
+The backend SHALL use one maintained JOSE/JWT dependency compatible with its Spring Boot version and centralize ID Perú JWT validation and flow-token signing/verification. It MUST NOT add an OAuth authorization server, broad security framework features, multiple competing JWT libraries or custom RSA parsing when the chosen library supports the requirement.
+
+#### Scenario: Dependencies are reviewed
+- **WHEN** the backend dependency tree is inspected
+- **THEN** it contains only the minimal JOSE/security modules justified by provider and cookie-token validation
+
+#### Scenario: Invalid algorithm is received
+- **WHEN** a JWT advertises `none` or an unapproved algorithm
+- **THEN** the centralized validator rejects it before claim access
+
+### Requirement: Security filters protect only declared flow boundaries
+The backend SHALL leave public only the endpoints required for initial query, ID Perú initiation/callback, health and environment-appropriate API documentation, while requiring the proper continuation or verified-flow purpose for identity state and future post-authentication APIs. Cookie-authenticated mutations SHALL also validate an allowed request origin.
+
+#### Scenario: Public callback arrives from ID Perú
+- **WHEN** the provider posts to the registered callback without a browser continuation cookie
+- **THEN** the callback can resolve and validate the attempt by state without opening other protected APIs
+
+#### Scenario: Cross-origin mutation uses a valid cookie
+- **WHEN** a disallowed Origin submits a cookie-authenticated mutation
+- **THEN** the request is rejected despite the cookie

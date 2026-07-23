@@ -3,7 +3,6 @@
 ## Purpose
 
 Define the reusable, versioned, observable, and tested technical communication between the Next.js frontend, Spring Boot backend, and MySQL.
-
 ## Requirements
 ### Requirement: Versioned technical integration API
 The backend SHALL reserve `/api/v1` for application APIs and SHALL expose `GET /api/v1/system/status` as the only new application endpoint in this change. A successful response SHALL use HTTP 200 JSON containing controlled `status`, `database`, and UTC `timestamp` fields, and MUST NOT expose database coordinates, credentials, schema details, queries, versions, personal data, or internal implementation information.
@@ -88,15 +87,19 @@ The central frontend client SHALL use native `fetch`, SHALL choose server-only `
 - **THEN** the client reports `NETWORK_ERROR` or `INVALID_RESPONSE` with a generic message and no native exception detail
 
 ### Requirement: Functional eligibility contract uses the shared transport
-The initial certificate-availability client SHALL use the centralized JSON transport, environment-based backend URL, credentials mode, timeout, abort handling, correlation propagation and common error mapping. Request and response types SHALL come from generated OpenAPI declarations. The client MUST NOT accept or synthesize certificate collections and MUST preserve the distinction between confirmed absence and transport or service failure.
+The initial certificate-availability client SHALL use the centralized JSON transport, environment-based backend URL, credentials mode, timeout, abort handling, correlation propagation and common error mapping. Request and response types SHALL come from generated OpenAPI declarations. Each submission SHALL include the current in-memory `recaptchaToken` with the DNI, while the client MUST NOT persist or log that token, accept or synthesize certificate collections, or lose the distinction between CAPTCHA failure, confirmed certificate absence and transport/service failure.
 
 #### Scenario: Availability request succeeds
-- **WHEN** the frontend submits a valid DNI and the backend returns `AVAILABLE` or `NOT_AVAILABLE`
-- **THEN** the client returns typed availability data and correlation without duplicating transport behavior or exposing certificate details
+- **WHEN** the frontend submits a valid DNI and current CAPTCHA token and the backend returns `AVAILABLE` or `NOT_AVAILABLE`
+- **THEN** the client returns typed availability data and correlation without duplicating transport behavior, retaining the token or exposing certificate details
 
-#### Scenario: Availability request fails
-- **WHEN** the backend returns a controlled error, times out, sends invalid JSON or cannot be reached
-- **THEN** the shared transport produces the established typed error and the feature does not map it to `NOT_AVAILABLE`
+#### Scenario: CAPTCHA request fails
+- **WHEN** the backend returns a controlled CAPTCHA rejection, expiration, timeout, unavailability or invalid-response error
+- **THEN** the shared transport preserves the stable code and correlation so the feature resets the widget and does not invoke or infer an availability outcome
+
+#### Scenario: Availability transport fails
+- **WHEN** the backend returns another controlled error, times out, sends invalid JSON or cannot be reached
+- **THEN** the shared transport produces the established typed error and the feature maps it neither to CAPTCHA success nor `NOT_AVAILABLE`
 
 ### Requirement: Layered and real integration verification
 The project SHALL retain fast infrastructure-free backend and frontend suites and separate verification for OpenAPI and MySQL integration. Documentation tests SHALL verify the availability operation metadata, DTO fields, allowed values, validation constraints, correlation and errors. Testcontainers SHALL verify real availability persistence with zero certificate rows. The frontend contract check SHALL compare the committed OpenAPI snapshot and generated TypeScript types with the backend document.
@@ -141,3 +144,36 @@ No new or modified endpoint SHALL be considered complete unless its OpenAPI oper
 #### Scenario: Future listing endpoint is introduced
 - **WHEN** a later increment implements the post-authentication certificate list
 - **THEN** that increment adds its own operation and schemas rather than extending the unauthenticated initial response
+
+### Requirement: Identity API contracts are versioned and synchronized
+The backend SHALL expose versioned contracts for starting identity verification, processing the provider callback, reading current identity state and invalidating local authorization. OpenAPI SHALL document request/response models, form fields, cookies, status codes and normalized errors, and generated TypeScript types SHALL be regenerated from the validated contract.
+
+#### Scenario: Developer inspects Swagger UI
+- **WHEN** the identity API group is opened
+- **THEN** each operation, state, field, cookie effect and principal error is described without exposing secrets or suggesting nonexistent security mechanisms
+
+#### Scenario: Contract generation runs
+- **WHEN** OpenAPI changes are accepted
+- **THEN** frontend generated types match the backend and handwritten duplicate DTOs are not introduced
+
+### Requirement: Frontend HTTP supports secure credential continuity
+The centralized HTTP client SHALL support `credentials: include` for same-project identity and protected-flow calls, retain correlation identifiers and existing JSON/error handling, and handle the provider callback only through browser navigation. It MUST NOT attempt to read, copy or persist the HttpOnly cookie.
+
+#### Scenario: Identity start succeeds
+- **WHEN** the frontend calls the start endpoint with a valid continuation cookie
+- **THEN** it receives only the authorization URL and correlation-safe response data before navigating
+
+#### Scenario: Protected call is unauthorized
+- **WHEN** the cookie is absent, invalid, expired or revoked
+- **THEN** the client maps the standard API error to a controlled restart message without exposing raw token details
+
+### Requirement: Identity integration errors remain normalized
+Provider rejection, cancellation, mismatch, expired/replayed state, invalid callback, token failure, JWT failure, timeout, unavailability, invalid configuration and unauthorized flow access SHALL use stable backend codes and the existing common error envelope. Provider payloads and exceptions MUST NOT be returned to the browser.
+
+#### Scenario: Provider service times out
+- **WHEN** a real token, userinfo or JWKS call exceeds its timeout
+- **THEN** the client receives a stable temporary-error code, timestamp, path and correlation ID but no endpoint credentials or token material
+
+#### Scenario: Identity differs
+- **WHEN** the authenticated DNI does not match the request
+- **THEN** the client receives a dedicated controlled outcome without either DNI value

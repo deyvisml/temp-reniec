@@ -42,5 +42,5 @@
 
 - [x] 6.1 Probar lógica del formulario y wrapper con dobles controlados para widget pendiente, token válido, expiración, error de script, configuración ausente, reset después del uso y doble envío.
 - [x] 6.2 Probar el contrato cliente para envío conjunto DNI/token, errores anti-bot, descarte de evidencia y conservación de resultados positivos, negativos e inconclusos de SPEC-10.
-- [ ] 6.3 Comprobar manualmente el widget real con las claves oficiales de prueba, navegación por teclado, foco, tamaños móvil/escritorio y reinicio tras cada intento.
+- [x] 6.3 Comprobar manualmente el widget real con las claves oficiales de prueba, navegación por teclado, foco, tamaños móvil/escritorio y reinicio tras cada intento.
 - [x] 6.4 Ejecutar pruebas Maven rápidas y completas con Testcontainers, pruebas Vitest, typecheck, build Next.js, sincronización OpenAPI, comprobación de contrato, validación OpenSpec estricta y `git diff --check`.

@@ -134,6 +134,70 @@
         ],
         "type": "object"
       },
+      "CurrentIdentityResponse": {
+        "properties": {
+          "callbackOutcome": {
+            "description": "Resultado efímero del último callback, consumido una sola vez para presentación.",
+            "enum": [
+              "CANCELLED",
+              "REJECTED",
+              "IDENTITY_MISMATCH",
+              "EXPIRED",
+              "TIMEOUT",
+              "UNAVAILABLE",
+              "ERROR"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canContinue": {
+            "description": "Indica si la autorización temporal permite continuar.",
+            "type": "boolean"
+          },
+          "nextStep": {
+            "description": "Siguiente paso autorizado.",
+            "enum": [
+              "IDENTITY_VERIFICATION",
+              "CERTIFICATE_SELECTION"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "description": "Estado normalizado del intento de identidad.",
+            "enum": [
+              "STARTED",
+              "VERIFIED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED",
+              "IDENTITY_MISMATCH",
+              "ERROR"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "canContinue",
+          "nextStep",
+          "status"
+        ],
+        "type": "object"
+      },
+      "IdentityStartResponse": {
+        "properties": {
+          "authorizationUrl": {
+            "description": "URL de autorización construida por el backend.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorizationUrl"
+        ],
+        "type": "object"
+      },
       "StartCancellationRequest": {
         "description": "Datos requeridos para iniciar una nueva solicitud y consultar si existen certificados disponibles.",
         "properties": {
@@ -185,13 +249,21 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "FlowCookie": {
+        "description": "Continuidad temporal HttpOnly emitida por el backend; no es una sesión permanente.",
+        "in": "cookie",
+        "name": "cancelacion_flow",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
     "contact": {
       "name": "RENIEC"
     },
-    "description": "API institucional para consultar la existencia de certificados disponibles e iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox; no se documentan autenticación ni autorización todavía inexistentes.",
+    "description": "API institucional para iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox y la autenticación usa ID Perú con continuidad temporal HttpOnly.",
     "title": "API de cancelación de certificados digitales",
     "version": "v1"
   },
@@ -440,6 +512,195 @@
         ]
       }
     },
+    "/api/v1/identity-verifications": {
+      "post": {
+        "description": "Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
+        "operationId": "startIdentityVerification",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityStartResponse"
+                }
+              }
+            },
+            "description": "URL de autorización preparada"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Continuidad ausente o inválida"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "La verificación no puede iniciarse en el estado actual"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Integración no disponible"
+          }
+        },
+        "security": [
+          {
+            "FlowCookie": []
+          }
+        ],
+        "summary": "Inicia la autenticación con ID Perú",
+        "tags": [
+          "Verificación de identidad"
+        ]
+      }
+    },
+    "/api/v1/identity-verifications/current": {
+      "get": {
+        "description": "Resuelve el intento desde la cookie HttpOnly, valida la autorización y consume el resultado de presentación del callback.",
+        "operationId": "getCurrentIdentityVerification",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentIdentityResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowCookie": []
+          }
+        ],
+        "summary": "Consulta el estado de autenticación actual",
+        "tags": [
+          "Verificación de identidad"
+        ]
+      }
+    },
+    "/api/v1/identity-verifications/logout": {
+      "post": {
+        "description": "Invalida el jti persistido y elimina la cookie; no inventa un contrato de logout remoto.",
+        "operationId": "logoutIdentityVerification",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowCookie": []
+          }
+        ],
+        "summary": "Invalida la autorización temporal local",
+        "tags": [
+          "Verificación de identidad"
+        ]
+      }
+    },
+    "/api/v1/idperu/callback": {
+      "get": {
+        "description": "Recibe el retorno del navegador, valida el intento y siempre redirige con HTTP 303 a una ruta frontend fija.",
+        "operationId": "handleIdentityCallbackGet",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Retorno procesado y redirección controlada"
+          }
+        },
+        "summary": "Procesa el retorno GET de ID Perú",
+        "tags": [
+          "Verificación de identidad"
+        ]
+      },
+      "post": {
+        "description": "Recibe el formulario del proveedor, aplica el mismo caso de uso y siempre redirige con HTTP 303 a una ruta frontend fija.",
+        "operationId": "handleIdentityCallbackPost",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "session_state": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "303": {
+            "description": "Retorno procesado y redirección controlada"
+          }
+        },
+        "summary": "Procesa el retorno POST de ID Perú",
+        "tags": [
+          "Verificación de identidad"
+        ]
+      }
+    },
     "/api/v1/system/status": {
       "get": {
         "description": "Ejecuta una comprobación ligera y actual de MySQL. No devuelve credenciales, coordenadas de conexión ni detalles internos.",
@@ -526,6 +787,10 @@
     {
       "description": "Inicio de solicitudes y consulta de disponibilidad de certificados.",
       "name": "Solicitudes de cancelación"
+    },
+    {
+      "description": "Inicio, callback, estado e invalidación temporal de ID Perú.",
+      "name": "Verificación de identidad"
     },
     {
       "description": "Disponibilidad operativa del backend y sus dependencias.",

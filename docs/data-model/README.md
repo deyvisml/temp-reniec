@@ -2,7 +2,7 @@
 
 > La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica atómica ejecutada como consecuencia de la confirmación de dicha solicitud.
 
-Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V5. El modelo efectivo contiene una tabla raíz y seis tablas relacionadas: siete tablas y 80 columnas de dominio. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
+Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V6. El modelo efectivo mantiene siete tablas; V6 amplía `identity_verification` con seguridad temporal de ID Perú sin crear una tabla de sesiones. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
 
 ## Diagrama entidad-relación
 
@@ -26,7 +26,7 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 | `certificate_cancellation_request` | Estado y progreso actual del trámite ciudadano. | Es la raíz conceptual y fuente directa del progreso. |
 | `certificate_availability_check` | Cada consulta inicial que determina únicamente si existen certificados disponibles. | Una consulta puede fallar o repetirse y no contiene datos individuales. |
 | `cancellation_request_certificate` | Cada emisión vigente que obtendrá el futuro segundo servicio después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
-| `identity_verification` | Cada intento de autenticación con ID Perú. | La verificación puede cancelarse, fallar o repetirse. |
+| `identity_verification` | Cada intento de autenticación con ID Perú, su state hasheado, PKCE protegido y autorización temporal hasheada. | La verificación puede cancelarse, fallar o repetirse sin guardar códigos ni tokens. |
 | `revocation_operation` | Cada ejecución técnica idempotente y atómica de revocación. | Conserva el único resultado técnico del conjunto confirmado. |
 | `cancellation_receipt` | Generación y disponibilidad de la constancia. | Su falla no cambia una revocación ya confirmada. |
 | `cancellation_audit_event` | Trazabilidad cronológica mínima. | Conserva hechos relevantes sin implementar event sourcing. |
@@ -113,8 +113,9 @@ Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso,
 - `V3__add_spanish_schema_comments.sql` documenta en español las ocho tablas y 95 columnas existentes en V3.
 - `V4__enforce_atomic_certificate_revocation.sql` elimina `certificate_revocation_result` y las dos claves candidatas que solo soportaban sus relaciones.
 - `V5__separate_certificate_availability_from_listing.sql` renombra la consulta y el resultado iniciales a disponibilidad, convierte valores heredados inequívocos y elimina de los certificados la relación incorrecta con el primer intento.
-- Una base vacía ejecuta V1 a V5 y termina con siete tablas y 80 columnas de dominio.
-- Una base existente en V4 ejecuta V5 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
+- `V6__add_id_peru_identity_security.sql` agrega modo, hash/expiración/consumo de state, verifier PKCE cifrado temporalmente, referencias técnicas y hash/vigencia/invalidez de la autorización.
+- Una base vacía ejecuta V1 a V6 y termina con las mismas siete tablas.
+- Una base existente en V5 ejecuta V6 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
 
 Flyway no revierte migraciones automáticamente. Cualquier cambio posterior requiere una nueva migración hacia adelante.
 

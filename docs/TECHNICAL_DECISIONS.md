@@ -43,9 +43,14 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 ## Integraciones y alcance
 
 - Las integraciones externas se definirán mediante interfaces y usarán mocks reemplazables mientras no existan contratos oficiales.
+- La integración ID Perú se rige por el PDF aprobado v1.2 conservado en `docs/integrations/id-peru/`; toda modificación de autenticación, PKCE, tokens, datos del ciudadano, JWKS o logout debe revisarlo previamente.
+- ID Perú utilizará OAuth 2.0/OpenID Connect Authorization Code con PKCE S256. El backend controlará `state`, PKCE, códigos, tokens, validación criptográfica y comparación del DNI.
+- Existirán adaptadores real y simulado seleccionados por configuración. Producción no podrá iniciar con el simulador y el modo real fallará de forma cerrada si falta configuración institucional.
+- Después de validar la identidad se emitirá una autorización temporal mediante cookie `HttpOnly`, ligada a la solicitud actual y validada contra `identity_verification`; no habrá tabla de sesiones, refresh tokens ni recuperación de trámites anteriores.
+- El flujo ciudadano utiliza `/cancelacion` como única URL canónica. Los pasos se resuelven mediante estado controlado y contexto temporal del backend, sin codificar el paso, DNI, identificador de solicitud, certificados o resultados de autenticación en la URL.
 - La consulta pública inicial está protegida por Google reCAPTCHA v2 Checkbox. El frontend conserva el token solo en memoria y el backend lo valida mediante un puerto antes de persistir o consultar disponibilidad.
 - La integración Google usa `RestClient`, timeout acotado y allowlist exacta de hostnames. No persiste CAPTCHA, IP ni payloads, y no incorpora reintentos, circuit breaker, fingerprinting o rate limiting en memoria.
-- No se inventarán contratos para ID Perú, la consulta de certificados ni la revocación.
+- No se inventarán contratos para la consulta de certificados, la revocación o aspectos de ID Perú no definidos en el PDF y el convenio, como parámetros de logout remoto.
 - No se incluirán módulos administrativos ni funcionalidades fuera del flujo ciudadano.
 
 Los modelos definitivos, contratos externos y detalles de implementación se decidirán en cambios posteriores cuando exista información validada.

@@ -4,7 +4,7 @@ spring:
       on-profile: local
     import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:cancelacion_certificados}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3308}/${DB_NAME:cancelacion_certificados}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
@@ -19,6 +19,8 @@ springdoc:
     try-it-out-enabled: true
 
 app:
+  frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  backend-base-url: ${APP_BACKEND_BASE_URL:http://localhost:${SERVER_PORT:8080}}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   availability:
@@ -33,6 +35,15 @@ app:
       verify-uri: ${RECAPTCHA_VERIFY_URI:https://www.google.com/recaptcha/api/siteverify}
       timeout: ${RECAPTCHA_TIMEOUT:3s}
       allowed-hostnames: ${RECAPTCHA_ALLOWED_HOSTNAMES:localhost}
+  id-peru:
+    mode: ${ID_PERU_MODE:mock}
+    version: v1
+    frontend-return-path: /autorizacion
+    client-id: ${ID_PERU_CLIENT_ID:}
+    client-secret: ${ID_PERU_CLIENT_SECRET:}
+    referer: ${ID_PERU_REFERER:http://localhost:3000/autorizacion}
+    flow-secret: ${ID_PERU_FLOW_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+    mock-scenario: ${ID_PERU_MOCK_SCENARIO:MATCH}
 
 logging:
   level:
