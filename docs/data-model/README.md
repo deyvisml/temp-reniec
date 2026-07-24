@@ -2,7 +2,7 @@
 
 > La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica atómica ejecutada como consecuencia de la confirmación de dicha solicitud.
 
-Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V6. El modelo efectivo mantiene siete tablas; V6 amplía `identity_verification` con seguridad temporal de ID Perú sin crear una tabla de sesiones. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
+Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V7. El modelo efectivo mantiene ocho tablas. V7 incorpora una única sesión transaccional por solicitud activa y retira de `identity_verification` los campos de autorización temporal reemplazados. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
 
 ## Diagrama entidad-relación
 
@@ -11,6 +11,7 @@ erDiagram
     certificate_cancellation_request ||--o{ certificate_availability_check : "consulta existencia"
     certificate_cancellation_request ||--o{ cancellation_request_certificate : "conserva certificados"
     certificate_cancellation_request ||--o{ identity_verification : "registra intentos"
+    certificate_cancellation_request ||--o| cancellation_flow_session : "mantiene sesión activa"
     certificate_cancellation_request ||--o{ revocation_operation : "origina"
     certificate_cancellation_request ||--o{ cancellation_receipt : "conserva constancias"
     revocation_operation ||--o{ cancellation_receipt : "sustenta"
@@ -19,14 +20,15 @@ erDiagram
 
 Las claves primarias son internas, numéricas y no constituyen autorización. Las claves foráneas no usan eliminación en cascada.
 
-## Responsabilidad de las siete tablas
+## Responsabilidad de las ocho tablas
 
 | Tabla | Responsabilidad | Justificación |
 | --- | --- | --- |
 | `certificate_cancellation_request` | Estado y progreso actual del trámite ciudadano. | Es la raíz conceptual y fuente directa del progreso. |
 | `certificate_availability_check` | Cada consulta inicial que determina únicamente si existen certificados disponibles. | Una consulta puede fallar o repetirse y no contiene datos individuales. |
 | `cancellation_request_certificate` | Cada emisión vigente que obtendrá el futuro segundo servicio después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
-| `identity_verification` | Cada intento de autenticación con ID Perú, su state hasheado, PKCE protegido y autorización temporal hasheada. | La verificación puede cancelarse, fallar o repetirse sin guardar códigos ni tokens. |
+| `identity_verification` | Cada intento de autenticación con ID Perú, su state hasheado y PKCE protegido. | La verificación puede cancelarse, fallar o repetirse sin guardar códigos ni tokens. |
+| `cancellation_flow_session` | Sesión transaccional única de la solicitud activa, estado, familia y hashes de refresh. | Permite recargas y renovación segura sin recuperar trámites históricos ni guardar tokens en texto plano. |
 | `revocation_operation` | Cada ejecución técnica idempotente y atómica de revocación. | Conserva el único resultado técnico del conjunto confirmado. |
 | `cancellation_receipt` | Generación y disponibilidad de la constancia. | Su falla no cambia una revocación ya confirmada. |
 | `cancellation_audit_event` | Trazabilidad cronológica mínima. | Conserva hechos relevantes sin implementar event sourcing. |
@@ -68,7 +70,7 @@ No existe `certificate_revocation_result`: duplicar un resultado común por cada
 ## Estados controlados
 
 - Consulta inicial: `STARTED`, `CHECKING_AVAILABILITY`, `NO_CERTIFICATES_AVAILABLE` y `PENDING_IDENTITY_VERIFICATION`.
-- Etapa autenticada y selección futura: `IDENTITY_VERIFIED`, `AUTHENTICATED_PENDING_CERTIFICATE_LIST`, `CERTIFICATES_AVAILABLE` y `CERTIFICATES_SELECTED`.
+- Etapa autenticada y selección: `IDENTITY_VERIFIED`, `AUTHENTICATED_PENDING_CERTIFICATE_LIST`, `CHECKING_CERTIFICATE_LIST`, `NO_CERTIFICATES_AVAILABLE`, `CERTIFICATES_AVAILABLE` y `CERTIFICATES_SELECTED`.
 - Etapas posteriores: `REVOCATION_IN_PROGRESS`, `REVOCATION_SUCCEEDED`, `REVOCATION_FAILED`, `REVOCATION_OUTCOME_UNKNOWN`, `COMPLETED`, `FAILED`, `OUTCOME_UNKNOWN`, `RECEIPT_AVAILABLE` y `ABANDONED`.
 - Disponibilidad: `AVAILABLE`, `NO_LONGER_AVAILABLE`, `REVOCATION_PENDING`, `REVOKED`, `REVOCATION_FAILED` y `OUTCOME_UNKNOWN`.
 - Resultado de operación: `SUCCEEDED`, `FAILED` y `OUTCOME_UNKNOWN`.
@@ -84,6 +86,8 @@ Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas 
 - Los índices permiten listar certificados por solicitud, consultar seleccionados o disponibles y recuperar intentos e historial.
 - `@Version` protege la fila de certificado que puede modificarse concurrentemente antes de confirmar.
 - Un conflicto de versión se rechaza para que el caso de uso recargue el estado; no hay reintentos automáticos generales.
+- La reserva `CHECKING_CERTIFICATE_LIST` evita llamadas simultáneas al segundo servicio. Si una ejecución queda interrumpida, una reserva vencida puede recuperarse; un fallo técnico vuelve a `AUTHENTICATED_PENDING_CERTIFICATE_LIST`.
+- La respuesta externa se valida completa antes de insertar. Una lista vacía conserva cero filas y una lista válida se guarda de manera atómica con unicidad `(request_id, certificate_uuid)`.
 - Finalizar conserva certificados, selecciones, operaciones, constancias y auditoría. El borrado físico queda restringido mientras exista historial relacionado.
 
 ## Datos y seguridad
@@ -104,7 +108,7 @@ Cada envío del DNI desde la página de inicio representa una intención nueva. 
 2. Si la solicitud anterior es terminal, conserva su historial y crea otra solicitud.
 3. Si existe una consulta en curso, una revocación confirmada activa o un resultado incierto, bloquea temporalmente el nuevo inicio para evitar duplicidades.
 
-Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso, certificados, selección o constancia. No existe `cancellation_request_session` ni persistencia por navegador o dispositivo.
+Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso, certificados, selección o constancia. `cancellation_flow_session` mantiene únicamente la operación actual y se invalida al cerrar sesión; no representa recuperación multidispositivo ni historial de sesiones.
 
 ## Migraciones Flyway
 
@@ -114,8 +118,9 @@ Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso,
 - `V4__enforce_atomic_certificate_revocation.sql` elimina `certificate_revocation_result` y las dos claves candidatas que solo soportaban sus relaciones.
 - `V5__separate_certificate_availability_from_listing.sql` renombra la consulta y el resultado iniciales a disponibilidad, convierte valores heredados inequívocos y elimina de los certificados la relación incorrecta con el primer intento.
 - `V6__add_id_peru_identity_security.sql` agrega modo, hash/expiración/consumo de state, verifier PKCE cifrado temporalmente, referencias técnicas y hash/vigencia/invalidez de la autorización.
-- Una base vacía ejecuta V1 a V6 y termina con las mismas siete tablas.
-- Una base existente en V5 ejecuta V6 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
+- `V7__add_citizen_flow_session.sql` crea la sesión transaccional y elimina de la verificación los campos de autorización que ya no son fuente de continuidad.
+- Una base vacía ejecuta V1 a V7 y termina con las mismas ocho tablas.
+- Una base existente en V6 ejecuta V7 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
 
 Flyway no revierte migraciones automáticamente. Cualquier cambio posterior requiere una nueva migración hacia adelante.
 
@@ -164,4 +169,4 @@ JOIN revocation_operation r ON r.id = c.revocation_operation_id
 WHERE c.request_id = 1;
 ```
 
-Los valores son ficticios. La integración real de revocación, la pantalla de selección y la generación de la constancia pertenecen a incrementos posteriores.
+Los valores son ficticios. La integración real del segundo servicio, la revocación y la generación de la constancia pertenecen a incrementos posteriores; la persistencia y pantalla de selección ya utilizan este modelo.

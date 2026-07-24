@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CertificateAvailabilityPort;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
@@ -32,6 +33,9 @@ class DocumentationDisabledByDefaultTests {
 
 	@MockitoBean
 	AvailabilityPersistenceCoordinator availabilityPersistenceCoordinator;
+
+	@MockitoBean
+	CertificateListingPersistenceCoordinator certificateListingPersistenceCoordinator;
 
 	@MockitoBean
 	CertificateAvailabilityPort certificateAvailabilityPort;

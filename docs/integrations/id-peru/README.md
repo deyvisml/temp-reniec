@@ -31,7 +31,7 @@ Se revisó en modo lectura `C:\FastFolder\sistema-autorizacion-certificados-reni
 
 Se reutilizan, adaptadas, la separación de proveedor real/simulado, propiedades tipadas, timeouts, `Referer`, hash de `state`, PKCE, cifrado de `vd`, JWKS y retorno controlado. Se descartan circuit breaker, reintentos generales, reconstrucción determinista del verifier y el modelo de sesiones de aquel dominio.
 
-Aquí el verifier es aleatorio, se protege temporalmente y se elimina al finalizar. La continuidad usa una cookie corta y una referencia hasheada en `identity_verification`, sin tabla de sesiones ni recuperación multidispositivo.
+Aquí el verifier es aleatorio, se protege temporalmente y se elimina al finalizar. El inicio exige la sesión transaccional activa y una verificación exitosa eleva esa misma sesión. `identity_verification` conserva el intento, no tokens ni una autorización paralela.
 
 El callback OAuth/OIDC permanece en el backend y usa uniformemente `/api/v1/idperu/callback`. En local resulta en `http://localhost:8080/api/v1/idperu/callback`; en producción se combina con la base HTTPS productiva. En local, el paso 1 se presenta y el callback retorna a `http://localhost:3000/autorizacion`; no se redirige después a `/cancelacion`. Producción presenta el paso y retorna directamente a `/cancelacion`. El resultado se obtiene desde el contexto temporal validado por el backend; no se incluyen códigos, tokens, DNI, identificadores ni estados en la URL.
 

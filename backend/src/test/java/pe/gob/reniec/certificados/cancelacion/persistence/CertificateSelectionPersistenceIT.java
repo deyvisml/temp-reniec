@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestResponse;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListResponse;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingService;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.CancellationRequestInitiationService;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFinalOutcome;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReasonCode;
@@ -54,6 +57,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	@Autowired RevocationOperationRepository operationRepository;
 	@Autowired CancellationReceiptRepository receiptRepository;
 	@Autowired CancellationRequestInitiationService cancellationRequestInitiationService;
+	@Autowired CertificateListingService certificateListingService;
 	@Autowired EntityManagerFactory entityManagerFactory;
 	@Autowired JdbcTemplate jdbcTemplate;
 
@@ -66,6 +70,85 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM identity_verification");
 		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
+	}
+
+	@Test
+	void listsPersistsAndConfirmsAnExactCertificateSelection() {
+		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000022");
+
+		CertificateListResponse listed = certificateListingService.list(request.getId(), "list-correlation");
+
+		assertThat(listed.requestStatus()).isEqualTo("CERTIFICATES_AVAILABLE");
+		assertThat(listed.certificates()).hasSize(3);
+		assertThat(certificateRepository.countByRequest_Id(request.getId())).isEqualTo(3);
+		String selectedUuid = listed.certificates().get(1).certificateUuid();
+
+		CertificateListResponse selected = certificateListingService.select(
+				request.getId(), List.of(selectedUuid), "selection-correlation");
+
+		assertThat(selected.requestStatus()).isEqualTo("CERTIFICATES_SELECTED");
+		assertThat(selected.selectedCount()).isEqualTo(1);
+		assertThat(certificateRepository.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(
+				request.getId())).extracting(CancellationRequestCertificateEntity::getCertificateUuid)
+				.containsExactly(selectedUuid);
+		assertThat(requestRepository.findById(request.getId())).get()
+				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
+				.isEqualTo(CancellationRequestStatus.CERTIFICATES_SELECTED);
+	}
+
+	@Test
+	void persistsEmptyResultWithoutInventingCertificates() {
+		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000020");
+
+		CertificateListResponse response = certificateListingService.list(request.getId(), "empty-correlation");
+
+		assertThat(response.certificates()).isEmpty();
+		assertThat(response.canContinue()).isFalse();
+		assertThat(certificateRepository.countByRequest_Id(request.getId())).isZero();
+		assertThat(requestRepository.findById(request.getId())).get()
+				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
+				.isEqualTo(CancellationRequestStatus.NO_CERTIFICATES_AVAILABLE);
+	}
+
+	@Test
+	void rejectsInvalidProviderDataAndRestoresTheRetryableState() {
+		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000023");
+
+		assertThatThrownBy(() -> certificateListingService.list(request.getId(), "invalid-correlation"))
+				.isInstanceOf(CertificateListingException.class)
+				.extracting(error -> ((CertificateListingException) error).reason())
+				.isEqualTo(CertificateListingException.Reason.INVALID_PROVIDER_RESPONSE);
+		assertThat(certificateRepository.countByRequest_Id(request.getId())).isZero();
+		assertThat(requestRepository.findById(request.getId())).get()
+				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
+				.isEqualTo(CancellationRequestStatus.AUTHENTICATED_PENDING_CERTIFICATE_LIST);
+	}
+
+	@Test
+	void rejectsUnknownAndDuplicateSelectionsAndAllowsReplacementBeforeConfirmation() {
+		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000022");
+		CertificateListResponse listed = certificateListingService.list(request.getId(), "selection-rules");
+		String uuid = listed.certificates().getFirst().certificateUuid();
+		String replacementUuid = listed.certificates().get(1).certificateUuid();
+
+		assertThatThrownBy(() -> certificateListingService.select(request.getId(), List.of(uuid, uuid), "duplicate"))
+				.isInstanceOf(CertificateListingException.class);
+		assertThatThrownBy(() -> certificateListingService.select(request.getId(),
+				List.of("00000000-0000-4000-8000-000000000099"), "unknown"))
+				.isInstanceOf(CertificateListingException.class);
+
+		certificateListingService.select(request.getId(), List.of(uuid), "confirmed");
+		assertThat(certificateListingService.select(request.getId(), List.of(uuid), "idempotent").selectedCount())
+				.isEqualTo(1);
+		CertificateListResponse replaced = certificateListingService.select(
+				request.getId(), List.of(replacementUuid), "replacement");
+		assertThat(replaced.selectedCount()).isEqualTo(1);
+		assertThat(replaced.certificates()).filteredOn(CertificateListResponse.CertificateItem::selected)
+				.extracting(CertificateListResponse.CertificateItem::certificateUuid)
+				.containsExactly(replacementUuid);
+		assertThatThrownBy(() -> certificateListingService.select(request.getId(),
+				List.of("00000000-0000-4000-8000-000000000099"), "changed"))
+				.isInstanceOf(CertificateListingException.class);
 	}
 
 	@Test
@@ -290,6 +373,14 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		CertificateCancellationRequestEntity request = requestRepository.saveAndFlush(
 				new CertificateCancellationRequestEntity(dni));
 		return new RequestFixture(request);
+	}
+
+	private CertificateCancellationRequestEntity identityVerifiedRequest(String dni) {
+		CertificateCancellationRequestEntity request = requestRepository.saveAndFlush(
+				new CertificateCancellationRequestEntity(dni));
+		request.recordAvailability(pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.IDENTITY_VERIFIED);
+		return requestRepository.saveAndFlush(request);
 	}
 
 	private CancellationRequestCertificateEntity certificate(RequestFixture fixture, String order,

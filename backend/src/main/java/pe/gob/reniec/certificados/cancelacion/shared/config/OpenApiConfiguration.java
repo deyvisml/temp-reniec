@@ -26,9 +26,12 @@ public class OpenApiConfiguration {
 
 	@Bean
 	OpenAPI cancellationCertificatesOpenApi() {
-		return new OpenAPI().components(new Components().addSecuritySchemes("FlowCookie",
+		return new OpenAPI().components(new Components().addSecuritySchemes("FlowSessionCookie",
 				new SecurityScheme().type(SecurityScheme.Type.APIKEY).in(SecurityScheme.In.COOKIE)
-						.name("cancelacion_flow").description("Continuidad temporal HttpOnly emitida por el backend; no es una sesión permanente.")))
+						.name("cancelacion_access").description("Access JWT de la sesión transaccional, transportado exclusivamente mediante cookie HttpOnly."))
+				.addSecuritySchemes("FlowRefreshCookie", new SecurityScheme().type(SecurityScheme.Type.APIKEY)
+						.in(SecurityScheme.In.COOKIE).name("cancelacion_refresh")
+						.description("Refresh JWT rotatorio, transportado exclusivamente mediante cookie HttpOnly.")))
 				.info(new Info()
 				.title("API de cancelación de certificados digitales")
 				.description("API institucional para iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox y la autenticación usa ID Perú con continuidad temporal HttpOnly.")
@@ -39,6 +42,8 @@ public class OpenApiConfiguration {
 								.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
 						new Tag().name("Verificación de identidad")
 								.description("Inicio, callback, estado e invalidación temporal de ID Perú."),
+						new Tag().name("Sesión del flujo").description("Consulta, renovación y cierre de la operación ciudadana activa."),
+						new Tag().name("Certificados vigentes").description("Listado autenticado y selección de certificados de la operación activa."),
 						new Tag().name("Estado técnico")
 								.description("Disponibilidad operativa del backend y sus dependencias.")));
 	}
@@ -51,6 +56,8 @@ public class OpenApiConfiguration {
 							.description("Inicio de solicitudes y consulta de disponibilidad de certificados."),
 					new Tag().name("Verificación de identidad")
 							.description("Inicio, callback, estado e invalidación temporal de ID Perú."),
+					new Tag().name("Sesión del flujo").description("Consulta, renovación y cierre de la operación ciudadana activa."),
+					new Tag().name("Certificados vigentes").description("Listado autenticado y selección de certificados de la operación activa."),
 					new Tag().name("Estado técnico")
 							.description("Disponibilidad operativa del backend y sus dependencias.")));
 			if (openApi.getPaths() == null || openApi.getPaths().get("/actuator/health") == null

@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
@@ -46,6 +47,9 @@ class BackendHttpIntegrationTests {
 
 	@MockitoBean
 	AvailabilityPersistenceCoordinator availabilityPersistenceCoordinator;
+
+	@MockitoBean
+	CertificateListingPersistenceCoordinator certificateListingPersistenceCoordinator;
 
 	private final HttpClient httpClient = HttpClient.newHttpClient();
 
@@ -172,8 +176,11 @@ class BackendHttpIntegrationTests {
 
 		assertThat(applicationPaths).containsExactlyInAnyOrder(
 				"/api/v1/system/status", "/api/v1/cancellation-requests",
+				"/api/v1/cancellation-requests/current/certificates",
+				"/api/v1/cancellation-requests/current/certificate-selection",
 				"/api/v1/identity-verifications", "/api/v1/idperu/callback",
-				"/api/v1/identity-verifications/current", "/api/v1/identity-verifications/logout",
+				"/api/v1/identity-verifications/current", "/api/v1/session/current",
+				"/api/v1/session/refresh", "/api/v1/session/logout",
 				"/api/v1/identity-verifications/mock/authorize");
 		applicationPaths.stream()
 				.filter(path -> !path.startsWith("/api/v1/identity-verifications/mock/"))
@@ -181,6 +188,8 @@ class BackendHttpIntegrationTests {
 
 		assertThat(document)
 				.contains("\"/actuator/health\"", "getSystemStatus", "initiateCancellationRequest",
+						"getCurrentRequestCertificates", "replaceCurrentCertificateSelection",
+						"CertificateListResponse", "CertificateSelectionRequest",
 						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
 						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
 						"ActuatorHealthResponse", "ApiError", "X-Correlation-ID",
@@ -190,12 +199,13 @@ class BackendHttpIntegrationTests {
 						"\"200\"", "\"400\"", "\"409\"", "\"415\"", "\"500\"",
 						"availabilityResult", "AVAILABLE", "NOT_AVAILABLE", "INCONCLUSIVE", "UNAVAILABLE", "ERROR",
 						"startIdentityVerification", "handleIdentityCallback", "getCurrentIdentityVerification",
-						"logoutIdentityVerification", "FlowCookie", "Verificación de identidad",
+						"getCurrentFlowSession", "refreshFlowSession", "logoutFlowSession",
+						"FlowSessionCookie", "FlowRefreshCookie", "Verificación de identidad", "Sesión del flujo",
 						"\"502\"", "\"503\"", "\"504\"")
 				.doesNotContain("/__test/", "/actuator/info", "/actuator/env",
 						"/api/v1/identity-verifications/mock/authorize",
 						"reused", "publicReference", "recupera una solicitud", "inicio o recuperación",
-						"eligibilityResult", "certificateUuid", "orderNumber", "emissionCreatedAt", "certificateCount",
+						"eligibilityResult", "certificateCount",
 						"00000001", "test-recaptcha-valid", "RECAPTCHA_SECRET_KEY", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");
 	}
 

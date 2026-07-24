@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityPersistenceCoordinator;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingPersistenceCoordinator;
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
@@ -34,6 +35,9 @@ class SwaggerUiAvailabilityTests {
 
 	@MockitoBean
 	AvailabilityPersistenceCoordinator availabilityPersistenceCoordinator;
+
+	@MockitoBean
+	CertificateListingPersistenceCoordinator certificateListingPersistenceCoordinator;
 
 	@LocalServerPort
 	private int port;

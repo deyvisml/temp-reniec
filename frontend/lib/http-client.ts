@@ -15,7 +15,10 @@ export type HttpResult<T> = {
 
 export type RequestJsonOptions = {
   timeoutMs?: number;
+  skipSessionRefresh?: boolean;
 };
+
+let refreshInFlight: Promise<void> | undefined;
 
 export class HttpClientError extends Error {
   readonly code: string;
@@ -90,6 +93,16 @@ export async function requestJson<T>(
   }
 
   const correlationId = response.headers.get(CORRELATION_HEADER) ?? undefined;
+  if (response.status === 401 && !options.skipSessionRefresh
+      && !path.endsWith("/api/v1/session/refresh")) {
+    try {
+      refreshInFlight ??= refreshSession().finally(() => { refreshInFlight = undefined; });
+      await refreshInFlight;
+      return requestJson<T>(path, init, { ...options, skipSessionRefresh: true });
+    } catch {
+      // The original standardized 401 is returned below.
+    }
+  }
   const body = await response.text();
   if (!body.trim()) {
     if (response.ok) return { data: undefined, correlationId };
@@ -122,6 +135,18 @@ export async function requestJson<T>(
   }
 
   return { data: payload as T, correlationId };
+}
+
+async function refreshSession(): Promise<void> {
+  const response = await fetch(new URL("/api/v1/session/refresh", resolveBackendUrl()), {
+    method: "POST", credentials: "include", headers: { [CORRELATION_HEADER]: crypto.randomUUID() },
+  });
+  if (response.ok) return;
+  if (response.status === 409) {
+    await new Promise(resolve => setTimeout(resolve, 180));
+    return;
+  }
+  throw new Error("Session refresh failed");
 }
 
 function clientError(code: string, message: string, status?: number, correlationId?: string) {

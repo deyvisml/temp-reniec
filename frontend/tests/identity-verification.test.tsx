@@ -42,6 +42,16 @@ describe("paso de verificación de identidad", () => {
     expect(markup).toContain('aria-busy="true"');
   });
 
+  it("permite volver a selección sin repetir ID Perú cuando la identidad ya fue verificada", () => {
+    const markup = renderToStaticMarkup(
+      <IdentityVerificationPanel identityVerified onContinue={() => undefined} />,
+    );
+
+    expect(markup).toContain("Continuar a selección de certificados");
+    expect(markup).not.toContain("Iniciar verificación facial con ID Perú");
+    expect(markup).toContain("Paso pendiente 2: Selección");
+  });
+
   it("normaliza únicamente resultados de callback permitidos", () => {
     expect(asIdentityCallbackOutcome("CANCELLED")).toBe("CANCELLED");
     expect(asIdentityCallbackOutcome("IDENTITY_MISMATCH")).toBe("IDENTITY_MISMATCH");
@@ -64,13 +74,11 @@ describe("paso de verificación de identidad", () => {
     expect(JSON.stringify(presentation)).not.toMatch(/state|code|token|session_state/i);
   });
 
-  it("presenta la transición mínima al paso 2 sin inventar certificados", () => {
-    const markup = renderToStaticMarkup(<CertificateSelectionTransition />);
+  it("inicia el paso 2 consultando los certificados sin inventar datos locales", () => {
+    const markup = renderToStaticMarkup(<CertificateSelectionTransition onBack={() => undefined} />);
 
-    expect(markup).toContain("PASO 2 DE 5");
-    expect(markup).toContain("Selección de certificados");
-    expect(markup).toContain("Tu identidad fue verificada correctamente");
     expect(markup).toContain("Paso actual 2: Selección");
+    expect(markup).toContain("Consultando tus certificados vigentes");
     expect(markup).not.toMatch(/UUID|número de orden|seleccionar certificado/i);
   });
 

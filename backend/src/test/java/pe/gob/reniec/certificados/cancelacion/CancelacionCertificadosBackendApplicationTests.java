@@ -7,6 +7,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import pe.gob.reniec.certificados.cancelacion.system.SystemStatusService;
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.AvailabilityPersistenceCoordinator;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingPersistenceCoordinator;
 
 @SpringBootTest(properties = {
 		"debug=false",
@@ -24,6 +25,9 @@ class CancelacionCertificadosBackendApplicationTests {
 
 	@MockitoBean
 	AvailabilityPersistenceCoordinator availabilityPersistenceCoordinator;
+
+	@MockitoBean
+	CertificateListingPersistenceCoordinator certificateListingPersistenceCoordinator;
 
 	@Test
 	void contextLoads() {

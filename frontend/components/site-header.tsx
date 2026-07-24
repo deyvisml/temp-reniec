@@ -1,12 +1,26 @@
+"use client";
+
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 export function SiteHeader() {
+  const pathname = usePathname();
+  const isInternalFlow = pathname === "/cancelacion" || pathname === "/autorizacion";
+
   return (
     <header className="relative z-5 bg-[linear-gradient(110deg,#001440,#002b79_52%,#003ba1)] text-white shadow-[0_8px_30px_#00143c1f]">
-      <div className="mx-auto flex min-h-[84px] w-[min(700px,calc(100%_-_28px))] items-center justify-center gap-9 min-[481px]:justify-between min-[801px]:min-h-[104px] min-[801px]:w-[min(1320px,calc(100%_-_40px))]">
+      <div
+        className={`mx-auto flex min-h-[84px] w-[min(700px,calc(100%_-_28px))] items-center gap-3 min-[801px]:min-h-[104px] min-[801px]:w-[min(1320px,calc(100%_-_40px))] ${
+          isInternalFlow ? "justify-between" : "justify-center min-[481px]:justify-between"
+        }`}
+      >
         <div className="flex shrink-0 items-center">
           <Image
-            className="h-[70px] w-[180px] object-contain object-center min-[801px]:object-left"
+            className={`object-contain object-center min-[801px]:object-left ${
+              isInternalFlow
+                ? "h-[58px] w-[120px] min-[520px]:h-[70px] min-[520px]:w-[180px]"
+                : "h-[70px] w-[180px]"
+            }`}
             src="/images/reniec-logo.png"
             alt="RENIEC - Registro Nacional de Identificación y Estado Civil"
             width={129}
@@ -15,13 +29,21 @@ export function SiteHeader() {
             unoptimized
           />
         </div>
-        <div className="hidden items-center min-[801px]:flex">
-          <HeaderItem
-            icon={<ShieldIcon />}
-            title="Servicio ciudadano"
-            text="Cancelación de certificados digitales"
+
+        {isInternalFlow ? (
+          <div
+            id="internal-flow-header-slot"
+            className="flex min-h-11 items-center"
           />
-        </div>
+        ) : (
+          <div className="hidden items-center min-[801px]:flex">
+            <HeaderItem
+              icon={<ShieldIcon />}
+              title="Servicio ciudadano"
+              text="Cancelación de certificados digitales"
+            />
+          </div>
+        )}
       </div>
     </header>
   );

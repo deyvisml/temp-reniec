@@ -29,6 +29,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.Re
 import pe.gob.reniec.certificados.cancelacion.cancellation.initiation.antibot.RecaptchaVerificationException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityFailure;
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityIntegrationException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -163,6 +165,43 @@ public final class GlobalExceptionHandler {
 				request.getRequestURI());
 		return respond(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
 				"No fue posible procesar la solicitud.", request);
+	}
+
+	@ExceptionHandler(FlowSessionException.class)
+	ResponseEntity<ApiError> handleSession(FlowSessionException exception, HttpServletRequest request) {
+		return switch (exception.reason()) {
+			case REQUIRED, INVALID -> respond(HttpStatus.UNAUTHORIZED, "SESSION_REQUIRED", "Inicia nuevamente el proceso para continuar.", request);
+			case EXPIRED -> respond(HttpStatus.UNAUTHORIZED, "SESSION_EXPIRED", "Tu sesión expiró. Inicia nuevamente.", request);
+			case REFRESH_CONFLICT -> respond(HttpStatus.CONFLICT, "SESSION_REFRESH_IN_PROGRESS", "La sesión ya se está renovando en otra pestaña.", request);
+			case REPLAYED -> respond(HttpStatus.UNAUTHORIZED, "SESSION_REUSE_DETECTED", "La sesión fue invalidada por seguridad.", request);
+			case FORBIDDEN -> respond(HttpStatus.FORBIDDEN, "FLOW_STEP_NOT_ALLOWED", "Este paso todavía no está disponible.", request);
+			case ALREADY_ACTIVE -> respond(HttpStatus.CONFLICT, "FLOW_SESSION_ALREADY_ACTIVE", "La operación ya está activa.", request);
+		};
+	}
+
+	@ExceptionHandler(CertificateListingException.class)
+	ResponseEntity<ApiError> handleCertificateListing(CertificateListingException exception,
+			HttpServletRequest request) {
+		return switch (exception.reason()) {
+			case IDENTITY_REQUIRED, NOT_ALLOWED -> respond(HttpStatus.FORBIDDEN,
+					"CERTIFICATE_STEP_NOT_ALLOWED", "Verifica tu identidad antes de continuar.", request);
+			case IN_PROGRESS -> respond(HttpStatus.CONFLICT, "CERTIFICATE_LIST_IN_PROGRESS",
+					"La consulta ya se está procesando. Inténtalo nuevamente en unos segundos.", request);
+			case TIMEOUT -> respond(HttpStatus.GATEWAY_TIMEOUT, "CERTIFICATE_LIST_TIMEOUT",
+					"La consulta tardó demasiado. Inténtalo nuevamente.", request);
+			case UNAVAILABLE -> respond(HttpStatus.SERVICE_UNAVAILABLE, "CERTIFICATE_LIST_UNAVAILABLE",
+					"No podemos consultar los certificados en este momento.", request);
+			case INVALID_PROVIDER_RESPONSE -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
+					"CERTIFICATE_LIST_INVALID_RESPONSE",
+					"No fue posible interpretar la lista de certificados. Inténtalo nuevamente.", request);
+			case EMPTY -> respond(HttpStatus.UNPROCESSABLE_ENTITY, "CERTIFICATE_LIST_EMPTY",
+					"Actualmente no existen certificados disponibles para cancelar.", request);
+			case INVALID_SELECTION -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
+					"INVALID_CERTIFICATE_SELECTION",
+					"Selecciona certificados válidos de esta operación.", request);
+			case CONFLICT -> respond(HttpStatus.CONFLICT, "CERTIFICATE_SELECTION_CONFLICT",
+					"La selección cambió simultáneamente. Recarga la lista e inténtalo nuevamente.", request);
+		};
 	}
 
 	private ResponseEntity<ApiError> respond(HttpStatus status, String code, String message,

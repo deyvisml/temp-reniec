@@ -176,9 +176,6 @@ public class IdPeruProperties {
 	public Duration getConnectTimeout() { return IdPeruFlowSettings.CONNECT_TIMEOUT; }
 	public Duration getReadTimeout() { return IdPeruFlowSettings.READ_TIMEOUT; }
 	public Duration getStateTtl() { return IdPeruFlowSettings.STATE_TTL; }
-	public Duration getIdentityInitTtl() { return IdPeruFlowSettings.IDENTITY_INIT_TTL; }
-	public Duration getFlowAuthorizationTtl() { return IdPeruFlowSettings.FLOW_AUTHORIZATION_TTL; }
 	public Duration getJwksTtl() { return IdPeruFlowSettings.JWKS_TTL; }
-	public String getCookieName() { return IdPeruFlowSettings.COOKIE_NAME; }
 	public boolean isCookieSecure() { return !environment.acceptsProfiles(Profiles.of("local", "test")); }
 }

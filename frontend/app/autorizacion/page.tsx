@@ -9,5 +9,5 @@ export const metadata: Metadata = { title: "Verificación de identidad" };
 export default function IdPeruLocalReturnPage() {
   if (!usesLocalIdentityRoute()) redirect(CANCELLATION_FLOW_ROUTE);
 
-  return <CancellationFlow initialRoute="identity" />;
+  return <CancellationFlow />;
 }

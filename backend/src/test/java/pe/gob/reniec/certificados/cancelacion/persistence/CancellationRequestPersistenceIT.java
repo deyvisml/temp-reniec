@@ -34,6 +34,7 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Cancellat
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationAuditEventRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationAuditEventType;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFinalOutcome;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFlowSessionRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReasonCode;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptRepository;
@@ -54,7 +55,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Revocatio
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationResult;
-import pe.gob.reniec.certificados.cancelacion.cancellation.identity.FlowTokenService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityFailure;
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityIntegrationException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityVerificationService;
@@ -75,7 +77,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	@Autowired CancellationAuditEventRepository auditRepository;
 	@Autowired JdbcTemplate jdbcTemplate;
 	@Autowired IdentityVerificationService identityService;
-	@Autowired FlowTokenService flowTokenService;
+	@Autowired FlowSessionService flowSessionService;
+	@Autowired CancellationFlowSessionRepository flowSessionRepository;
 
 	@LocalServerPort int port;
 
@@ -86,19 +89,20 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM cancellation_request_certificate");
 		jdbcTemplate.update("DELETE FROM revocation_operation");
 		jdbcTemplate.update("DELETE FROM identity_verification");
+		jdbcTemplate.update("DELETE FROM cancellation_flow_session");
 		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
 	}
 
 	@Test
-	void mockIdentityFlowConsumesStateOnceAndIssuesPersistedTemporaryAuthorization() {
+	void mockIdentityFlowConsumesStateOnceAndUsesTheSharedFlowSession() {
 		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("00000001");
 		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
 				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request = requestRepository.saveAndFlush(request);
 
-		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
-		URI authorization = identityService.start(init.value(), "identity-flow-it");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		URI authorization = identityService.start(init.access().value(), "identity-flow-it");
 		String state = java.util.Arrays.stream(authorization.getRawQuery().split("&"))
 				.filter(value -> value.startsWith("state=")).findFirst()
 				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8)).orElseThrow();
@@ -106,21 +110,54 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		IdentityVerificationService.CallbackResult callback = identityService.callback(
 				"mock-code", state, "mock-session", null);
 		assertThat(callback.verified()).isTrue();
-		assertThat(identityService.current(callback.token().value()).canContinue()).isTrue();
+		assertThat(identityService.current(callback.accessToken().value()).canContinue()).isTrue();
 
 		IdentityVerificationEntity verification = identityRepository
 				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
 		assertThat(verification.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.VERIFIED);
 		assertThat(verification.getDniMatchResult()).isEqualTo(IdentityMatchResult.MATCH);
 		assertThat(verification.getPkceVerifierProtected()).isNull();
-		assertThat(verification.getAuthorizationJtiHash()).hasSize(64);
 		assertThatThrownBy(() -> identityService.callback("mock-code", state, "mock-session", null))
 				.isInstanceOf(IdentityIntegrationException.class);
 
 		CertificateCancellationRequestEntity completed = requestRepository.findById(request.getId()).orElseThrow();
 		completed.transitionTo(CancellationRequestStatus.COMPLETED, null);
 		requestRepository.saveAndFlush(completed);
-		assertThat(identityService.current(callback.token().value()).canContinue()).isFalse();
+		assertThat(identityService.current(callback.accessToken().value()).canContinue()).isFalse();
+	}
+
+	@Test
+	void rotatesRefreshOnceRejectsConcurrentReuseAndLogoutAbandonsTheActiveOperation() {
+		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+
+		FlowSessionService.Tokens initial = flowSessionService.establish(request.getId());
+		assertThat(flowSessionService.current(initial.access().value()).requestId()).isEqualTo(request.getId());
+		assertThat(java.time.Duration.between(Instant.now(), initial.access().expiresAt()).toMinutes())
+				.isBetween(14L, 15L);
+		assertThat(java.time.Duration.between(Instant.now(), initial.refresh().expiresAt()).toHours())
+				.isBetween(71L, 72L);
+
+		FlowSessionService.Tokens rotated = flowSessionService.refresh(initial.refresh().value());
+		assertThat(rotated.refresh().value()).isNotEqualTo(initial.refresh().value());
+		assertThat(rotated.refresh().expiresAt()).isAfter(initial.refresh().expiresAt());
+		assertThat(java.time.Duration.between(
+				flowSessionRepository.findByRequest_Id(request.getId()).orElseThrow().getRefreshExpiresAt(),
+				rotated.refresh().expiresAt()).abs().toMillis()).isLessThan(1_000L);
+		assertThat(flowSessionService.current(rotated.access().value()).dni()).isEqualTo("00000001");
+		assertThatThrownBy(() -> flowSessionService.refresh(initial.refresh().value()))
+				.isInstanceOfSatisfying(FlowSessionException.class,
+						exception -> assertThat(exception.reason())
+								.isEqualTo(FlowSessionException.Reason.REFRESH_CONFLICT));
+
+		flowSessionService.logout(rotated.access().value());
+		assertThat(requestRepository.findById(request.getId())).get()
+				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
+				.isEqualTo(CancellationRequestStatus.ABANDONED);
+		assertThatThrownBy(() -> flowSessionService.current(rotated.access().value()))
+				.isInstanceOf(FlowSessionException.class);
 	}
 
 	@Test
@@ -130,10 +167,10 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request = requestRepository.saveAndFlush(request);
 
-		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
-		identityService.start(init.value(), "first-identity-start");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		identityService.start(init.access().value(), "first-identity-start");
 
-		assertThatThrownBy(() -> identityService.start(init.value(), "duplicate-identity-start"))
+		assertThatThrownBy(() -> identityService.start(init.access().value(), "duplicate-identity-start"))
 				.isInstanceOfSatisfying(IdentityIntegrationException.class,
 						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.IN_PROGRESS));
 		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
@@ -147,8 +184,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request = requestRepository.saveAndFlush(request);
 
-		FlowTokenService.IssuedFlowToken init = flowTokenService.issueIdentityInit(request.getId());
-		URI authorization = identityService.start(init.value(), "callback-boundary-it");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		URI authorization = identityService.start(init.access().value(), "callback-boundary-it");
 		String state = java.util.Arrays.stream(authorization.getRawQuery().split("&"))
 				.filter(value -> value.startsWith("state="))
 				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8))
@@ -167,7 +204,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void httpMockFlowRotatesTheCookieAndEnablesCertificateSelection() throws Exception {
+	void httpMockFlowPersistsSelectionAndAuthorizesTheReasonStep() throws Exception {
 		HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
 		HttpResponse<String> initiation = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port + "/api/v1/cancellation-requests"))
@@ -176,6 +213,9 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 						"{\"dni\":\"00000001\",\"recaptchaToken\":\"test-recaptcha-valid\"}"))
 				.build(), HttpResponse.BodyHandlers.ofString());
 		String initiationCookie = cookiePair(initiation);
+		HttpResponse<String> beforeStart = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/identity-verifications/current"))
+				.header("Cookie", initiationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
 
 		HttpResponse<String> start = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port + "/api/v1/identity-verifications"))
@@ -205,12 +245,50 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
 
 		assertThat(initiation.statusCode()).isEqualTo(200);
+		assertThat(beforeStart.statusCode()).isEqualTo(200);
+		assertThat(beforeStart.body()).contains("\"status\":\"STARTED\"", "\"canContinue\":false",
+				"\"nextStep\":\"IDENTITY_VERIFICATION\"");
 		assertThat(start.statusCode()).isEqualTo(200);
 		assertThat(current.statusCode()).isEqualTo(200);
 		assertThat(current.body()).contains("\"status\":\"VERIFIED\"", "\"canContinue\":true",
 				"\"nextStep\":\"CERTIFICATE_SELECTION\"")
 				.doesNotContain("00000001", "mock-code", state);
 		assertThat(initiationCookie).isNotEqualTo(authorizationCookie);
+
+		HttpResponse<String> listed = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port
+						+ "/api/v1/cancellation-requests/current/certificates"))
+				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+		java.util.regex.Matcher certificate = java.util.regex.Pattern
+				.compile("\\\"certificateUuid\\\":\\\"([^\\\"]+)\\\"").matcher(listed.body());
+		assertThat(certificate.find()).isTrue();
+		String certificateUuid = certificate.group(1);
+
+		HttpResponse<String> selected = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port
+						+ "/api/v1/cancellation-requests/current/certificate-selection"))
+				.header("Cookie", authorizationCookie)
+				.header("Origin", "http://localhost:3000")
+				.header("Content-Type", "application/json")
+				.PUT(HttpRequest.BodyPublishers.ofString(
+						"{\"certificateUuids\":[\"" + certificateUuid + "\"]}"))
+				.build(), HttpResponse.BodyHandlers.ofString());
+		HttpResponse<String> session = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/session/current"))
+				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+
+		assertThat(listed.statusCode()).isEqualTo(200);
+		assertThat(listed.body()).contains("\"requestStatus\":\"CERTIFICATES_AVAILABLE\"",
+				"\"canContinue\":false");
+		assertThat(selected.statusCode()).isEqualTo(200);
+		assertThat(selected.body()).contains("\"requestStatus\":\"CERTIFICATES_SELECTED\"",
+				"\"selectedCount\":1", "\"canContinue\":true");
+		assertThat(session.statusCode()).isEqualTo(200);
+		assertThat(session.body()).contains("\"requestStatus\":\"CERTIFICATES_SELECTED\"",
+				"\"nextStep\":\"REASON\"");
+		assertThat(jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM cancellation_request_certificate WHERE selected = TRUE", Integer.class))
+				.isEqualTo(1);
 	}
 
 	@Test
@@ -288,14 +366,14 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				HttpResponse.BodyHandlers.ofString());
 
 		assertThat(tables).containsExactly(
-				"cancellation_audit_event", "cancellation_receipt",
+				"cancellation_audit_event", "cancellation_flow_session", "cancellation_receipt",
 				"cancellation_request_certificate", "certificate_availability_check",
 				"certificate_cancellation_request", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(6);
+		assertThat(migrationCount).isEqualTo(7);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
-		assertThat(documentedColumnCount).isEqualTo(92);
+		assertThat(documentedColumnCount).isEqualTo(103);
 		assertThat(health.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(health.body()).contains("\"status\":\"UP\"")
 				.doesNotContain("jdbc", "mysql", "username", "password", "sql", "dni");

@@ -87,6 +87,7 @@ describe("DNI eligibility entry", () => {
     expect(canSubmitInitialQuery("00000001", "", false, true)).toBe(false);
     expect(canSubmitInitialQuery("00000001", "token", true, true)).toBe(false);
     expect(canSubmitInitialQuery("00000001", "token", false, false)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "", false, false, false)).toBe(true);
   });
 
   it("maps CAPTCHA failures separately from certificate availability", () => {

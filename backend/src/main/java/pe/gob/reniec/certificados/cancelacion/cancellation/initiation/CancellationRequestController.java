@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,8 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import pe.gob.reniec.certificados.cancelacion.shared.error.ApiError;
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
-import pe.gob.reniec.certificados.cancelacion.cancellation.identity.FlowCookieService;
-import pe.gob.reniec.certificados.cancelacion.cancellation.identity.FlowTokenService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionCookieService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionService;
 
 @RestController
 @RequestMapping("/api/v1/cancellation-requests")
@@ -30,14 +29,14 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.identity.FlowTokenSer
 public class CancellationRequestController {
 
 	private final CancellationRequestInitiationService service;
-	private final FlowTokenService flowTokens;
-	private final FlowCookieService flowCookies;
+	private final FlowSessionService flowSessions;
+	private final FlowSessionCookieService sessionCookies;
 
 	public CancellationRequestController(CancellationRequestInitiationService service,
-			FlowTokenService flowTokens, FlowCookieService flowCookies) {
+			FlowSessionService flowSessions, FlowSessionCookieService sessionCookies) {
 		this.service = service;
-		this.flowTokens = flowTokens;
-		this.flowCookies = flowCookies;
+		this.flowSessions = flowSessions;
+		this.sessionCookies = sessionCookies;
 	}
 
 	@Operation(operationId = "initiateCancellationRequest",
@@ -73,11 +72,10 @@ public class CancellationRequestController {
 		CancellationRequestResponse result = service.initiate(body.dni(), body.recaptchaToken(), correlationId);
 		ResponseEntity.BodyBuilder response = ResponseEntity.ok();
 		if (result.canContinue()) {
-			FlowTokenService.IssuedFlowToken token = flowTokens.issueIdentityInit(result.requestId());
-			response.header(HttpHeaders.SET_COOKIE, flowCookies.create(token.value(), token.expiresAt()).toString());
+			response.headers(sessionCookies.headers(flowSessions.establish(result.requestId())));
 		}
 		else {
-			response.header(HttpHeaders.SET_COOKIE, flowCookies.clear().toString());
+			response.headers(sessionCookies.clearHeaders());
 		}
 		return response.body(result);
 	}

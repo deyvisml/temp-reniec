@@ -1,6 +1,6 @@
 # Frontend — Cancelación de certificados digitales
 
-Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. `/cancelacion` es la entrada del trámite. En desarrollo local, el paso 1 de autenticación se presenta y permanece en `/autorizacion` porque ese es el origen registrado para las credenciales de prueba de ID Perú; en producción el paso permanece en `/cancelacion`.
+Frontend ciudadano en Next.js 16, React, TypeScript, Tailwind CSS y App Router. `/` es la portada pública y `/cancelacion` es la ruta interna canónica del trámite. En desarrollo local, el paso 1 de autenticación se presenta y permanece en `/autorizacion` porque ese es el origen registrado para las credenciales de prueba de ID Perú; en producción el paso permanece en `/cancelacion`.
 
 ## Requisitos e inicio
 
@@ -65,12 +65,14 @@ Consulta [`docs/LOCAL_INTEGRATION.md`](../docs/LOCAL_INTEGRATION.md) para el ord
 
 ## Consulta local
 
-Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El botón solo se habilita con DNI válido, token actual y ningún envío en curso. DNI y token no se guardan en almacenamiento web ni URL. Solo un resultado disponible permite avanzar: con `NEXT_PUBLIC_APP_ENV=local` el navegador pasa de `/cancelacion` a `/autorizacion`; en producción la vista cambia dentro de `/cancelacion`. La continuidad viaja exclusivamente en una cookie HttpOnly y el frontend no puede leerla ni persistirla.
+Usa los DNI ficticios documentados en el README del backend para reproducir cada resultado. El botón solo se habilita con DNI válido, token actual y ningún envío en curso. DNI y token no se guardan en almacenamiento web ni URL. Solo un resultado disponible permite avanzar: con `NEXT_PUBLIC_APP_ENV=local` el navegador pasa de `/` a `/autorizacion`; en producción pasa a `/cancelacion`. La continuidad usa access y refresh JWT en cookies `HttpOnly`; el frontend no puede leerlos ni persistirlos. Una recarga valida la sesión en backend y renueva una sola vez cuando únicamente venció el access token.
 
 `/`, `/verificacion-identidad` y `/verificacion-identidad/retorno` existen únicamente como redirecciones hacia `/cancelacion`. `/autorizacion` renderiza el mismo componente compartido del flujo cuando el ambiente es local y redirige a `/cancelacion` fuera de local. Ningún DNI, `requestId`, certificado o resultado de autenticación se transporta en la URL. Una recarga consulta solo el contexto temporal vigente del backend; no recupera solicitudes terminadas ni progreso histórico.
 
+Tras autenticar la identidad, la misma ruta muestra siempre el paso 2. La lista se obtiene del backend y no de parámetros o almacenamiento del navegador. El ciudadano selecciona explícitamente uno o varios certificados —también cuando solo existe uno— y el botón continúa bloqueado mientras la selección esté vacía o se esté enviando. Una lista vacía finaliza la operación activa de forma controlada; timeout, indisponibilidad y respuestas inválidas permiten un reintento seguro.
+
 ## Cliente HTTP
 
-`lib/http-client.ts` centraliza `fetch`, JSON, cookies futuras, correlación, timeout de ocho segundos, cancelación y errores seguros. No incorpora JWT, reintentos, interceptores, sesión, almacenamiento ni librerías HTTP externas.
+`lib/http-client.ts` centraliza `fetch`, JSON, cookies, correlación, timeout de ocho segundos, cancelación y errores seguros. Ante un `401` coordina una única renovación de sesión y repite una sola vez; no lee JWT, no usa almacenamiento web ni incorpora una librería HTTP externa.
 
-La portada se basa en `docs/ui-reference/home.png` y el paso 1 en `docs/ui-reference/step-1.png`, corrigiendo el stepper a cinco pasos. El contexto funcional prevalece sobre cualquier detalle visual contradictorio. El listado del paso 2, motivo, confirmación, revocación, constancia y despliegue productivo permanecen fuera de alcance.
+La portada se basa en `docs/ui-reference/home.png`, el paso 1 en `docs/ui-reference/step-1.png` y la selección en `docs/ui-reference/step-2.png`, manteniendo el stepper de cinco pasos. El contexto funcional prevalece sobre cualquier detalle visual contradictorio. Motivo, confirmación, revocación, constancia y despliegue productivo permanecen fuera de alcance.

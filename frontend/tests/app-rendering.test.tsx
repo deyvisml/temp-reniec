@@ -1,13 +1,16 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import CancellationPage from "@/app/cancelacion/page";
 import RootLayout, { metadata } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import CancellationPage from "@/app/cancelacion/page";
 import { CancellationEntry } from "@/components/cancellation-entry";
+import { InternalFlowHeaderActions } from "@/components/internal-flow-header";
+import { parseCurrentFlowSession } from "@/lib/api/flow-session";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  usePathname: () => "/",
 }));
 
 afterEach(() => {
@@ -58,5 +61,50 @@ describe("base application rendering", () => {
     const page = renderToStaticMarkup(<CancellationPage />);
     expect(page).toContain("Preparando el trámite");
     expect(page).toContain('aria-busy="true"');
+  });
+
+  it("renders the authenticated DNI as a profile and an accessible logout action", () => {
+    const html = renderToStaticMarkup(
+      <InternalFlowHeaderActions dni="00000001" pending={false} onLogout={() => undefined} />,
+    );
+
+    expect(html).toContain("Perfil del ciudadano, DNI 00000001");
+    expect(html).toContain("00000001");
+    expect(html).toContain("Cerrar sesión");
+    expect(html).toContain("<button");
+    expect(html).not.toContain("******");
+    expect(html).not.toMatch(/access|refresh|token|localStorage|sessionStorage/i);
+  });
+
+  it("offers a clear retry after a logout failure", () => {
+    const html = renderToStaticMarkup(
+      <InternalFlowHeaderActions dni="00000001" pending={false} logoutFailed onLogout={() => undefined} />,
+    );
+
+    expect(html).toContain("Reintentar salida");
+    expect(html).toContain("No pudimos cerrar la sesión");
+    expect(html).toContain('role="alert"');
+  });
+
+  it("rejects an outdated session response instead of rendering an undefined DNI", () => {
+    expect(parseCurrentFlowSession({
+      sessionId: 1,
+      requestId: 2,
+      maskedDni: "******01",
+      sessionStatus: "PENDING_IDENTITY",
+      requestStatus: "PENDING_IDENTITY_VERIFICATION",
+      nextStep: "IDENTITY_VERIFICATION",
+    })).toBeNull();
+  });
+
+  it("accepts only a complete current-session contract", () => {
+    expect(parseCurrentFlowSession({
+      sessionId: 1,
+      requestId: 2,
+      dni: "00000001",
+      sessionStatus: "PENDING_IDENTITY",
+      requestStatus: "PENDING_IDENTITY_VERIFICATION",
+      nextStep: "IDENTITY_VERIFICATION",
+    })).toMatchObject({ dni: "00000001", nextStep: "IDENTITY_VERIFICATION" });
   });
 });

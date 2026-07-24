@@ -1,4 +1,58 @@
 export interface paths {
+    "/api/v1/cancellation-requests/current/certificate-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Confirma el conjunto completo de certificados seleccionados
+         * @description Reemplazo idempotente del conjunto seleccionado. Cada UUID debe pertenecer al listado persistido de la solicitud autenticada.
+         */
+        put: operations["replaceCurrentCertificateSelection"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/session/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rota el refresh token y renueva el access token */
+        post: operations["refreshFlowSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/session/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cierra la sesión y abandona la operación activa reversible */
+        post: operations["logoutFlowSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/idperu/callback": {
         parameters: {
             query?: never;
@@ -37,26 +91,6 @@ export interface paths {
          * @description Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.
          */
         post: operations["startIdentityVerification"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity-verifications/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Invalida la autorización temporal local
-         * @description Invalida el jti persistido y elimina la cookie; no inventa un contrato de logout remoto.
-         */
-        post: operations["logoutIdentityVerification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -103,6 +137,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/session/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consulta la sesión y el paso actualmente autorizado */
+        get: operations["getCurrentFlowSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity-verifications/current": {
         parameters: {
             query?: never;
@@ -115,6 +166,26 @@ export interface paths {
          * @description Resuelve el intento desde la cookie HttpOnly, valida la autorización y consume el resultado de presentación del callback.
          */
         get: operations["getCurrentIdentityVerification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cancellation-requests/current/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Obtiene el listado de certificados de la solicitud autenticada
+         * @description Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida. No recibe DNI ni identificadores de solicitud desde el navegador.
+         */
+        get: operations["getCurrentRequestCertificates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -147,6 +218,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Conjunto completo de certificados que el ciudadano selecciona para cancelar. */
+        CertificateSelectionRequest: {
+            /** @description UUID canónicos de la solicitud activa; no admite duplicados. */
+            certificateUuids: string[];
+        };
         /** @description Formato común y seguro de los errores controlados de la API. */
         ApiError: {
             /**
@@ -175,6 +251,24 @@ export interface components {
              * @example 7a5f3f75-3bd2-4c47-90fc-6cfc79f1ec2d
              */
             correlationId: string;
+        };
+        /** @description Certificado vigente obtenido después de autenticar al ciudadano. */
+        CertificateItem: {
+            orderNumber: string;
+            /** Format: date-time */
+            emissionCreatedAt: string;
+            /** Format: uuid */
+            certificateUuid: string;
+            availabilityStatus: string;
+            selected: boolean;
+        };
+        /** @description Listado persistido de certificados vigentes de la solicitud autenticada. */
+        CertificateListResponse: {
+            requestStatus: string;
+            certificates: components["schemas"]["CertificateItem"][];
+            /** Format: int32 */
+            selectedCount: number;
+            canContinue: boolean;
         };
         IdentityStartResponse: {
             /**
@@ -208,7 +302,7 @@ export interface components {
              * @example PENDING_IDENTITY_VERIFICATION
              * @enum {string}
              */
-            requestStatus: "STARTED" | "CHECKING_AVAILABILITY" | "NO_CERTIFICATES_AVAILABLE" | "PENDING_IDENTITY_VERIFICATION" | "IDENTITY_VERIFIED" | "AUTHENTICATED_PENDING_CERTIFICATE_LIST" | "CERTIFICATES_AVAILABLE" | "CERTIFICATES_SELECTED" | "REASON_REGISTERED" | "PENDING_CONFIRMATION" | "CONFIRMED" | "REVOCATION_IN_PROGRESS" | "REVOCATION_SUCCEEDED" | "REVOCATION_FAILED" | "REVOCATION_OUTCOME_UNKNOWN" | "COMPLETED" | "FAILED" | "OUTCOME_UNKNOWN" | "RECEIPT_AVAILABLE" | "ABANDONED";
+            requestStatus: "STARTED" | "CHECKING_AVAILABILITY" | "NO_CERTIFICATES_AVAILABLE" | "PENDING_IDENTITY_VERIFICATION" | "IDENTITY_VERIFIED" | "AUTHENTICATED_PENDING_CERTIFICATE_LIST" | "CHECKING_CERTIFICATE_LIST" | "CERTIFICATES_AVAILABLE" | "CERTIFICATES_SELECTED" | "REASON_REGISTERED" | "PENDING_CONFIRMATION" | "CONFIRMED" | "REVOCATION_IN_PROGRESS" | "REVOCATION_SUCCEEDED" | "REVOCATION_FAILED" | "REVOCATION_OUTCOME_UNKNOWN" | "COMPLETED" | "FAILED" | "OUTCOME_UNKNOWN" | "RECEIPT_AVAILABLE" | "ABANDONED";
             /**
              * @description Resultado normalizado de la consulta inicial de existencia. No representa una lista detallada.
              * @example AVAILABLE
@@ -246,6 +340,27 @@ export interface components {
              */
             timestamp: string;
         };
+        /** @description Contexto seguro de la operación activa y el siguiente paso autorizado. */
+        CurrentSession: {
+            /**
+             * Format: int64
+             * @description Identificador técnico de sesión.
+             */
+            sessionId: number;
+            /**
+             * Format: int64
+             * @description Identificador técnico de solicitud.
+             */
+            requestId: number;
+            /** @description DNI completo mostrado únicamente dentro de la sesión autenticada. */
+            dni: string;
+            /** @enum {string} */
+            sessionStatus: "PENDING_IDENTITY" | "IDENTITY_VERIFIED";
+            /** @description Estado controlado de la solicitud. */
+            requestStatus: string;
+            /** @enum {string} */
+            nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION" | "REASON";
+        };
         CurrentIdentityResponse: {
             /**
              * @description Estado normalizado del intento de identidad.
@@ -282,6 +397,111 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    replaceCurrentCertificateSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Selección persistida y paso 3 habilitado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateListResponse"];
+                };
+            };
+            /** @description Formato inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sesión ausente o expirada */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Origen o paso no permitido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Actualización concurrente de la selección */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description UUID duplicado, ajeno o no disponible */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    refreshFlowSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logoutFlowSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     handleIdentityCallbackGet: {
         parameters: {
             query?: {
@@ -376,24 +596,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiError"];
                 };
-            };
-        };
-    };
-    logoutIdentityVerification: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -544,6 +746,26 @@ export interface operations {
             };
         };
     };
+    getCurrentFlowSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CurrentSession"];
+                };
+            };
+        };
+    };
     getCurrentIdentityVerification: {
         parameters: {
             query?: never;
@@ -560,6 +782,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentIdentityResponse"];
+                };
+            };
+        };
+    };
+    getCurrentRequestCertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Listado persistido, incluido el escenario vacío */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateListResponse"];
+                };
+            };
+            /** @description Sesión ausente o expirada */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Identidad no verificada o paso no permitido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Consulta concurrente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Respuesta externa inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Servicio de listado no disponible */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Timeout del servicio de listado */
+            504: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

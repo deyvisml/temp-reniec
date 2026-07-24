@@ -13,6 +13,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityP
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionJwtService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionService;
 
 @Service
 public class IdentityVerificationService {
@@ -21,24 +23,24 @@ public class IdentityVerificationService {
 	private static final Pattern SESSION_STATE_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,256}");
 	private static final Pattern PROVIDER_ERROR_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 	private final IdPeruProperties properties;
-	private final FlowTokenService tokens;
+	private final FlowSessionService sessions;
 	private final IdentitySecurityArtifacts security;
 	private final TransientSecretProtector protector;
 	private final CitizenIdentityProviderPort provider;
 	private final IdentityPersistenceCoordinator persistence;
 
-	public IdentityVerificationService(IdPeruProperties properties, FlowTokenService tokens,
+	public IdentityVerificationService(IdPeruProperties properties, FlowSessionService sessions,
 			IdentitySecurityArtifacts security, TransientSecretProtector protector,
 			CitizenIdentityProviderPort provider, IdentityPersistenceCoordinator persistence) {
-		this.properties = properties; this.tokens = tokens; this.security = security;
+		this.properties = properties; this.sessions = sessions; this.security = security;
 		this.protector = protector; this.provider = provider; this.persistence = persistence;
 	}
 
 	public URI start(String continuityToken, String correlationId) {
-		FlowTokenService.FlowTokenClaims claims = tokens.validate(continuityToken, FlowTokenPurpose.IDENTITY_INIT);
+		Long requestId = sessions.requireRequest(continuityToken);
 		IdentitySecurityArtifacts.StateValue state = security.newState();
 		IdentitySecurityArtifacts.PkceValue pkce = security.newPkce();
-		IdentityPersistenceCoordinator.PreparedAttempt attempt = persistence.prepare(claims.requestId(),
+		IdentityPersistenceCoordinator.PreparedAttempt attempt = persistence.prepare(requestId,
 				properties.getMode() == IdPeruMode.REAL ? IdentityProviderMode.REAL : IdentityProviderMode.MOCK,
 				state.hash(), Instant.now().plus(properties.getStateTtl()), protector.protect(pkce.verifier()), correlationId);
 		return provider.authorizationUri(new CitizenIdentityProviderPort.AuthorizationContext(
@@ -78,10 +80,10 @@ public class IdentityVerificationService {
 						IdentityMatchResult.MISMATCH, "IDENTITY_MISMATCH", sessionState);
 				return new CallbackResult(false, null, "IDENTITY_MISMATCH");
 			}
-			FlowTokenService.IssuedFlowToken authorization = tokens.issueFlowAuthorization(attempt.requestId(), attempt.attemptId());
 			persistence.completeSuccess(attempt.attemptId(), security.sha256(citizen.subject()),
-					citizen.externalReference(), sessionState, security.sha256(authorization.jti()), authorization.expiresAt());
-			return new CallbackResult(true, authorization, "VERIFIED");
+					citizen.externalReference(), sessionState);
+			FlowSessionJwtService.IssuedToken access = sessions.markIdentityVerified(attempt.requestId());
+			return new CallbackResult(true, access, "VERIFIED");
 		}
 		catch (IdentityIntegrationException exception) {
 			persistence.completeFailure(attempt.attemptId(), mapStatus(exception.failure()),
@@ -99,16 +101,14 @@ public class IdentityVerificationService {
 	}
 
 	public CurrentIdentityStatus current(String cookie) {
-		FlowTokenService.FlowTokenClaims claims = tokens.validate(cookie,
-				FlowTokenPurpose.IDENTITY_INIT, FlowTokenPurpose.FLOW_AUTH);
-		IdentityVerificationEntity latest = persistence.latest(claims.requestId());
-		boolean authorized = claims.purpose() == FlowTokenPurpose.FLOW_AUTH
-				&& claims.attemptId() != null && claims.attemptId().equals(latest.getId())
-				&& latest.getVerificationStatus() == IdentityVerificationStatus.VERIFIED
-				&& isActiveFlowStatus(latest.getRequest().getRequestStatus())
-				&& latest.getAuthorizationInvalidatedAt() == null
-				&& latest.getAuthorizationExpiresAt() != null && latest.getAuthorizationExpiresAt().isAfter(Instant.now())
-				&& security.sha256(claims.jti()).equals(latest.getAuthorizationJtiHash());
+		Long requestId = sessions.requireRequest(cookie);
+		IdentityVerificationEntity latest = persistence.latest(requestId).orElse(null);
+		if (latest == null) {
+			return new CurrentIdentityStatus(IdentityVerificationStatus.STARTED.name(), false,
+					"IDENTITY_VERIFICATION");
+		}
+		boolean authorized = latest.getVerificationStatus() == IdentityVerificationStatus.VERIFIED
+				&& isActiveFlowStatus(latest.getRequest().getRequestStatus());
 		return new CurrentIdentityStatus(latest.getVerificationStatus().name(), authorized,
 				authorized ? "CERTIFICATE_SELECTION" : "IDENTITY_VERIFICATION");
 	}
@@ -122,11 +122,6 @@ public class IdentityVerificationService {
 		};
 	}
 
-	public void logout(String cookie) {
-		FlowTokenService.FlowTokenClaims claims = tokens.validate(cookie, FlowTokenPurpose.FLOW_AUTH);
-		persistence.invalidate(claims.attemptId());
-	}
-
 	private static IdentityVerificationStatus mapStatus(IdentityFailure failure) {
 		return switch (failure) {
 			case CANCELLED -> IdentityVerificationStatus.CANCELLED;
@@ -137,6 +132,6 @@ public class IdentityVerificationService {
 		};
 	}
 
-	public record CallbackResult(boolean verified, FlowTokenService.IssuedFlowToken token, String status) { }
+	public record CallbackResult(boolean verified, FlowSessionJwtService.IssuedToken accessToken, String status) { }
 	public record CurrentIdentityStatus(String status, boolean canContinue, String nextStep) { }
 }

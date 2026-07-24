@@ -24,7 +24,7 @@ public class WebConfiguration implements WebMvcConfigurer {
 
 		registry.addMapping("/api/**")
 				.allowedOrigins(allowedOrigins.toArray(String[]::new))
-				.allowedMethods("GET", "POST", "OPTIONS")
+				.allowedMethods("GET", "POST", "PUT", "OPTIONS")
 				.allowedHeaders("Accept", "Content-Type", CorrelationIdFilter.HEADER_NAME)
 				.exposedHeaders(CorrelationIdFilter.HEADER_NAME)
 				.allowCredentials(true)

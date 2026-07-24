@@ -30,7 +30,7 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - No se recuperarán automáticamente selecciones, resultados ni constancias anteriores. Una eventual consulta histórica de constancias será un caso de uso independiente y autenticado.
 - Una revocación confirmada en curso o con resultado incierto podrá bloquear otro inicio para proteger la idempotencia, sin devolver ni reabrir el trámite anterior.
 - Un resultado incierto se reconciliará conservando la misma operación y clave de idempotencia; no habilitará automáticamente otra ejecución.
-- JWT se diseñará por separado y no implica una tabla de sesiones, refresh tokens, registros por navegador o dispositivo ni recuperación del progreso.
+- La operación activa utiliza una única sesión transaccional persistida por solicitud. El access JWT y el refresh JWT contienen solo identificadores técnicos y viajan en cookies `HttpOnly`; esto no habilita recuperación histórica ni sesiones por dispositivo.
 
 ## Principios de arquitectura y datos
 
@@ -43,10 +43,14 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 ## Integraciones y alcance
 
 - Las integraciones externas se definirán mediante interfaces y usarán mocks reemplazables mientras no existan contratos oficiales.
+- El segundo servicio de certificados utiliza un puerto propio y un mock determinista en desarrollo. Como no existe un contrato institucional verificado, el adaptador real no inventa endpoints ni payloads y el modo `real` falla de forma cerrada hasta incorporarlo mediante un incremento específico.
+- La consulta detallada se reserva en una transacción breve, ejecuta la llamada externa fuera de la transacción y persiste la colección completa atómicamente. Una recarga reutiliza la instantánea persistida y no vuelve a consumir el proveedor.
+- La selección se guarda en `cancellation_request_certificate`; no existe una tabla adicional. El backend reemplaza el conjunto completo, valida pertenencia y disponibilidad, acepta repeticiones idénticas y permite corregirla mientras no exista confirmación ciudadana. Después de esa confirmación, la selección queda inmutable.
 - La integración ID Perú se rige por el PDF aprobado v1.2 conservado en `docs/integrations/id-peru/`; toda modificación de autenticación, PKCE, tokens, datos del ciudadano, JWKS o logout debe revisarlo previamente.
 - ID Perú utilizará OAuth 2.0/OpenID Connect Authorization Code con PKCE S256. El backend controlará `state`, PKCE, códigos, tokens, validación criptográfica y comparación del DNI.
 - Existirán adaptadores real y simulado seleccionados por configuración. Producción no podrá iniciar con el simulador y el modo real fallará de forma cerrada si falta configuración institucional.
-- Después de validar la identidad se emitirá una autorización temporal mediante cookie `HttpOnly`, ligada a la solicitud actual y validada contra `identity_verification`; no habrá tabla de sesiones, refresh tokens ni recuperación de trámites anteriores.
+- La sesión nace únicamente después de una disponibilidad positiva y acompaña el mismo trámite durante ID Perú. La verificación exitosa eleva esa sesión existente; no crea una autorización paralela. Logout invalida la familia, elimina cookies y abandona solo una solicitud todavía reversible.
+- `/` permanece pública. `/cancelacion` y la variante local `/autorizacion` son internas y se autorizan con el estado persistido, sin colocar DNI, solicitud, tokens o pasos en la URL.
 - El flujo ciudadano utiliza `/cancelacion` como única URL canónica. Los pasos se resuelven mediante estado controlado y contexto temporal del backend, sin codificar el paso, DNI, identificador de solicitud, certificados o resultados de autenticación en la URL.
 - La consulta pública inicial está protegida por Google reCAPTCHA v2 Checkbox. El frontend conserva el token solo en memoria y el backend lo valida mediante un puerto antes de persistir o consultar disponibilidad.
 - La integración Google usa `RestClient`, timeout acotado y allowlist exacta de hostnames. No persiste CAPTCHA, IP ni payloads, y no incorpora reintentos, circuit breaker, fingerprinting o rate limiting en memoria.

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { CancellationEntry } from "@/components/cancellation-entry";
 import { CertificateSelectionTransition } from "@/components/certificate-selection-transition";
 import { IdentityVerificationPanel } from "@/components/identity-verification-panel";
 import type { IdentityCallbackOutcome } from "@/components/identity-callback-alert";
@@ -12,19 +11,10 @@ import { HttpClientError } from "@/lib/http-client";
 
 type FlowView =
   | { kind: "checking" }
-  | { kind: "entry" }
-  | { kind: "identity"; callbackOutcome?: IdentityCallbackOutcome }
+  | { kind: "identity"; callbackOutcome?: IdentityCallbackOutcome; verified?: boolean }
   | { kind: "selection" };
 
-type CancellationFlowProps = {
-  initialRoute?: "entry" | "identity";
-  identityRoute?: string;
-};
-
-export function CancellationFlow({
-  initialRoute = "entry",
-  identityRoute,
-}: CancellationFlowProps = {}) {
+export function CancellationFlow() {
   const router = useRouter();
   const [view, setView] = useState<FlowView>({ kind: "checking" });
 
@@ -32,14 +22,14 @@ export function CancellationFlow({
     try {
       const result = await getCurrentIdentityVerification(signal);
       if (!result.data) {
-        setView({ kind: "entry" });
+        setView({ kind: "identity" });
         return;
       }
 
       if (result.data.status === "VERIFIED") {
         setView(result.data.canContinue && result.data.nextStep === "CERTIFICATE_SELECTION"
           ? { kind: "selection" }
-          : { kind: "entry" });
+          : { kind: "identity" });
         return;
       }
 
@@ -49,9 +39,13 @@ export function CancellationFlow({
       });
     } catch (error) {
       if (error instanceof HttpClientError && error.code === "REQUEST_ABORTED") return;
-      setView(initialRoute === "identity" ? { kind: "identity" } : { kind: "entry" });
+      if (error instanceof HttpClientError && error.status === 401) {
+        router.replace("/");
+        return;
+      }
+      setView({ kind: "identity", callbackOutcome: "ERROR" });
     }
-  }, [initialRoute]);
+  }, [router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -64,7 +58,11 @@ export function CancellationFlow({
   if (view.kind === "identity") {
     return (
       <div className="relative overflow-hidden px-4 py-8 sm:py-12">
-        <IdentityVerificationPanel callbackOutcome={view.callbackOutcome} />
+        <IdentityVerificationPanel
+          callbackOutcome={view.callbackOutcome}
+          identityVerified={view.verified}
+          onContinue={() => setView({ kind: "selection" })}
+        />
       </div>
     );
   }
@@ -72,22 +70,12 @@ export function CancellationFlow({
   if (view.kind === "selection") {
     return (
       <div className="relative overflow-hidden px-4 py-8 sm:py-12">
-        <CertificateSelectionTransition />
+        <CertificateSelectionTransition onBack={() => setView({ kind: "identity", verified: true })} />
       </div>
     );
   }
 
-  return (
-    <CancellationEntry
-      onContinue={() => {
-        if (identityRoute) {
-          router.push(identityRoute);
-          return;
-        }
-        setView({ kind: "identity" });
-      }}
-    />
-  );
+  return <FlowLoading />;
 }
 
 export function asIdentityCallbackOutcome(value: string | null | undefined): IdentityCallbackOutcome | undefined {

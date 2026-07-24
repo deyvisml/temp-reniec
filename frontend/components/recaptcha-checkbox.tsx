@@ -1,11 +1,7 @@
 "use client";
 
-import {
-  GoogleReCaptchaCheckbox,
-  GoogleReCaptchaProvider,
-  useGoogleReCaptcha,
-} from "@google-recaptcha/react";
 import { useCallback, useEffect, useRef } from "react";
+import ReCAPTCHA from "react-google-recaptcha";
 
 type RecaptchaCheckboxProps = {
   resetKey: number;
@@ -24,7 +20,26 @@ export function RecaptchaCheckbox({
   onExpired,
   onError,
 }: RecaptchaCheckboxProps) {
-  const handleProviderError = useCallback(async () => onError(), [onError]);
+  const widgetRef = useRef<ReCAPTCHA>(null);
+  const previousResetKey = useRef(resetKey);
+
+  const handleChange = useCallback(
+    (token: string | null) => {
+      if (token) {
+        onToken(token);
+        return;
+      }
+      onExpired();
+    },
+    [onExpired, onToken],
+  );
+
+  useEffect(() => {
+    if (previousResetKey.current === resetKey) return;
+
+    previousResetKey.current = resetKey;
+    widgetRef.current?.reset();
+  }, [resetKey]);
 
   if (!RECAPTCHA_SITE_KEY) {
     return (
@@ -40,46 +55,14 @@ export function RecaptchaCheckbox({
       aria-label="Verificación de seguridad reCAPTCHA"
       aria-disabled={disabled}
     >
-      <GoogleReCaptchaProvider
-        type="v2-checkbox"
-        siteKey={RECAPTCHA_SITE_KEY}
-        language="es"
-        scriptProps={{ async: true, defer: true }}
-        onError={handleProviderError}
-      >
-        <ResettableCheckbox
-          resetKey={resetKey}
-          onToken={onToken}
-          onExpired={onExpired}
-          onError={onError}
-        />
-      </GoogleReCaptchaProvider>
+      <ReCAPTCHA
+        ref={widgetRef}
+        sitekey={RECAPTCHA_SITE_KEY}
+        hl="es"
+        onChange={handleChange}
+        onExpired={onExpired}
+        onErrored={onError}
+      />
     </div>
-  );
-}
-
-function ResettableCheckbox({
-  resetKey,
-  onToken,
-  onExpired,
-  onError,
-}: Omit<RecaptchaCheckboxProps, "disabled">) {
-  const { reset } = useGoogleReCaptcha();
-  const previousResetKey = useRef(resetKey);
-
-  useEffect(() => {
-    if (previousResetKey.current === resetKey) return;
-    previousResetKey.current = resetKey;
-    reset?.();
-  }, [reset, resetKey]);
-
-  return (
-    <GoogleReCaptchaCheckbox
-      id="initial-query-recaptcha"
-      language="es"
-      onChange={onToken}
-      onExpired={onExpired}
-      onError={onError}
-    />
   );
 }

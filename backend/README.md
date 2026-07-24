@@ -76,7 +76,7 @@ La documentación está habilitada para desarrollo local:
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 - OpenAPI YAML: `http://localhost:8080/v3/api-docs.yaml`
 
-Swagger UI permite explorar y ejecutar las operaciones disponibles contra el backend local. El contrato incluye el estado técnico, el inicio ciudadano y los endpoints de verificación de identidad. La continuidad se documenta como una cookie temporal `FlowCookie`; no es una sesión permanente ni un refresh token.
+Swagger UI permite explorar y ejecutar las operaciones disponibles contra el backend local. El contrato incluye el estado técnico, el inicio ciudadano, la sesión transaccional y los endpoints de verificación de identidad. Las operaciones internas documentan la cookie de access `FlowSessionCookie`; el refresh permanece exclusivamente en su endpoint de rotación.
 
 ## Variables de entorno
 
@@ -109,6 +109,10 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `ID_PERU_CLIENT_ID` / `ID_PERU_CLIENT_SECRET` | Obligatorias en modo `real` | Credenciales autorizadas exclusivas del backend. |
 | `ID_PERU_REFERER` | `/autorizacion` local por defecto; obligatoria en producción | Referer autorizado por RENIEC; HTTP solo se admite para localhost local. |
 | `ID_PERU_FLOW_SECRET` | Valor local de desarrollo; obligatorio externo en `prod` | Base64 de exactamente 32 bytes; deriva claves separadas para PKCE y continuidad. |
+| `SESSION_SIGNING_SECRET` | Valor conocido solo en local; obligatorio externo en `prod` | Base64 de al menos 32 bytes para firmar access y refresh JWT. |
+| `SESSION_ACCESS_TTL` | `15m` | Vigencia corta del access JWT, alineada con el proyecto de autorización de referencia. |
+| `SESSION_REFRESH_TTL` | `3d` | Ventana renovable de la operación activa; cada rotación válida emite un refresh con esta vigencia. |
+| `SESSION_CONCURRENT_REFRESH_WINDOW` | `5s` | Ventana para reconocer una carrera legítima entre pestañas. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
 
@@ -139,7 +143,7 @@ Después de compilar también puedes ejecutar el backend desde `/backend`:
 java -jar target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
 ```
 
-Flyway es el único propietario del esquema y aplica el historial V1–V5 hasta obtener el modelo vigente de siete tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
+Flyway es el único propietario del esquema y aplica el historial V1–V7 hasta obtener el modelo vigente de ocho tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
 
 ## Perfiles
 
@@ -169,15 +173,15 @@ Todo endpoint nuevo o modificado debe actualizar, dentro del mismo incremento:
 - Reglas de seguridad únicamente cuando hayan sido implementadas.
 - Pruebas de cobertura OpenAPI, snapshot y tipos TypeScript derivados.
 
-Un endpoint no se considera terminado mientras la documentación generada difiera de su comportamiento HTTP. No edites manualmente los contratos generados del frontend. Swagger declara únicamente la cookie temporal realmente implementada; no declara bearer tokens ni refresh tokens.
+Un endpoint no se considera terminado mientras la documentación generada difiera de su comportamiento HTTP. No edites manualmente los contratos generados del frontend. Swagger declara la cookie de access realmente implementada y nunca expone el contenido de access o refresh JWT.
 
 ## Verificación de identidad con ID Perú
 
-Tras un resultado `AVAILABLE`, el backend emite continuidad `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/cancelacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
+Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/cancelacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
 
 El retorno siempre responde `303 See Other` hacia una URI frontend fija. Éxitos y fallos no exponen un documento JSON en el navegador ni propagan `code`, `state`, `session_state`, tokens o DNI en la redirección. Solo una identidad verificada recibe la autorización temporal; los resultados controlados regresan al paso 1 mediante un aviso efímero.
 
-Los códigos y tokens no se devuelven al frontend ni se persisten. El verifier se cifra temporalmente con AES-GCM y se elimina al terminar. Una verificación correcta rota la cookie a una autorización temporal cuyo `jti` se almacena solo como hash; logout lo invalida y elimina la cookie. La autorización deja de habilitar el flujo cuando la solicitud alcanza un estado terminal. No existe tabla de sesiones, recuperación multidispositivo ni reapertura de trámites finalizados.
+Los códigos y tokens de ID Perú no se devuelven al frontend ni se persisten. El verifier se cifra temporalmente con AES-GCM y se elimina al terminar. Una verificación correcta eleva la misma sesión a identidad verificada. Los refresh JWT rotan y solo sus hashes se guardan; logout invalida la familia, elimina ambas cookies y abandona una solicitud reversible. No existe recuperación multidispositivo ni reapertura de trámites finalizados.
 
 El ambiente y el adaptador son decisiones separadas. El perfil `local` usa `ID_PERU_MODE=mock` de forma predeterminada, pero permite `ID_PERU_MODE=real` con credenciales autorizadas de desarrollo; `prod` permanece obligatoriamente en `real`. El perfil `test` conserva el simulador controlado.
 
@@ -208,7 +212,7 @@ En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http
 
 Tras iniciar una consulta con cualquier DNI válido que no sea un fixture especial, abre `/cancelacion`. El resultado positivo debe llevarte a `/autorizacion`; desde allí inicia la verificación. El navegador debe salir hacia la URL institucional, ID Perú debe retornar al callback local y la vista final debe permanecer en `/autorizacion`. Si el DNI autenticado no coincide con el ingresado, el rechazo es esperado y no debe deshabilitarse.
 
-La aplicación mantiene internamente las decisiones estables del MVP: conexión 3 s, lectura 5 s, `state` 5 min, continuidad inicial 10 min, autorización 15 min, caché JWKS 15 min, cookie `cancelacion_flow` y ACR `face_mobile`. La cookie es segura salvo en perfiles `local` y `test`. Modificar estos valores requiere una necesidad operativa comprobada y un cambio de código revisado.
+La aplicación mantiene internamente las decisiones estables de ID Perú: conexión 3 s, lectura 5 s, `state` 5 min, caché JWKS 15 min y ACR `face_mobile`. La continuidad del trámite ya no depende de una cookie temporal de ID Perú: utiliza las cookies JWT de sesión documentadas en [`docs/session/README.md`](../docs/session/README.md). Modificar estos valores requiere una necesidad operativa comprobada y un cambio de código revisado.
 
 Migración desde la configuración anterior:
 
@@ -235,7 +239,27 @@ El adaptador de perfiles `local` y `test` es determinista y no representa el con
 | `00000005` | Error técnico controlado |
 | `00000006` | Timeout |
 
-Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que el flujo local normal pueda probarse con la misma identidad que autenticará ID Perú. Los fixtures especiales son sintéticos y ningún resultado produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada. La lista detallada corresponde a un segundo servicio futuro, posterior a ID Perú, y no se implementa ni se simula en este incremento.
+Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que el flujo local normal pueda probarse con la misma identidad que autenticará ID Perú. Los fixtures especiales son sintéticos y ningún resultado inicial produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada.
+
+## Paso 2: listado y selección local
+
+Después de una identidad verificada, `GET /api/v1/cancellation-requests/current/certificates` obtiene una sola vez el listado detallado y devuelve en recargas la instantánea persistida. `PUT /api/v1/cancellation-requests/current/certificate-selection` reemplaza el conjunto completo seleccionado. Ambos endpoints derivan la solicitud desde la cookie de sesión; no aceptan DNI ni `requestId` del navegador.
+
+El perfil `local` usa `CERTIFICATE_LISTING_MODE=mock`. El contrato institucional del segundo servicio aún no está disponible, por lo que el modo `real` falla al iniciar en vez de inventar URL, autenticación o payload. Los escenarios deterministas del mock son:
+
+| DNI ficticio | Listado detallado |
+| --- | --- |
+| `00000020` | Lista vacía |
+| `00000021` | Un certificado |
+| `00000022` | Tres certificados |
+| `00000023` | UUID duplicado, respuesta rechazada |
+| `00000024` | UUID inválido, respuesta rechazada |
+| `00000025` | Timeout |
+| `00000026` | Servicio no disponible |
+| `00000027` | Respuesta malformada |
+| Cualquier otro DNI válido | Tres certificados ficticios |
+
+La lista vacía no crea filas y bloquea el avance. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. La selección exige al menos un UUID, rechaza duplicados o certificados ajenos, y una repetición idéntica es idempotente.
 
 ## Detener y reiniciar MySQL local
 
@@ -276,10 +300,10 @@ Nunca limpies, repares o recrees automáticamente una base compartida o con dato
 
 ## Modelo y seguridad
 
-El esquema contiene siete tablas para solicitud, consulta de disponibilidad, certificados detallados futuros, identidad, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
+El esquema contiene ocho tablas para solicitud, consulta de disponibilidad, certificados detallados futuros, identidad, sesión transaccional, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
 
-La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del progreso y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. `requestId` identifica la solicitud pero no autentica al ciudadano. MySQL no almacena sesiones, tokens, credenciales, biometría, payloads externos completos ni archivos PDF.
+La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del progreso y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. `requestId` identifica la solicitud pero no autentica al ciudadano. MySQL almacena el estado de la sesión y hashes de refresh; nunca almacena JWT completos, credenciales, biometría, payloads externos completos ni archivos PDF.
 
 ## Fuera de alcance
 
-Permanecen diferidos el listado de certificados del paso 2, motivo, confirmación, revocación externa, constancia, recuperación de trámites, retención definitiva, rate limiting productivo, módulos administrativos y despliegue productivo. Compose contiene solo MySQL.
+Permanecen diferidos el contrato real del segundo servicio, motivo, confirmación, revocación externa, constancia, recuperación de trámites, retención definitiva, rate limiting productivo, módulos administrativos y despliegue productivo. Compose contiene solo MySQL.

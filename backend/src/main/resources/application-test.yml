@@ -29,6 +29,9 @@ app:
     mode: mock
     flow-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     mock-scenario: MATCH
+  certificate-listing:
+    mode: mock
+    stale-reservation-threshold: 100ms
 
 server:
   port: 0

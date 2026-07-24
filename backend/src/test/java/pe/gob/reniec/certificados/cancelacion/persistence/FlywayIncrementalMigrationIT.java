@@ -21,7 +21,7 @@ class FlywayIncrementalMigrationIT {
 			.withDatabaseName("cancelacion_incremental_test");
 
 	@Test
-	void upgradesV4ToLatestPreservingDataAndAddingIdentitySecurity() throws Exception {
+	void upgradesV4ToLatestPreservingDataAndAddingFlowSessionSecurity() throws Exception {
 		Flyway v4 = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.target(MigrationVersion.fromVersion("4"))
@@ -34,26 +34,24 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(2);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(3);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
 				SELECT COUNT(*) FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
-				""")).isEqualTo(7);
+				""")).isEqualTo(8);
 		assertThat(singleInt("""
 				SELECT COUNT(*) FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
-				""")).isEqualTo(92);
+				""")).isEqualTo(103);
 		assertThat(schemaRows("""
 				SELECT column_name FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name = 'identity_verification'
 				  AND column_name IN ('provider_mode', 'state_hash', 'state_expires_at', 'state_consumed_at',
-				    'pkce_verifier_protected', 'verified_subject_hash', 'authorization_jti_hash',
-				    'authorization_expires_at', 'authorization_invalidated_at')
+				    'pkce_verifier_protected', 'verified_subject_hash')
 				ORDER BY column_name
-				""")).containsExactly("authorization_expires_at", "authorization_invalidated_at",
-				"authorization_jti_hash", "pkce_verifier_protected", "provider_mode", "state_consumed_at",
+				""")).containsExactly("pkce_verifier_protected", "provider_mode", "state_consumed_at",
 				"state_expires_at", "state_hash", "verified_subject_hash");
 		assertThat(singleInt("""
 				SELECT COUNT(*) FROM information_schema.tables

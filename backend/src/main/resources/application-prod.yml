@@ -4,6 +4,9 @@ spring:
       on-profile: prod
 
 app:
+  session:
+    signing-secret: ${SESSION_SIGNING_SECRET}
+    cookie-secure: true
   frontend-base-url: ${APP_FRONTEND_BASE_URL}
   backend-base-url: ${APP_BACKEND_BASE_URL}
   id-peru:

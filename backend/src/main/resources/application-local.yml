@@ -29,7 +29,7 @@ app:
     mock:
       simulated-timeout: ${AVAILABILITY_MOCK_SIMULATED_TIMEOUT:2s}
   recaptcha:
-    mode: google
+    mode: ${RECAPTCHA_MODE:google}
     google:
       secret-key: ${RECAPTCHA_SECRET_KEY}
       verify-uri: ${RECAPTCHA_VERIFY_URI:https://www.google.com/recaptcha/api/siteverify}
@@ -44,6 +44,11 @@ app:
     referer: ${ID_PERU_REFERER:http://localhost:3000/autorizacion}
     flow-secret: ${ID_PERU_FLOW_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
     mock-scenario: ${ID_PERU_MOCK_SCENARIO:MATCH}
+  certificate-listing:
+    mode: ${CERTIFICATE_LISTING_MODE:mock}
+  session:
+    signing-secret: ${SESSION_SIGNING_SECRET:Y2FuY2VsYWNpb24tbG9jYWwtc2Vzc2lvbi1rZXktMzJiIQ==}
+    cookie-secure: ${SESSION_COOKIE_SECURE:false}
 
 logging:
   level:

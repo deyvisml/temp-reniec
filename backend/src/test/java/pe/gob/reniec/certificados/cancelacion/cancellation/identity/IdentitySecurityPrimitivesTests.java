@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.time.Duration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionJwtService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionProperties;
 
 class IdentitySecurityPrimitivesTests {
 	private IdPeruProperties properties;
@@ -54,14 +57,43 @@ class IdentitySecurityPrimitivesTests {
 	}
 
 	@Test
-	void signsPurposeBoundShortLivedContinuityWithoutPii() {
-		FlowTokenService service = new FlowTokenService(properties, new IdPeruFlowKeys(properties));
-		FlowTokenService.IssuedFlowToken token = service.issueIdentityInit(42L);
+	void signsPurposeBoundShortLivedContinuityWithoutPii() throws Exception {
+		FlowSessionProperties sessionProperties = new FlowSessionProperties();
+		sessionProperties.setSigningSecret("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+		sessionProperties.validate();
+		FlowSessionJwtService service = new FlowSessionJwtService(sessionProperties);
+		FlowSessionJwtService.IssuedToken token = service.issueAccess(7L, 42L);
 		assertThat(token.value()).doesNotContain("12345678");
-		FlowTokenService.FlowTokenClaims claims = service.validate(token.value(), FlowTokenPurpose.IDENTITY_INIT);
+		assertThat(com.nimbusds.jwt.SignedJWT.parse(token.value()).getJWTClaimsSet().getClaims().keySet())
+				.containsExactlyInAnyOrder("iss", "aud", "iat", "exp", "jti", "typ", "sid", "rid")
+				.doesNotContain("dni", "certificates", "name");
+		FlowSessionJwtService.Claims claims = service.validate(token.value(), "access");
 		assertThat(claims.requestId()).isEqualTo(42L);
-		assertThatThrownBy(() -> service.validate(token.value(), FlowTokenPurpose.FLOW_AUTH))
-				.isInstanceOf(IdentityIntegrationException.class);
+		assertThatThrownBy(() -> service.validate(token.value(), "refresh"))
+				.isInstanceOf(pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException.class);
+		String[] segments = token.value().split("\\.");
+		String signature = segments[2];
+		String tampered = segments[0] + "." + segments[1] + "."
+				+ (signature.startsWith("A") ? "B" : "A") + signature.substring(1);
+		assertThatThrownBy(() -> service.validate(tampered, "access"))
+				.isInstanceOf(pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException.class);
+	}
+
+	@Test
+	void rejectsUnsafeSessionDurationRelationships() {
+		FlowSessionProperties properties = new FlowSessionProperties();
+		properties.setSigningSecret("MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
+		properties.setAccessTtl(Duration.ofDays(3));
+		properties.setRefreshTtl(Duration.ofDays(3));
+		assertThatThrownBy(properties::validate)
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("access-ttl");
+
+		properties.setAccessTtl(Duration.ofMinutes(15));
+		properties.setConcurrentRefreshWindow(Duration.ofMinutes(15));
+		assertThatThrownBy(properties::validate)
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("concurrent-refresh-window");
 	}
 
 	@Test

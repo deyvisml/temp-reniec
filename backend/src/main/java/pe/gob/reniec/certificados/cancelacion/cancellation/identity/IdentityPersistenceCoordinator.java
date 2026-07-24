@@ -1,6 +1,7 @@
 package pe.gob.reniec.certificados.cancelacion.cancellation.identity;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.ObjectProvider;
@@ -69,13 +70,12 @@ public class IdentityPersistenceCoordinator {
 
 	@Transactional
 	public void completeSuccess(Long attemptId, String subjectHash, String externalReference,
-			String sessionState, String jtiHash, Instant authorizationExpiresAt) {
+			String sessionState) {
 		ensurePersistence();
 		IdentityVerificationEntity entity = verifications.findByIdForUpdate(attemptId)
 				.orElseThrow(() -> unauthorized("Intento no encontrado"));
 		entity.finish(IdentityVerificationStatus.VERIFIED, IdentityMatchResult.MATCH, Instant.now(),
 				externalReference, null, sessionState, subjectHash);
-		entity.issueAuthorization(jtiHash, authorizationExpiresAt);
 		CertificateCancellationRequestEntity request = requests.findByIdForUpdate(entity.getRequest().getId())
 				.orElseThrow(() -> unauthorized("Solicitud no encontrada"));
 		request.transitionTo(CancellationRequestStatus.IDENTITY_VERIFIED, null);
@@ -91,16 +91,9 @@ public class IdentityPersistenceCoordinator {
 	}
 
 	@Transactional(readOnly = true)
-	public IdentityVerificationEntity latest(Long requestId) {
+	public Optional<IdentityVerificationEntity> latest(Long requestId) {
 		ensurePersistence();
-		return verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(requestId)
-				.orElseThrow(() -> unauthorized("No existe una autenticación iniciada"));
-	}
-
-	@Transactional
-	public void invalidate(Long attemptId) {
-		ensurePersistence();
-		verifications.findByIdForUpdate(attemptId).ifPresent(entity -> entity.invalidateAuthorization(Instant.now(), "LOGOUT"));
+		return verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(requestId);
 	}
 
 	private static IdentityIntegrationException unauthorized(String message) {

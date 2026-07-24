@@ -87,6 +87,20 @@ describe("requestJson", () => {
     vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response("gateway detail", { status: 502 })));
     await expect(requestJson("/technical/example")).rejects.toMatchObject({ code: "HTTP_ERROR", status: 502 });
   });
+
+  it("coordinates one refresh and retries the protected request once", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ code: "SESSION_EXPIRED" }, 401))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ nextStep: "IDENTITY_VERIFICATION" }, 200));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(requestJson<{ nextStep: string }>("/api/v1/session/current"))
+      .resolves.toMatchObject({ data: { nextStep: "IDENTITY_VERIFICATION" } });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/api/v1/session/refresh");
+    expect(fetchMock.mock.calls[1][1]?.credentials).toBe("include");
+  });
 });
 
 function abortableFetch() {

@@ -15,8 +15,12 @@ type IdentityView = "ready" | "starting";
 
 export function IdentityVerificationPanel({
   callbackOutcome,
+  identityVerified = false,
+  onContinue,
 }: {
   callbackOutcome?: IdentityCallbackOutcome;
+  identityVerified?: boolean;
+  onContinue?: () => void;
 }) {
   const [view, setView] = useState<IdentityView>("ready");
   const [outcome, setOutcome] = useState<IdentityCallbackOutcome | undefined>(callbackOutcome);
@@ -44,7 +48,11 @@ export function IdentityVerificationPanel({
         <IdentityCallbackAlert outcome={outcome} onAcknowledge={() => setOutcome(undefined)} />
       ) : null}
       <div className="px-2 sm:px-8 lg:px-14">
-        <CancellationStepper currentStep={1} />
+        <CancellationStepper
+          currentStep={1}
+          navigableSteps={identityVerified ? [2] : []}
+          onNavigate={identityVerified ? onContinue : undefined}
+        />
       </div>
       <div className="mx-2 mt-6 rounded-[22px] border border-[#dfe7f3] bg-white/95 px-6 py-8 shadow-[0_24px_70px_-36px_#001b6066] sm:mx-8 sm:px-10 lg:mx-14 lg:px-14">
         <div className="mx-auto max-w-[760px] text-center">
@@ -78,11 +86,16 @@ export function IdentityVerificationPanel({
             />
           </div>
 
-          <p className="mt-4 flex items-center justify-center gap-2 text-sm text-[#52678f]"><LockIcon /> Tu información se transmite de forma segura.</p>
-          <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
-            <FaceScanIcon />
-            {view === "starting" ? "Conectando con ID Perú…" : "Iniciar verificación facial con ID Perú"}
-          </button>
+          {identityVerified ? (
+            <button type="button" onClick={onContinue} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
+              Continuar a selección de certificados <ForwardIcon />
+            </button>
+          ) : (
+            <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
+              <FaceScanIcon />
+              {view === "starting" ? "Conectando con ID Perú…" : "Iniciar verificación facial con ID Perú"}
+            </button>
+          )}
         </div>
       </div>
     </section>
@@ -131,5 +144,5 @@ const iconClass = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] 
 function ShieldCheckIcon() { return <svg className={iconClass} viewBox="0 0 24 24"><path d="M12 3 5.5 6v5.2c0 4.2 2.5 7.7 6.5 9.8 4-2.1 6.5-5.6 6.5-9.8V6L12 3Z"/><path d="m9.2 12 1.8 1.8 3.8-4"/></svg>; }
 function BoltIcon() { return <svg className={iconClass} viewBox="0 0 24 24"><path d="m13.5 2-8 12h6l-1 8 8-12h-6l1-8Z"/></svg>; }
 function OfficialIcon() { return <svg className={iconClass} viewBox="0 0 24 24"><path d="m12 3 2 2.2 3-.2.8 2.9 2.6 1.5-1.1 2.8 1.1 2.8-2.6 1.5-.8 2.9-3-.2L12 21l-2-2.2-3 .2-.8-2.9-2.6-1.5 1.1-2.8-1.1-2.8 2.6-1.5L7 5l3 .2L12 3Z"/><path d="m9.5 12 1.7 1.7 3.5-3.7"/></svg>; }
-function LockIcon() { return <svg className={`${iconClass} size-5 shrink-0 text-[#1749a8]`} viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10M12 14v2"/></svg>; }
 function FaceScanIcon() { return <svg className={`${iconClass} size-6 shrink-0`} viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="10" r="2.5"/><path d="M7.5 17c.6-2.7 2.1-4 4.5-4s3.9 1.3 4.5 4"/></svg>; }
+function ForwardIcon() { return <svg className={`${iconClass} size-5 shrink-0`} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>; }

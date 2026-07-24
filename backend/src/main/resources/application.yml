@@ -37,6 +37,17 @@ app:
   id-peru:
     mode: disabled
     version: v1
+  certificate-listing:
+    mode: ${CERTIFICATE_LISTING_MODE:disabled}
+    stale-reservation-threshold: ${CERTIFICATE_LISTING_STALE_THRESHOLD:30s}
+  session:
+    issuer: cancelacion-certificados-backend
+    audience: cancelacion-certificados-flow
+    signing-secret: ${SESSION_SIGNING_SECRET:}
+    access-ttl: ${SESSION_ACCESS_TTL:15m}
+    refresh-ttl: ${SESSION_REFRESH_TTL:3d}
+    concurrent-refresh-window: ${SESSION_CONCURRENT_REFRESH_WINDOW:5s}
+    cookie-secure: ${SESSION_COOKIE_SECURE:true}
 
 server:
   port: ${SERVER_PORT:8080}

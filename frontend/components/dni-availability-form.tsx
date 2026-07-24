@@ -12,6 +12,8 @@ import { HttpClientError } from "@/lib/http-client";
 import { RecaptchaCheckbox, RECAPTCHA_SITE_KEY } from "@/components/recaptcha-checkbox";
 
 export const DNI_PATTERN = /^[0-9]{8}$/;
+export const RECAPTCHA_ENABLED = process.env.NEXT_PUBLIC_RECAPTCHA_ENABLED?.trim().toLowerCase() !== "false";
+const LOCAL_ANTI_BOT_EVIDENCE = "local-development-bypass";
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
 const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
@@ -27,8 +29,10 @@ export function canSubmitInitialQuery(
   recaptchaToken: string,
   pending: boolean,
   siteKeyConfigured = Boolean(RECAPTCHA_SITE_KEY),
+  recaptchaEnabled = RECAPTCHA_ENABLED,
 ): boolean {
-  return !pending && !validateDni(dni) && recaptchaToken.length > 0 && siteKeyConfigured;
+  const antiBotReady = !recaptchaEnabled || (recaptchaToken.length > 0 && siteKeyConfigured);
+  return !pending && !validateDni(dni) && antiBotReady;
 }
 
 export function isConsistentInitialResponse(response: CancellationRequestResponse): boolean {
@@ -99,10 +103,12 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
       inputRef.current?.focus();
       return;
     }
-    if (!recaptchaToken) {
+    if (RECAPTCHA_ENABLED && !recaptchaToken) {
       setSecurityMessage("Completa la verificación de seguridad para continuar.");
       return;
     }
+
+    const antiBotEvidence = RECAPTCHA_ENABLED ? recaptchaToken : LOCAL_ANTI_BOT_EVIDENCE;
 
     setFieldError(undefined);
     submissionInFlightRef.current = true;
@@ -112,7 +118,7 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
     controllerRef.current = controller;
 
     try {
-      const result = await startCancellationRequest(dni, recaptchaToken, controller.signal);
+      const result = await startCancellationRequest(dni, antiBotEvidence, controller.signal);
       const response = result.data;
       if (!response) throw new HttpClientError("Respuesta vacía.", { code: "INVALID_RESPONSE" });
       if (!isConsistentInitialResponse(response)) {
@@ -210,25 +216,27 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
         </p>
       </div>
 
-      <div className="mb-5" aria-describedby={securityMessage ? "recaptcha-error" : undefined}>
-        <RecaptchaCheckbox
-          resetKey={recaptchaResetKey}
-          disabled={pending}
-          onToken={handleRecaptchaToken}
-          onExpired={handleRecaptchaExpired}
-          onError={handleRecaptchaError}
-        />
-        {securityMessage ? (
-          <p
-            id="recaptcha-error"
-            className="mx-auto mt-2 text-sm font-semibold text-[#9b003a]"
-            role="alert"
-            aria-live="polite"
-          >
-            {securityMessage}
-          </p>
-        ) : null}
-      </div>
+      {RECAPTCHA_ENABLED ? (
+        <div className="mb-5" aria-describedby={securityMessage ? "recaptcha-error" : undefined}>
+          <RecaptchaCheckbox
+            resetKey={recaptchaResetKey}
+            disabled={pending}
+            onToken={handleRecaptchaToken}
+            onExpired={handleRecaptchaExpired}
+            onError={handleRecaptchaError}
+          />
+          {securityMessage ? (
+            <p
+              id="recaptcha-error"
+              className="mx-auto mt-2 text-sm font-semibold text-[#9b003a]"
+              role="alert"
+              aria-live="polite"
+            >
+              {securityMessage}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <button className={primaryActionClasses} type="submit" disabled={!canSubmitInitialQuery(dni, recaptchaToken, pending)}>
         <span>{pending ? "Consultando disponibilidad…" : "Iniciar cancelación"}</span>

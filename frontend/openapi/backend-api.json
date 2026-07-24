@@ -105,6 +105,7 @@
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
               "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
+              "CHECKING_CERTIFICATE_LIST",
               "CERTIFICATES_AVAILABLE",
               "CERTIFICATES_SELECTED",
               "REASON_REGISTERED",
@@ -131,6 +132,87 @@
           "nextStep",
           "requestId",
           "requestStatus"
+        ],
+        "type": "object"
+      },
+      "CertificateItem": {
+        "description": "Certificado vigente obtenido después de autenticar al ciudadano.",
+        "properties": {
+          "availabilityStatus": {
+            "type": "string"
+          },
+          "certificateUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "emissionCreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "orderNumber": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "availabilityStatus",
+          "certificateUuid",
+          "emissionCreatedAt",
+          "orderNumber",
+          "selected"
+        ],
+        "type": "object"
+      },
+      "CertificateListResponse": {
+        "description": "Listado persistido de certificados vigentes de la solicitud autenticada.",
+        "properties": {
+          "canContinue": {
+            "type": "boolean"
+          },
+          "certificates": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateItem"
+            },
+            "type": "array"
+          },
+          "requestStatus": {
+            "type": "string"
+          },
+          "selectedCount": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "canContinue",
+          "certificates",
+          "requestStatus",
+          "selectedCount"
+        ],
+        "type": "object"
+      },
+      "CertificateSelectionRequest": {
+        "description": "Conjunto completo de certificados que el ciudadano selecciona para cancelar.",
+        "properties": {
+          "certificateUuids": {
+            "description": "UUID canónicos de la solicitud activa; no admite duplicados.",
+            "items": {
+              "minLength": 1,
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "maxLength": 100,
+            "minItems": 0,
+            "minLength": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "certificateUuids"
         ],
         "type": "object"
       },
@@ -182,6 +264,54 @@
           "canContinue",
           "nextStep",
           "status"
+        ],
+        "type": "object"
+      },
+      "CurrentSession": {
+        "description": "Contexto seguro de la operación activa y el siguiente paso autorizado.",
+        "properties": {
+          "dni": {
+            "description": "DNI completo mostrado únicamente dentro de la sesión autenticada.",
+            "pattern": "^[0-9]{8}$",
+            "type": "string"
+          },
+          "nextStep": {
+            "enum": [
+              "IDENTITY_VERIFICATION",
+              "CERTIFICATE_SELECTION",
+              "REASON"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "description": "Identificador técnico de solicitud.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "requestStatus": {
+            "description": "Estado controlado de la solicitud.",
+            "type": "string"
+          },
+          "sessionId": {
+            "description": "Identificador técnico de sesión.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sessionStatus": {
+            "enum": [
+              "PENDING_IDENTITY",
+              "IDENTITY_VERIFIED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "dni",
+          "nextStep",
+          "requestId",
+          "requestStatus",
+          "sessionId",
+          "sessionStatus"
         ],
         "type": "object"
       },
@@ -251,10 +381,16 @@
       }
     },
     "securitySchemes": {
-      "FlowCookie": {
-        "description": "Continuidad temporal HttpOnly emitida por el backend; no es una sesión permanente.",
+      "FlowRefreshCookie": {
+        "description": "Refresh JWT rotatorio, transportado exclusivamente mediante cookie HttpOnly.",
         "in": "cookie",
-        "name": "cancelacion_flow",
+        "name": "cancelacion_refresh",
+        "type": "apiKey"
+      },
+      "FlowSessionCookie": {
+        "description": "Access JWT de la sesión transaccional, transportado exclusivamente mediante cookie HttpOnly.",
+        "in": "cookie",
+        "name": "cancelacion_access",
         "type": "apiKey"
       }
     }
@@ -512,6 +648,180 @@
         ]
       }
     },
+    "/api/v1/cancellation-requests/current/certificate-selection": {
+      "put": {
+        "description": "Reemplazo idempotente del conjunto seleccionado. Cada UUID debe pertenecer al listado persistido de la solicitud autenticada.",
+        "operationId": "replaceCurrentCertificateSelection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateListResponse"
+                }
+              }
+            },
+            "description": "Selección persistida y paso 3 habilitado"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Formato inválido"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Origen o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Actualización concurrente de la selección"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "UUID duplicado, ajeno o no disponible"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Confirma el conjunto completo de certificados seleccionados",
+        "tags": [
+          "Certificados vigentes"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/certificates": {
+      "get": {
+        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida. No recibe DNI ni identificadores de solicitud desde el navegador.",
+        "operationId": "getCurrentRequestCertificates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateListResponse"
+                }
+              }
+            },
+            "description": "Listado persistido, incluido el escenario vacío"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad no verificada o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Consulta concurrente"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Respuesta externa inválida"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Servicio de listado no disponible"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Timeout del servicio de listado"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Obtiene el listado de certificados de la solicitud autenticada",
+        "tags": [
+          "Certificados vigentes"
+        ]
+      }
+    },
     "/api/v1/identity-verifications": {
       "post": {
         "description": "Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
@@ -560,7 +870,7 @@
         },
         "security": [
           {
-            "FlowCookie": []
+            "FlowSessionCookie": []
           }
         ],
         "summary": "Inicia la autenticación con ID Perú",
@@ -587,30 +897,10 @@
         },
         "security": [
           {
-            "FlowCookie": []
+            "FlowSessionCookie": []
           }
         ],
         "summary": "Consulta el estado de autenticación actual",
-        "tags": [
-          "Verificación de identidad"
-        ]
-      }
-    },
-    "/api/v1/identity-verifications/logout": {
-      "post": {
-        "description": "Invalida el jti persistido y elimina la cookie; no inventa un contrato de logout remoto.",
-        "operationId": "logoutIdentityVerification",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowCookie": []
-          }
-        ],
-        "summary": "Invalida la autorización temporal local",
         "tags": [
           "Verificación de identidad"
         ]
@@ -698,6 +988,70 @@
         "summary": "Procesa el retorno POST de ID Perú",
         "tags": [
           "Verificación de identidad"
+        ]
+      }
+    },
+    "/api/v1/session/current": {
+      "get": {
+        "operationId": "getCurrentFlowSession",
+        "responses": {
+          "200": {
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentSession"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Consulta la sesión y el paso actualmente autorizado",
+        "tags": [
+          "Sesión del flujo"
+        ]
+      }
+    },
+    "/api/v1/session/logout": {
+      "post": {
+        "operationId": "logoutFlowSession",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Cierra la sesión y abandona la operación activa reversible",
+        "tags": [
+          "Sesión del flujo"
+        ]
+      }
+    },
+    "/api/v1/session/refresh": {
+      "post": {
+        "operationId": "refreshFlowSession",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowRefreshCookie": []
+          }
+        ],
+        "summary": "Rota el refresh token y renueva el access token",
+        "tags": [
+          "Sesión del flujo"
         ]
       }
     },
@@ -791,6 +1145,14 @@
     {
       "description": "Inicio, callback, estado e invalidación temporal de ID Perú.",
       "name": "Verificación de identidad"
+    },
+    {
+      "description": "Consulta, renovación y cierre de la operación ciudadana activa.",
+      "name": "Sesión del flujo"
+    },
+    {
+      "description": "Listado autenticado y selección de certificados de la operación activa.",
+      "name": "Certificados vigentes"
     },
     {
       "description": "Disponibilidad operativa del backend y sus dependencias.",

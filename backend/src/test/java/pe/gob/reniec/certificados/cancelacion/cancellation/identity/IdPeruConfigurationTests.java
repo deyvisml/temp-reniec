@@ -108,12 +108,9 @@ class IdPeruConfigurationTests {
 
 		assertThat(properties.isCookieSecure()).isFalse();
 		assertThat(properties.getAcrValues()).isEqualTo("face_mobile");
-		assertThat(properties.getCookieName()).isEqualTo("cancelacion_flow");
 		assertThat(properties.getConnectTimeout()).isEqualTo(java.time.Duration.ofSeconds(3));
 		assertThat(properties.getReadTimeout()).isEqualTo(java.time.Duration.ofSeconds(5));
 		assertThat(properties.getStateTtl()).isEqualTo(java.time.Duration.ofMinutes(5));
-		assertThat(properties.getIdentityInitTtl()).isEqualTo(java.time.Duration.ofMinutes(10));
-		assertThat(properties.getFlowAuthorizationTtl()).isEqualTo(java.time.Duration.ofMinutes(15));
 		assertThat(properties.getJwksTtl()).isEqualTo(java.time.Duration.ofMinutes(15));
 	}
 

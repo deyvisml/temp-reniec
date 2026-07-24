@@ -534,6 +534,8 @@ Resultado y constancia
 | RN-34 | Las solicitudes anteriores deben conservarse como historial, sin convertirse en el contexto activo del nuevo ingreso | Confirmado |
 | RN-35 | Una solicitud anterior no confirmada puede marcarse como abandonada cuando una nueva solicitud la sustituya | Confirmado |
 | RN-36 | Una revocación confirmada en curso o con resultado incierto debe impedir temporalmente otro inicio sin revelar ni recuperar el trámite anterior | Confirmado por integridad e idempotencia |
+| RN-37 | Un resultado inicial positivo crea una única sesión transaccional para la operación activa; home permanece pública y los pasos internos exigen esa sesión | Confirmado |
+| RN-38 | ID Perú debe elevar la misma sesión existente y el cierre debe invalidarla, limpiar cookies y abandonar solo una solicitud reversible | Confirmado |
 | RN-37 | La selección queda inmutable después de la confirmación ciudadana | Confirmado |
 | RN-38 | Los certificados no seleccionados quedan fuera de la operación y no cambian de estado | Confirmado |
 | RN-39 | Un resultado incierto conserva la misma operación y clave de idempotencia hasta su reconciliación | Confirmado |

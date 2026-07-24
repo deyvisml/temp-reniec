@@ -81,18 +81,6 @@ public class IdentityVerificationEntity {
 	@Column(name = "correlation_id", nullable = false, updatable = false, length = 64)
 	private String correlationId;
 
-	@Column(name = "authorization_jti_hash", length = 64)
-	private String authorizationJtiHash;
-
-	@Column(name = "authorization_expires_at")
-	private Instant authorizationExpiresAt;
-
-	@Column(name = "authorization_invalidated_at")
-	private Instant authorizationInvalidatedAt;
-
-	@Column(name = "authorization_invalidation_reason", length = 64)
-	private String authorizationInvalidationReason;
-
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
 
@@ -149,23 +137,6 @@ public class IdentityVerificationEntity {
 		this.verifiedSubjectHash = verifiedSubjectHash == null ? null
 				: requireLength(verifiedSubjectHash, "verifiedSubjectHash", 64);
 		pkceVerifierProtected = null;
-	}
-
-	public void issueAuthorization(String jtiHash, Instant expiresAt) {
-		if (verificationStatus != IdentityVerificationStatus.VERIFIED
-				|| dniMatchResult != IdentityMatchResult.MATCH) {
-			throw new IllegalStateException("Authorization requires a matching verified identity");
-		}
-		authorizationJtiHash = requireLength(jtiHash, "jtiHash", 64);
-		authorizationExpiresAt = Objects.requireNonNull(expiresAt, "expiresAt");
-		authorizationInvalidatedAt = null;
-		authorizationInvalidationReason = null;
-	}
-
-	public void invalidateAuthorization(Instant at, String reason) {
-		if (authorizationJtiHash == null) return;
-		authorizationInvalidatedAt = Objects.requireNonNull(at, "at");
-		authorizationInvalidationReason = bounded(requireText(reason, "reason"), 64);
 	}
 
 	@PrePersist
@@ -226,10 +197,6 @@ public class IdentityVerificationEntity {
 	public Instant getCompletedAt() { return completedAt; }
 	public String getErrorOrCancellationCode() { return errorOrCancellationCode; }
 	public String getCorrelationId() { return correlationId; }
-	public String getAuthorizationJtiHash() { return authorizationJtiHash; }
-	public Instant getAuthorizationExpiresAt() { return authorizationExpiresAt; }
-	public Instant getAuthorizationInvalidatedAt() { return authorizationInvalidatedAt; }
-	public String getAuthorizationInvalidationReason() { return authorizationInvalidationReason; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }
 }

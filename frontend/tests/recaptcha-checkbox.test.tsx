@@ -16,12 +16,13 @@ describe("reCAPTCHA checkbox wrapper", () => {
 
   it("wires token, expiration, error and a stable reset lifecycle without browser persistence", () => {
     const source = readFileSync(join(process.cwd(), "components", "recaptcha-checkbox.tsx"), "utf8");
-    expect(source).toContain('type="v2-checkbox"');
-    expect(source).toContain("onChange={onToken}");
+    expect(source).toContain('from "react-google-recaptcha"');
+    expect(source).toContain("sitekey={RECAPTCHA_SITE_KEY}");
+    expect(source).toContain("onChange={handleChange}");
     expect(source).toContain("onExpired={onExpired}");
-    expect(source).toContain("onError={onError}");
-    expect(source).toContain("useGoogleReCaptcha");
-    expect(source).toContain("reset?.()");
+    expect(source).toContain("onErrored={onError}");
+    expect(source).toContain("widgetRef.current?.reset()");
+    expect(source).not.toContain("@google-recaptcha/react");
     expect(source).not.toContain("key={resetKey}");
     expect(source).not.toMatch(/localStorage|sessionStorage|document\.cookie|test-recaptcha-valid/);
   });

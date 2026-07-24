@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  activeFlowRoute,
   CANCELLATION_FLOW_ROUTE,
   LOCAL_IDENTITY_ROUTE,
   usesLocalIdentityRoute,
@@ -22,10 +23,11 @@ describe("rutas del flujo ciudadano", () => {
     expect(usesLocalIdentityRoute("production", "development")).toBe(false);
     expect(usesLocalIdentityRoute(undefined, "development")).toBe(true);
     expect(usesLocalIdentityRoute(undefined, "production")).toBe(false);
+    expect(activeFlowRoute("local", "production")).toBe(LOCAL_IDENTITY_ROUTE);
+    expect(activeFlowRoute("production", "development")).toBe(CANCELLATION_FLOW_ROUTE);
   });
 
   it.each([
-    "app/page.tsx",
     "app/verificacion-identidad/page.tsx",
     "app/verificacion-identidad/retorno/page.tsx",
   ])("redirige %s hacia la ruta canónica", (file) => {
@@ -35,21 +37,38 @@ describe("rutas del flujo ciudadano", () => {
     expect(content).not.toMatch(/requestId|dni=|step=|code=|token=/i);
   });
 
+  it("mantiene home pública y solo redirige cuando existe una sesión activa", () => {
+    const home = source("app/page.tsx");
+    expect(home).toContain("readServerFlowSession");
+    expect(home).toContain("<PublicCancellationEntry />");
+    expect(home).toContain("activeFlowRoute");
+    expect(home).toContain("redirect(flowRoute)");
+  });
+
   it("renderiza el paso 1 en /autorizacion solo para el ambiente local", () => {
     const authorizationPage = source("app/autorizacion/page.tsx");
     const cancellationPage = source("app/cancelacion/page.tsx");
 
     expect(authorizationPage).toContain("if (!usesLocalIdentityRoute()) redirect(CANCELLATION_FLOW_ROUTE)");
-    expect(authorizationPage).toContain('<CancellationFlow initialRoute="identity" />');
-    expect(cancellationPage).toContain("usesLocalIdentityRoute() ? LOCAL_IDENTITY_ROUTE : undefined");
+    expect(authorizationPage).toContain("<CancellationFlow />");
+    expect(cancellationPage).toContain("<CancellationFlow />");
+    expect(source("app/cancelacion/layout.tsx")).toContain("requireServerFlowSession");
+    expect(source("app/autorizacion/layout.tsx")).toContain("requireServerFlowSession");
+    expect(source("app/api/session/refresh/route.ts")).toContain("getSetCookie");
+    expect(source("app/api/session/refresh/route.ts")).toContain("cancelacion_refresh");
+    expect(source("app/api/session/refresh/route.ts")).not.toContain("cookies.getAll");
+    expect(source("lib/server-flow-session.ts")).not.toContain("store.getAll");
     expect(authorizationPage).not.toMatch(/requestId|dni=|step=|code=|token=/i);
   });
 
-  it("navega al paso local y consulta el contexto temporal al recargar", () => {
+  it("consulta el contexto protegido al recargar sin persistencia del navegador", () => {
     const flow = source("components/cancellation-flow.tsx");
     expect(flow).toContain("getCurrentIdentityVerification");
     expect(flow).toContain('setView({ kind: "identity" })');
-    expect(flow).toContain("router.push(identityRoute)");
+    expect(source("components/public-cancellation-entry.tsx")).toContain("router.push");
+    expect(source("lib/http-client.ts")).toContain("refreshInFlight");
+    expect(source("components/internal-flow-header.tsx")).toContain("BroadcastChannel");
+    expect(source("components/internal-flow-header.tsx")).toContain("Cerrar sesión");
     expect(flow).not.toMatch(/window\.location|URLSearchParams/);
     expect(flow).not.toMatch(/localStorage|sessionStorage/);
   });

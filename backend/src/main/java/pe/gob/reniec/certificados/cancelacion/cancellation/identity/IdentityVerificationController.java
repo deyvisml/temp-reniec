@@ -21,17 +21,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import pe.gob.reniec.certificados.cancelacion.shared.error.ApiError;
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
+import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionCookieService;
 
 @RestController
 @Tag(name = "Verificación de identidad", description = "Autenticación temporal del ciudadano mediante ID Perú.")
 public class IdentityVerificationController {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IdentityVerificationController.class);
 	private final IdentityVerificationService service;
-	private final FlowCookieService cookies;
+	private final FlowSessionCookieService cookies;
 	private final IdentityCallbackOutcomeCookieService callbackOutcomes;
 	private final IdPeruProperties properties;
 
-	public IdentityVerificationController(IdentityVerificationService service, FlowCookieService cookies,
+	public IdentityVerificationController(IdentityVerificationService service, FlowSessionCookieService cookies,
 			IdentityCallbackOutcomeCookieService callbackOutcomes, IdPeruProperties properties) {
 		this.service = service;
 		this.cookies = cookies;
@@ -42,7 +43,7 @@ public class IdentityVerificationController {
 	@PostMapping(path = "/api/v1/identity-verifications", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "startIdentityVerification", summary = "Inicia la autenticación con ID Perú",
 			description = "Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
-			security = @SecurityRequirement(name = "FlowCookie"))
+			security = @SecurityRequirement(name = "FlowSessionCookie"))
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "URL de autorización preparada"),
 		@ApiResponse(responseCode = "401", description = "Continuidad ausente o inválida",
 				content = @Content(schema = @Schema(implementation = ApiError.class))),
@@ -52,7 +53,7 @@ public class IdentityVerificationController {
 				content = @Content(schema = @Schema(implementation = ApiError.class))) })
 	public IdentityStartResponse start(HttpServletRequest request) {
 		String correlation = String.valueOf(request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE));
-		return new IdentityStartResponse(service.start(cookies.read(request), correlation).toString());
+		return new IdentityStartResponse(service.start(cookies.access(request).orElseThrow(() -> unauthorized()), correlation).toString());
 	}
 
 	@GetMapping(path = "/api/v1/idperu/callback")
@@ -84,7 +85,7 @@ public class IdentityVerificationController {
 			IdentityVerificationService.CallbackResult result = service.callback(code, state, sessionState, error);
 			if (result.verified()) {
 				response.header(HttpHeaders.SET_COOKIE,
-						cookies.create(result.token().value(), result.token().expiresAt()).toString(),
+						cookies.access(result.accessToken().value(), result.accessToken().expiresAt()).toString(),
 						callbackOutcomes.clear().toString());
 			}
 			else {
@@ -107,9 +108,9 @@ public class IdentityVerificationController {
 	@GetMapping(path = "/api/v1/identity-verifications/current", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "getCurrentIdentityVerification", summary = "Consulta el estado de autenticación actual",
 			description = "Resuelve el intento desde la cookie HttpOnly, valida la autorización y consume el resultado de presentación del callback.",
-			security = @SecurityRequirement(name = "FlowCookie"))
+			security = @SecurityRequirement(name = "FlowSessionCookie"))
 	public ResponseEntity<CurrentIdentityResponse> current(HttpServletRequest request) {
-		IdentityVerificationService.CurrentIdentityStatus status = service.current(cookies.read(request));
+		IdentityVerificationService.CurrentIdentityStatus status = service.current(cookies.access(request).orElseThrow(() -> unauthorized()));
 		IdentityCallbackOutcome callbackOutcome = callbackOutcomes.read(request).orElse(null);
 		ResponseEntity.BodyBuilder response = ResponseEntity.ok();
 		if (callbackOutcome != null) {
@@ -119,13 +120,9 @@ public class IdentityVerificationController {
 				callbackOutcome == null ? null : callbackOutcome.name()));
 	}
 
-	@PostMapping("/api/v1/identity-verifications/logout")
-	@Operation(operationId = "logoutIdentityVerification", summary = "Invalida la autorización temporal local",
-			description = "Invalida el jti persistido y elimina la cookie; no inventa un contrato de logout remoto.",
-			security = @SecurityRequirement(name = "FlowCookie"))
-	public ResponseEntity<Void> logout(HttpServletRequest request) {
-		service.logout(cookies.read(request));
-		return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, cookies.clear().toString()).build();
+	private static pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException unauthorized() {
+		return new pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException(
+				pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException.Reason.REQUIRED);
 	}
 
 	public record IdentityStartResponse(
