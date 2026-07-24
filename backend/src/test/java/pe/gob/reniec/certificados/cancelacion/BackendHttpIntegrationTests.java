@@ -178,6 +178,8 @@ class BackendHttpIntegrationTests {
 				"/api/v1/system/status", "/api/v1/cancellation-requests",
 				"/api/v1/cancellation-requests/current/certificates",
 				"/api/v1/cancellation-requests/current/certificate-selection",
+				"/api/v1/cancellation-requests/current/review",
+				"/api/v1/cancellation-requests/current/confirmation",
 				"/api/v1/identity-verifications", "/api/v1/idperu/callback",
 				"/api/v1/identity-verifications/current", "/api/v1/session/current",
 				"/api/v1/session/refresh", "/api/v1/session/logout",
@@ -189,6 +191,8 @@ class BackendHttpIntegrationTests {
 		assertThat(document)
 				.contains("\"/actuator/health\"", "getSystemStatus", "initiateCancellationRequest",
 						"getCurrentRequestCertificates", "replaceCurrentCertificateSelection",
+						"getCurrentCancellationReview", "confirmCurrentCancellation",
+						"CancellationReviewResponse", "CancellationConfirmationRequest",
 						"CertificateListResponse", "CertificateSelectionRequest",
 						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
 						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
@@ -223,6 +227,25 @@ class BackendHttpIntegrationTests {
 
 	private HttpResponse<String> send(HttpRequest request) throws IOException, InterruptedException {
 		return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
+	@Test
+	void cancellationReviewAndConfirmationRequireTheFlowSession() throws Exception {
+		HttpResponse<String> review = send(HttpRequest.newBuilder(
+				uri("/api/v1/cancellation-requests/current/review")).GET().build());
+		HttpResponse<String> confirmation = send(HttpRequest.newBuilder(
+				uri("/api/v1/cancellation-requests/current/confirmation"))
+				.header(HttpHeaders.CONTENT_TYPE, "application/json")
+				.POST(HttpRequest.BodyPublishers.ofString(
+						"{\"consentAccepted\":true,\"consentVersion\":\"CANCELACION_CERTIFICADOS_V1\"}"))
+				.build());
+
+		assertThat(review.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+		assertThat(confirmation.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+		assertThat(review.body()).contains("\"code\":\"SESSION_REQUIRED\"")
+				.doesNotContain("dni", "uuid", "trace");
+		assertThat(confirmation.body()).contains("\"code\":\"SESSION_REQUIRED\"")
+				.doesNotContain("CANCELACION_CERTIFICADOS_V1", "trace");
 	}
 
 	@Test

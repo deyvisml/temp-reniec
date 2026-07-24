@@ -21,7 +21,7 @@ class FlywayIncrementalMigrationIT {
 			.withDatabaseName("cancelacion_incremental_test");
 
 	@Test
-	void upgradesV4ToLatestPreservingDataAndAddingFlowSessionSecurity() throws Exception {
+	void upgradesV4ToLatestPreservingDataAndAddingCurrentSchemaChanges() throws Exception {
 		Flyway v4 = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.target(MigrationVersion.fromVersion("4"))
@@ -34,7 +34,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(3);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(4);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
@@ -44,7 +44,18 @@ class FlywayIncrementalMigrationIT {
 		assertThat(singleInt("""
 				SELECT COUNT(*) FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
-				""")).isEqualTo(103);
+				""")).isEqualTo(104);
+		assertThat(schemaRows("""
+				SELECT CONCAT(is_nullable, '|', character_maximum_length, '|', column_comment)
+				FROM information_schema.columns
+				WHERE table_schema = DATABASE()
+				  AND table_name = 'certificate_cancellation_request'
+				  AND column_name = 'consent_version'
+				""")).containsExactly("YES|64|Versión del texto de consentimiento aceptado por el ciudadano");
+		assertThat(singleInt("""
+				SELECT COUNT(*) FROM certificate_cancellation_request
+				WHERE id = 1 AND confirmed_at IS NOT NULL AND consent_version IS NULL
+				""")).isEqualTo(1);
 		assertThat(schemaRows("""
 				SELECT column_name FROM information_schema.columns
 				WHERE table_schema = DATABASE() AND table_name = 'identity_verification'

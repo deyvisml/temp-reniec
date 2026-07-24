@@ -51,6 +51,9 @@ public class CertificateCancellationRequestEntity {
 	@Column(name = "confirmed_at")
 	private Instant confirmedAt;
 
+	@Column(name = "consent_version", length = 64)
+	private String consentVersion;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "final_outcome", length = 40)
 	private CancellationFinalOutcome finalOutcome;
@@ -69,6 +72,9 @@ public class CertificateCancellationRequestEntity {
 
 	@Transient
 	private Instant persistedConfirmedAt;
+
+	@Transient
+	private String persistedConsentVersion;
 
 	protected CertificateCancellationRequestEntity() {
 	}
@@ -101,9 +107,11 @@ public class CertificateCancellationRequestEntity {
 		requestStatus = CancellationRequestStatus.REASON_REGISTERED;
 	}
 
-	public void confirm(Instant confirmedAt) {
+	public void confirm(Instant confirmedAt, String consentVersion) {
 		if (reasonCode == null) throw new IllegalStateException("A reason is required before confirmation");
+		if (this.confirmedAt != null) throw new IllegalStateException("The request is already confirmed");
 		this.confirmedAt = Objects.requireNonNull(confirmedAt, "confirmedAt");
+		this.consentVersion = requireBoundedText(consentVersion, "consentVersion", 64);
 		requestStatus = CancellationRequestStatus.CONFIRMED;
 	}
 
@@ -127,13 +135,16 @@ public class CertificateCancellationRequestEntity {
 		persistedReason = reasonCode;
 		persistedOtherReason = otherReason;
 		persistedConfirmedAt = confirmedAt;
+		persistedConsentVersion = consentVersion;
 	}
 
 	@PreUpdate
 	void update() {
-		if (persistedConfirmedAt != null
-				&& (persistedReason != reasonCode || !Objects.equals(persistedOtherReason, otherReason))) {
-			throw new IllegalStateException("A confirmed reason cannot be changed");
+		if (persistedConfirmedAt != null && (persistedReason != reasonCode
+				|| !Objects.equals(persistedOtherReason, otherReason)
+				|| !Objects.equals(persistedConfirmedAt, confirmedAt)
+				|| !Objects.equals(persistedConsentVersion, consentVersion))) {
+			throw new IllegalStateException("Confirmed request data cannot be changed");
 		}
 		updatedAt = Instant.now();
 		validate();
@@ -145,8 +156,10 @@ public class CertificateCancellationRequestEntity {
 			if (reasonCode == null) {
 				throw new IllegalStateException("Confirmation requires reason");
 			}
+			if (consentVersion != null) requireBoundedText(consentVersion, "consentVersion", 64);
 			if (confirmedAt.isBefore(createdAt)) throw new IllegalStateException("Confirmation cannot precede creation");
 		}
+		else if (consentVersion != null) throw new IllegalStateException("Consent version requires confirmation");
 		if (reasonCode == CancellationReasonCode.OTHER) requireBoundedText(otherReason, "otherReason", 300);
 		else if (otherReason != null) throw new IllegalStateException("otherReason is only valid for OTHER");
 	}
@@ -180,6 +193,7 @@ public class CertificateCancellationRequestEntity {
 	public CancellationReasonCode getReasonCode() { return reasonCode; }
 	public String getOtherReason() { return otherReason; }
 	public Instant getConfirmedAt() { return confirmedAt; }
+	public String getConsentVersion() { return consentVersion; }
 	public CancellationFinalOutcome getFinalOutcome() { return finalOutcome; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }

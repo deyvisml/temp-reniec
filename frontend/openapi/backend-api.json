@@ -54,6 +54,26 @@
         ],
         "type": "object"
       },
+      "CancellationConfirmationRequest": {
+        "description": "Evidencia explícita del consentimiento mostrado en el paso 4.",
+        "properties": {
+          "consentAccepted": {
+            "description": "Aceptación expresa del texto mostrado; debe enviarse con valor true.",
+            "type": "boolean"
+          },
+          "consentVersion": {
+            "description": "Versión exacta del consentimiento mostrado por el backend.",
+            "maxLength": 64,
+            "minLength": 0,
+            "type": "string"
+          }
+        },
+        "required": [
+          "consentAccepted",
+          "consentVersion"
+        ],
+        "type": "object"
+      },
       "CancellationRequestResponse": {
         "description": "Resultado normalizado del inicio de una nueva solicitud de cancelación.",
         "properties": {
@@ -131,6 +151,67 @@
           "maskedDni",
           "nextStep",
           "requestId",
+          "requestStatus"
+        ],
+        "type": "object"
+      },
+      "CancellationReviewResponse": {
+        "description": "Resumen autoritativo y minimizado de la cancelación que confirmará el ciudadano.",
+        "properties": {
+          "certificates": {
+            "items": {
+              "$ref": "#/components/schemas/SelectedCertificate"
+            },
+            "type": "array"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "confirmedAt": {
+            "description": "Fecha UTC persistida; ausente antes de confirmar.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "consentText": {
+            "type": "string"
+          },
+          "consentVersion": {
+            "maxLength": 64,
+            "type": "string"
+          },
+          "consequences": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maskedDni": {
+            "example": "******91",
+            "type": "string"
+          },
+          "otherReason": {
+            "description": "Descripción persistida solo para el motivo OTHER.",
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "reasonLabel": {
+            "type": "string"
+          },
+          "requestStatus": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificates",
+          "confirmed",
+          "consentText",
+          "consentVersion",
+          "consequences",
+          "maskedDni",
+          "reasonCode",
+          "reasonLabel",
           "requestStatus"
         ],
         "type": "object"
@@ -279,7 +360,8 @@
             "enum": [
               "IDENTITY_VERIFICATION",
               "CERTIFICATE_SELECTION",
-              "REASON"
+              "REASON",
+              "CONFIRMATION"
             ],
             "type": "string"
           },
@@ -325,6 +407,29 @@
         },
         "required": [
           "authorizationUrl"
+        ],
+        "type": "object"
+      },
+      "SelectedCertificate": {
+        "description": "Certificado seleccionado presentado sin exponer su UUID completo.",
+        "properties": {
+          "emissionCreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "maskedUuid": {
+            "example": "11111111…1111",
+            "type": "string"
+          },
+          "orderNumber": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "emissionCreatedAt",
+          "maskedUuid",
+          "orderNumber"
         ],
         "type": "object"
       },
@@ -819,6 +924,160 @@
         "summary": "Obtiene el listado de certificados de la solicitud autenticada",
         "tags": [
           "Certificados vigentes"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/confirmation": {
+      "post": {
+        "description": "Confirma de forma idempotente sin ejecutar todavía la revocación.",
+        "operationId": "confirmCurrentCancellation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancellationConfirmationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationReviewResponse"
+                }
+              }
+            },
+            "description": "Solicitud confirmada o repetición idempotente"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Consentimiento ausente o formato inválido"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Versión cambiada, estado incompatible o concurrencia"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Motivo o selección persistida inválida"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Registra el consentimiento y confirma la solicitud",
+        "tags": [
+          "Confirmación de cancelación"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/review": {
+      "get": {
+        "description": "Construye el paso 4 desde persistencia y devuelve solo identificadores enmascarados.",
+        "operationId": "getCurrentCancellationReview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationReviewResponse"
+                }
+              }
+            },
+            "description": "Resumen vigente o confirmación ya registrada"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Solicitud en un estado incompatible"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Motivo o selección persistida inválida"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Obtiene el resumen autoritativo previo a confirmar",
+        "tags": [
+          "Confirmación de cancelación"
         ]
       }
     },

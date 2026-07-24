@@ -43,6 +43,16 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Revocatio
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationRequest;
+import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationService;
+import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConsentCatalog;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationAuditEventRepository;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationAuditEventType;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentAvailabilityResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityMatchResult;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationEntity;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationRepository;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.IdentityVerificationStatus;
 
 @Testcontainers
 @SpringBootTest(properties = "debug=false")
@@ -60,6 +70,9 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	@Autowired CertificateListingService certificateListingService;
 	@Autowired EntityManagerFactory entityManagerFactory;
 	@Autowired JdbcTemplate jdbcTemplate;
+	@Autowired CancellationConfirmationService confirmationService;
+	@Autowired IdentityVerificationRepository identityRepository;
+	@Autowired CancellationAuditEventRepository auditRepository;
 
 	@BeforeEach
 	void cleanTables() {
@@ -294,6 +307,45 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
+	void confirmsOnceWithoutCreatingRevocationOrReceipt() {
+		RequestFixture fixture = request("70000001", 1);
+		fixture.request().recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.CERTIFICATES_SELECTED);
+		fixture.request().registerReason(CancellationReasonCode.LOSS, null);
+		requestRepository.saveAndFlush(fixture.request());
+		IdentityVerificationEntity verification = new IdentityVerificationEntity(
+				fixture.request(), 1, "ID_PERU", NOW.minusSeconds(20), "identity-confirmation-it");
+		verification.finish(IdentityVerificationStatus.VERIFIED, IdentityMatchResult.MATCH,
+				NOW.minusSeconds(10), "identity-external", null);
+		identityRepository.saveAndFlush(verification);
+		CancellationRequestCertificateEntity selected = certificate(fixture, "ORD-CONFIRM",
+				"a785da78-df44-44ea-a711-2eeceef114ad", 1);
+		selected.select(NOW.plusSeconds(2));
+		certificateRepository.saveAndFlush(selected);
+
+		CertificateListResponse reasonSnapshot = certificateListingService.list(
+				fixture.request().getId(), "confirmation-back-navigation");
+		assertThat(reasonSnapshot.requestStatus()).isEqualTo("REASON_REGISTERED");
+		assertThat(reasonSnapshot.certificates()).singleElement()
+				.extracting(CertificateListResponse.CertificateItem::selected).isEqualTo(true);
+
+		CancellationConfirmationRequest command = new CancellationConfirmationRequest(
+				true, CancellationConsentCatalog.VERSION);
+		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it");
+		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it-retry");
+
+		CertificateCancellationRequestEntity confirmed = requestRepository.findById(
+				fixture.request().getId()).orElseThrow();
+		assertThat(confirmed.getRequestStatus()).isEqualTo(CancellationRequestStatus.CONFIRMED);
+		assertThat(confirmed.getConsentVersion()).isEqualTo(CancellationConsentCatalog.VERSION);
+		assertThat(auditRepository.findByRequest_IdOrderByOccurredAtAscIdAsc(confirmed.getId()))
+				.filteredOn(event -> event.getEventType() == CancellationAuditEventType.CONSENT_CONFIRMED)
+				.hasSize(1);
+		assertThat(operationRepository.count()).isZero();
+		assertThat(receiptRepository.count()).isZero();
+	}
+
+	@Test
 	@Transactional
 	void startsFreshConsultationAfterCompletedAtomicCancellationAndPreservesHistory() {
 		RequestFixture historical = request("00000001", 1);
@@ -365,7 +417,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 
 	private void confirm(CertificateCancellationRequestEntity request) {
 		request.registerReason(CancellationReasonCode.THEFT, null);
-		request.confirm(Instant.now().plusSeconds(1));
+		request.confirm(Instant.now().plusSeconds(1), "CANCELACION_CERTIFICADOS_V1");
 		requestRepository.saveAndFlush(request);
 	}
 

@@ -4,15 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CertificateSelectionTransition } from "@/components/certificate-selection-transition";
+import { CancellationReviewTransition } from "@/components/cancellation-review-transition";
 import { IdentityVerificationPanel } from "@/components/identity-verification-panel";
 import type { IdentityCallbackOutcome } from "@/components/identity-callback-alert";
 import { getCurrentIdentityVerification } from "@/lib/api/identity-verifications";
+import { getCurrentFlowSession } from "@/lib/api/flow-session";
 import { HttpClientError } from "@/lib/http-client";
 
 type FlowView =
   | { kind: "checking" }
   | { kind: "identity"; callbackOutcome?: IdentityCallbackOutcome; verified?: boolean }
-  | { kind: "selection" };
+  | { kind: "selection" }
+  | { kind: "confirmation" };
 
 export function CancellationFlow() {
   const router = useRouter();
@@ -20,6 +23,16 @@ export function CancellationFlow() {
 
   const resolveCurrentView = useCallback(async (signal: AbortSignal) => {
     try {
+      const session = await getCurrentFlowSession(signal);
+      if (!session.data) throw new Error("Missing flow session");
+      if (session.data.nextStep === "CONFIRMATION") {
+        setView({ kind: "confirmation" });
+        return;
+      }
+      if (session.data.nextStep === "CERTIFICATE_SELECTION" || session.data.nextStep === "REASON") {
+        setView({ kind: "selection" });
+        return;
+      }
       const result = await getCurrentIdentityVerification(signal);
       if (!result.data) {
         setView({ kind: "identity" });
@@ -70,7 +83,15 @@ export function CancellationFlow() {
   if (view.kind === "selection") {
     return (
       <div className="relative overflow-hidden px-4 py-8 sm:py-12">
-        <CertificateSelectionTransition onBack={() => setView({ kind: "identity", verified: true })} />
+        <CertificateSelectionTransition onReview={() => setView({ kind: "confirmation" })} />
+      </div>
+    );
+  }
+
+  if (view.kind === "confirmation") {
+    return (
+      <div className="relative overflow-hidden px-4 py-8 sm:py-12">
+        <CancellationReviewTransition onBack={() => setView({ kind: "selection" })} />
       </div>
     );
   }

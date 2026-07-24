@@ -36,6 +36,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Cancellat
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFinalOutcome;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationFlowSessionRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReasonCode;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestCertificateEntity;
+import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestCertificateRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptEntity;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationReceiptRepository;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus;
@@ -79,6 +81,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	@Autowired IdentityVerificationService identityService;
 	@Autowired FlowSessionService flowSessionService;
 	@Autowired CancellationFlowSessionRepository flowSessionRepository;
+	@Autowired CancellationRequestCertificateRepository certificateRepository;
 
 	@LocalServerPort int port;
 
@@ -92,6 +95,59 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		jdbcTemplate.update("DELETE FROM cancellation_flow_session");
 		jdbcTemplate.update("DELETE FROM certificate_availability_check");
 		jdbcTemplate.update("DELETE FROM certificate_cancellation_request");
+	}
+
+	@Test
+	void confirmsThroughTheProtectedHttpApiAndMySqlWithoutStartingRevocation() throws Exception {
+		CertificateCancellationRequestEntity request = new CertificateCancellationRequestEntity("73905791");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+		flowSessionService.establish(request.getId());
+
+		IdentityVerificationEntity verification = new IdentityVerificationEntity(
+				request, 1, "ID_PERU", Instant.now().minusSeconds(30), "confirmation-http-it");
+		verification.finish(IdentityVerificationStatus.VERIFIED, IdentityMatchResult.MATCH,
+				Instant.now().minusSeconds(20), "identity-http-it", null);
+		identityRepository.saveAndFlush(verification);
+
+		request.transitionTo(CancellationRequestStatus.CERTIFICATES_SELECTED, null);
+		request.registerReason(CancellationReasonCode.THEFT, null);
+		requestRepository.saveAndFlush(request);
+		CancellationRequestCertificateEntity certificate = new CancellationRequestCertificateEntity(
+				request, "0000123456", Instant.parse("2026-07-15T15:24:00Z"),
+				"11111111-1111-4111-8111-111111111111", Instant.now().minusSeconds(10));
+		certificate.select(Instant.now().minusSeconds(5));
+		certificateRepository.saveAndFlush(certificate);
+		String access = flowSessionService.markIdentityVerified(request.getId()).value();
+
+		HttpResponse<String> review = currentRequest("GET", "/review", access, null);
+		assertThat(review.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(review.body()).contains("******91", "11111111…1111")
+				.doesNotContain("73905791", "11111111-1111-4111-8111-111111111111");
+
+		String confirmation = """
+				{"consentAccepted":true,"consentVersion":"CANCELACION_CERTIFICADOS_V1"}
+				""";
+		HttpResponse<String> first;
+		HttpResponse<String> repeated;
+		try (var executor = Executors.newFixedThreadPool(2)) {
+			var firstCall = executor.submit(() -> currentRequest(
+					"POST", "/confirmation", access, confirmation));
+			var repeatedCall = executor.submit(() -> currentRequest(
+					"POST", "/confirmation", access, confirmation));
+			first = firstCall.get();
+			repeated = repeatedCall.get();
+		}
+		assertThat(first.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(repeated.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(first.body()).contains("\"confirmed\":true");
+		assertThat(jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM cancellation_audit_event
+				WHERE request_id = ? AND event_type = 'CONSENT_CONFIRMED'
+				""", Integer.class, request.getId())).isEqualTo(1);
+		assertThat(revocationRepository.count()).isZero();
+		assertThat(receiptRepository.count()).isZero();
 	}
 
 	@Test
@@ -324,7 +380,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void cleanDatabaseRunsFlywayCreatesTheSevenDomainTablesAndReportsSafeHealth() throws Exception {
+	void cleanDatabaseRunsFlywayCreatesTheDomainTablesAndReportsSafeHealth() throws Exception {
 		List<String> tables = jdbcTemplate.queryForList("""
 				SELECT table_name FROM information_schema.tables
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
@@ -339,7 +395,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				 'active_dni_guard', 'verified_identity_hash', 'session_reference_hash',
 				 'token_family_id', 'client_reference_hash', 'open_request_guard',
 				 'next_status_check_at', 'document_hash', 'template_version',
-				 'technical_code', 'technical_detail', 'public_reference', 'consent_version',
+				 'technical_code', 'technical_detail', 'public_reference',
 				 'recoverable_until', 'expires_at', 'session_reference')
 				""", String.class);
 		Integer migrationCount = jdbcTemplate.queryForObject(
@@ -370,10 +426,10 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				"cancellation_request_certificate", "certificate_availability_check",
 				"certificate_cancellation_request", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(7);
+		assertThat(migrationCount).isEqualTo(8);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
-		assertThat(documentedColumnCount).isEqualTo(103);
+		assertThat(documentedColumnCount).isEqualTo(104);
 		assertThat(health.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(health.body()).contains("\"status\":\"UP\"")
 				.doesNotContain("jdbc", "mysql", "username", "password", "sql", "dni");
@@ -531,7 +587,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
 				CancellationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request.registerReason(CancellationReasonCode.OTHER, "Cambio de dispositivo personal");
-		request.confirm(Instant.now());
+		request.confirm(Instant.now(), "CANCELACION_CERTIFICADOS_V1");
 		requestRepository.saveAndFlush(request);
 
 		assertThat(requestRepository.findById(request.getId())).get().satisfies(found -> {
@@ -701,6 +757,18 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				.header("Content-Type", "application/json")
 				.header("X-Correlation-ID", "eligibility-it")
 				.POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> currentRequest(String method, String path, String accessToken, String body)
+			throws Exception {
+		HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(
+				"http://localhost:" + port + "/api/v1/cancellation-requests/current" + path))
+				.header("Cookie", "cancelacion_access=" + accessToken)
+				.header("X-Correlation-ID", "confirmation-http-it");
+		if (body == null) request.GET();
+		else request.header("Content-Type", "application/json")
+				.method(method, HttpRequest.BodyPublishers.ofString(body));
+		return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
 	private Integer certificateCount() {

@@ -32,11 +32,14 @@ public class CertificateListingPersistenceCoordinator {
 				.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(requestId);
 		CancellationRequestStatus current = request.getRequestStatus();
 		if (current == CancellationRequestStatus.CERTIFICATES_AVAILABLE
-				|| current == CancellationRequestStatus.CERTIFICATES_SELECTED) {
-			return new Preparation(requestId, request.getDni(), snapshot, false);
+				|| current == CancellationRequestStatus.CERTIFICATES_SELECTED
+				|| current == CancellationRequestStatus.REASON_REGISTERED
+				|| current == CancellationRequestStatus.PENDING_CONFIRMATION
+				|| current == CancellationRequestStatus.CONFIRMED) {
+			return new Preparation(requestId, request.getDni(), snapshot, current, false);
 		}
 		if (current == CancellationRequestStatus.NO_CERTIFICATES_AVAILABLE) {
-			return new Preparation(requestId, request.getDni(), List.of(), false);
+			return new Preparation(requestId, request.getDni(), List.of(), current, false);
 		}
 		if (current == CancellationRequestStatus.CHECKING_CERTIFICATE_LIST
 				&& request.getUpdatedAt().isAfter(Instant.now().minus(staleThreshold))) {
@@ -59,7 +62,7 @@ public class CertificateListingPersistenceCoordinator {
 				CancellationAuditEventType.CERTIFICATE_LIST_REQUESTED, previous,
 				CancellationRequestStatus.CHECKING_CERTIFICATE_LIST, "REQUESTED", correlationId,
 				AuditEventOrigin.SYSTEM, Instant.now()));
-		return new Preparation(requestId, request.getDni(), List.of(), true);
+		return new Preparation(requestId, request.getDni(), List.of(), current, true);
 	}
 
 	@Transactional
@@ -157,5 +160,6 @@ public class CertificateListingPersistenceCoordinator {
 	}
 
 	record Preparation(Long requestId, String dni,
-			List<CancellationRequestCertificateEntity> snapshot, boolean providerRequired) { }
+			List<CancellationRequestCertificateEntity> snapshot,
+			CancellationRequestStatus requestStatus, boolean providerRequired) { }
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CORRELATION_HEADER, HttpClientError, requestJson, resolveBackendUrl } from "@/lib/http-client";
+import { getCurrentFlowSession } from "@/lib/api/flow-session";
 
 describe("requestJson", () => {
   beforeEach(() => {
@@ -100,6 +101,22 @@ describe("requestJson", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1][0])).toContain("/api/v1/session/refresh");
     expect(fetchMock.mock.calls[1][1]?.credentials).toBe("include");
+  });
+
+  it("rejects a malformed current-session contract", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({
+      sessionId: 1,
+      requestId: 2,
+      maskedDni: "******01",
+      sessionStatus: "PENDING_IDENTITY",
+      requestStatus: "PENDING_IDENTITY_VERIFICATION",
+      nextStep: "IDENTITY_VERIFICATION",
+    }, 200, "session-correlation")));
+
+    await expect(getCurrentFlowSession()).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      correlationId: "session-correlation",
+    });
   });
 });
 

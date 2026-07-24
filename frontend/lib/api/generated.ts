@@ -117,6 +117,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cancellation-requests/current/confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registra el consentimiento y confirma la solicitud
+         * @description Confirma de forma idempotente sin ejecutar todavía la revocación.
+         */
+        post: operations["confirmCurrentCancellation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/status": {
         parameters: {
             query?: never;
@@ -166,6 +186,26 @@ export interface paths {
          * @description Resuelve el intento desde la cookie HttpOnly, valida la autorización y consume el resultado de presentación del callback.
          */
         get: operations["getCurrentIdentityVerification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cancellation-requests/current/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Obtiene el resumen autoritativo previo a confirmar
+         * @description Construye el paso 4 desde persistencia y devuelve solo identificadores enmascarados.
+         */
+        get: operations["getCurrentCancellationReview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -321,6 +361,41 @@ export interface components {
              */
             nextStep: "IDENTITY_VERIFICATION" | null;
         };
+        /** @description Evidencia explícita del consentimiento mostrado en el paso 4. */
+        CancellationConfirmationRequest: {
+            /** @description Aceptación expresa del texto mostrado; debe enviarse con valor true. */
+            consentAccepted: boolean;
+            /** @description Versión exacta del consentimiento mostrado por el backend. */
+            consentVersion: string;
+        };
+        /** @description Resumen autoritativo y minimizado de la cancelación que confirmará el ciudadano. */
+        CancellationReviewResponse: {
+            requestStatus: string;
+            /** @example ******91 */
+            maskedDni: string;
+            certificates: components["schemas"]["SelectedCertificate"][];
+            reasonCode: string;
+            reasonLabel: string;
+            /** @description Descripción persistida solo para el motivo OTHER. */
+            otherReason?: string;
+            consequences: string[];
+            consentText: string;
+            consentVersion: string;
+            /**
+             * Format: date-time
+             * @description Fecha UTC persistida; ausente antes de confirmar.
+             */
+            confirmedAt?: string;
+            confirmed: boolean;
+        };
+        /** @description Certificado seleccionado presentado sin exponer su UUID completo. */
+        SelectedCertificate: {
+            orderNumber: string;
+            /** Format: date-time */
+            emissionCreatedAt: string;
+            /** @example 11111111…1111 */
+            maskedUuid: string;
+        };
         /** @description Estado técnico del backend y su conexión con MySQL */
         SystemStatusResponse: {
             /**
@@ -359,7 +434,7 @@ export interface components {
             /** @description Estado controlado de la solicitud. */
             requestStatus: string;
             /** @enum {string} */
-            nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION" | "REASON";
+            nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION" | "REASON" | "CONFIRMATION";
         };
         CurrentIdentityResponse: {
             /**
@@ -699,6 +774,75 @@ export interface operations {
             };
         };
     };
+    confirmCurrentCancellation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancellationConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description Solicitud confirmada o repetición idempotente */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationReviewResponse"];
+                };
+            };
+            /** @description Consentimiento ausente o formato inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Sesión ausente o expirada */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Identidad o paso no permitido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Versión cambiada, estado incompatible o concurrencia */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Motivo o selección persistida inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     getSystemStatus: {
         parameters: {
             query?: never;
@@ -782,6 +926,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentIdentityResponse"];
+                };
+            };
+        };
+    };
+    getCurrentCancellationReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumen vigente o confirmación ya registrada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationReviewResponse"];
+                };
+            };
+            /** @description Sesión ausente o expirada */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Identidad o paso no permitido */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Solicitud en un estado incompatible */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Motivo o selección persistida inválida */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
                 };
             };
         };

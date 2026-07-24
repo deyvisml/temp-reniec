@@ -97,7 +97,9 @@ class CertificateListingServiceTests {
 		CertificateListingPersistenceCoordinator persistence = mock(CertificateListingPersistenceCoordinator.class);
 		when(persistence.prepare(eq(REQUEST_ID), eq(CORRELATION_ID), any()))
 				.thenReturn(new CertificateListingPersistenceCoordinator.Preparation(
-						REQUEST_ID, "12345678", List.of(), true));
+						REQUEST_ID, "12345678", List.of(),
+						pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationRequestStatus.IDENTITY_VERIFIED,
+						true));
 		return persistence;
 	}
 

@@ -35,7 +35,9 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 
 ## Solicitud principal
 
-`certificate_cancellation_request` conserva el DNI, `request_status`, `availability_result`, motivo, descripción de `OTHER`, confirmación, resultado final y fechas técnicas. `availability_result` solo indica si la existencia fue confirmada; no significa que la lista detallada ya se obtuvo. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
+`certificate_cancellation_request` conserva el DNI, `request_status`, `availability_result`, motivo, descripción de `OTHER`, `confirmed_at`, `consent_version`, resultado final y fechas técnicas. `availability_result` solo indica si la existencia fue confirmada; no significa que la lista detallada ya se obtuvo. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
+
+`consent_version` identifica el texto estable aceptado por el ciudadano; el texto completo se mantiene en el catálogo del backend y no se repite en cada fila. La combinación de `confirmed_at`, esa versión y el evento `CONSENT_CONFIRMED` constituye la evidencia técnica. Los registros históricos pueden conservar el campo nulo.
 
 `certificate_availability_check` registra cada intento del primer servicio con estado técnico, resultado `AVAILABLE`, `NOT_AVAILABLE`, `INCONCLUSIVE`, `UNAVAILABLE` o `ERROR`, fechas, correlación y referencias controladas. No almacena cantidad, número de orden, fecha de creación ni UUID. Un resultado positivo deja la solicitud en `PENDING_IDENTITY_VERIFICATION` y cero filas de certificados.
 

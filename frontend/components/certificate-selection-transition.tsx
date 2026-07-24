@@ -34,7 +34,7 @@ const dateFormatter = new Intl.DateTimeFormat("es-PE", {
   hour12: false,
 });
 
-export function CertificateSelectionTransition({ onBack }: { onBack: () => void }) {
+export function CertificateSelectionTransition({ onBack, onReview }: { onBack?: () => void; onReview?: () => void } = {}) {
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +47,7 @@ export function CertificateSelectionTransition({ onBack }: { onBack: () => void 
       if (!result.data) throw new Error("Missing certificate response");
       setSelected(new Set(result.data.certificates.filter(item => item.selected)
         .map(item => item.certificateUuid)));
-      if (result.data.requestStatus === "CERTIFICATES_SELECTED") {
+      if (["CERTIFICATES_SELECTED", "REASON_REGISTERED", "PENDING_CONFIRMATION"].includes(result.data.requestStatus)) {
         setView({ kind: "complete", data: result.data });
         return;
       }
@@ -153,7 +153,9 @@ export function CertificateSelectionTransition({ onBack }: { onBack: () => void 
             onBack={onBack}
           />
         ) : null}
-        {view.kind === "complete" ? <ReasonTransition selectedCount={view.data.selectedCount} /> : null}
+        {view.kind === "complete" ? <ReasonTransition selectedCount={view.data.selectedCount}
+          canReview={["REASON_REGISTERED", "PENDING_CONFIRMATION"].includes(view.data.requestStatus)}
+          onReview={onReview} /> : null}
       </div>
     </section>
   );
@@ -166,7 +168,7 @@ export function CertificateSelectionView({ certificates, selected, submitting, o
   onToggle: (uuid: string) => void;
   onToggleAll: () => void;
   onSubmit: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const allSelected = certificates.length > 0 && selected.size === certificates.length;
   const selectedLabel = `${selected.size} ${selected.size === 1 ? "seleccionado" : "seleccionados"}`;
@@ -213,10 +215,10 @@ export function CertificateSelectionView({ certificates, selected, submitting, o
         <InfoIcon /> <span>Debes seleccionar al menos un certificado para continuar.</span>
       </p>
       <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-[#e1e8f2] pt-5 sm:flex-row sm:items-center">
-        <button type="button" onClick={onBack}
+        {onBack ? <button type="button" onClick={onBack}
           className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-6 font-bold text-[#173a78] transition-colors hover:bg-[#f1f5fb] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df] sm:w-[280px]">
           <BackIcon /> Regresar
-        </button>
+        </button> : <span aria-hidden="true" />}
         <button type="button" onClick={onSubmit} disabled={selected.size === 0 || submitting}
           className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-reniec-red px-6 font-bold text-white transition-colors hover:bg-[#a8003f] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df] disabled:cursor-default disabled:bg-[#c9cfdb] sm:w-[280px]">
           {submitting ? "Guardando selección…" : "Continuar"}<ArrowIcon />
@@ -263,8 +265,8 @@ function ErrorState({ presentation, onRetry }: { presentation: ErrorPresentation
   return <div className="grid min-h-[390px] place-items-center text-center" role="alert"><div className="max-w-[520px]"><h1 id="selection-title" className="text-2xl font-black text-[#061a50]">{presentation.title}</h1><p className="mt-3 leading-7 text-[#52678f]">{presentation.description}</p>{href ? <a href={href} className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-reniec-red px-6 font-bold text-white">Volver al inicio</a> : <button type="button" onClick={presentation.action === "reload" ? () => window.location.reload() : onRetry} className="mt-6 min-h-11 cursor-pointer rounded-lg bg-reniec-red px-6 font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df]">{presentation.action === "reload" ? "Recargar lista" : "Reintentar"}</button>}</div></div>;
 }
 
-function ReasonTransition({ selectedCount }: { selectedCount: number }) {
-  return <div className="grid min-h-[390px] place-items-center text-center" aria-live="polite"><div className="max-w-[560px]"><p className="inline-flex rounded-full bg-[#fae9f0] px-4 py-1.5 text-xs font-black text-reniec-red">PASO 3 DE 5</p><h1 id="selection-title" className="mt-4 text-3xl font-black text-[#061a50]">Selección guardada</h1><p className="mt-3 leading-7 text-[#52678f]">{selectedCount} {selectedCount === 1 ? "certificado quedó seleccionado" : "certificados quedaron seleccionados"}. Ya puedes continuar con el registro del motivo.</p></div></div>;
+function ReasonTransition({ selectedCount, canReview, onReview }: { selectedCount: number; canReview: boolean; onReview?: () => void }) {
+  return <div className="grid min-h-[390px] place-items-center text-center" aria-live="polite"><div className="max-w-[560px]"><p className="inline-flex rounded-full bg-[#fae9f0] px-4 py-1.5 text-xs font-black text-reniec-red">PASO 3 DE 5</p><h1 id="selection-title" className="mt-4 text-3xl font-black text-[#061a50]">{canReview ? "Motivo registrado" : "Selección guardada"}</h1><p className="mt-3 leading-7 text-[#52678f]">{selectedCount} {selectedCount === 1 ? "certificado quedó seleccionado" : "certificados quedaron seleccionados"}. {canReview ? "Puedes volver a la revisión de tu solicitud." : "Ya puedes continuar con el registro del motivo."}</p>{canReview && onReview ? <button type="button" onClick={onReview} className="mt-6 min-h-12 w-full cursor-pointer rounded-lg bg-reniec-red px-6 font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df]">Continuar a revisión</button> : null}</div></div>;
 }
 
 function errorPresentation(error: unknown): ErrorPresentation {

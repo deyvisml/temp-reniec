@@ -31,6 +31,7 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityFail
 import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityIntegrationException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingException;
+import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -201,6 +202,25 @@ public final class GlobalExceptionHandler {
 					"Selecciona certificados válidos de esta operación.", request);
 			case CONFLICT -> respond(HttpStatus.CONFLICT, "CERTIFICATE_SELECTION_CONFLICT",
 					"La selección cambió simultáneamente. Recarga la lista e inténtalo nuevamente.", request);
+		};
+	}
+
+	@ExceptionHandler(CancellationConfirmationException.class)
+	ResponseEntity<ApiError> handleCancellationConfirmation(CancellationConfirmationException exception,
+			HttpServletRequest request) {
+		return switch (exception.reason()) {
+			case IDENTITY_REQUIRED, NOT_ALLOWED -> respond(HttpStatus.FORBIDDEN,
+					"CONFIRMATION_STEP_NOT_ALLOWED", "Este paso todavía no está disponible.", request);
+			case INVALID_REASON -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
+					"INVALID_CANCELLATION_REASON", "El motivo registrado ya no es válido.", request);
+			case INVALID_SELECTION -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
+					"INVALID_CERTIFICATE_SELECTION", "La selección de certificados ya no es válida.", request);
+			case CONSENT_REQUIRED -> respond(HttpStatus.BAD_REQUEST,
+					"CONSENT_REQUIRED", "Debes aceptar la confirmación para continuar.", request);
+			case CONSENT_CHANGED -> respond(HttpStatus.CONFLICT,
+					"CONSENT_VERSION_CHANGED", "La información de confirmación fue actualizada. Revísala nuevamente.", request);
+			case CONFLICT -> respond(HttpStatus.CONFLICT,
+					"CONFIRMATION_CONFLICT", "La solicitud cambió. Recarga la información e inténtalo nuevamente.", request);
 		};
 	}
 

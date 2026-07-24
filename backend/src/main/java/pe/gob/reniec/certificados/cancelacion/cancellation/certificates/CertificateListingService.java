@@ -31,7 +31,9 @@ public class CertificateListingService {
 	public CertificateListResponse list(Long requestId, String correlationId) {
 		CertificateListingPersistenceCoordinator.Preparation preparation = persistence.prepare(
 				requestId, correlationId, properties.getStaleReservationThreshold());
-		if (!preparation.providerRequired()) return response(preparation.snapshot());
+		if (!preparation.providerRequired()) {
+			return response(preparation.snapshot(), preparation.requestStatus().name());
+		}
 		try {
 			CertificateListingResult result = provider.listCertificates(preparation.dni(), correlationId);
 			if (result == null || result.outcome() == null) {
@@ -127,14 +129,20 @@ public class CertificateListingService {
 	}
 
 	private static CertificateListResponse response(List<CancellationRequestCertificateEntity> entities) {
+		String status = entities.isEmpty() ? "NO_CERTIFICATES_AVAILABLE"
+				: entities.stream().anyMatch(CancellationRequestCertificateEntity::isSelected)
+						? "CERTIFICATES_SELECTED" : "CERTIFICATES_AVAILABLE";
+		return response(entities, status);
+	}
+
+	private static CertificateListResponse response(List<CancellationRequestCertificateEntity> entities,
+			String requestStatus) {
 		List<CertificateListResponse.CertificateItem> items = entities.stream()
 				.map(entity -> new CertificateListResponse.CertificateItem(entity.getOrderNumber(),
 						entity.getEmissionCreatedAt(), entity.getCertificateUuid(),
 						entity.getAvailabilityStatus().name(), entity.isSelected()))
 				.toList();
 		int selected = (int) entities.stream().filter(CancellationRequestCertificateEntity::isSelected).count();
-		String status = entities.isEmpty() ? "NO_CERTIFICATES_AVAILABLE"
-				: selected > 0 ? "CERTIFICATES_SELECTED" : "CERTIFICATES_AVAILABLE";
-		return new CertificateListResponse(status, items, selected, selected > 0);
+		return new CertificateListResponse(requestStatus, items, selected, selected > 0);
 	}
 }

@@ -261,6 +261,14 @@ El perfil `local` usa `CERTIFICATE_LISTING_MODE=mock`. El contrato institucional
 
 La lista vacía no crea filas y bloquea el avance. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. La selección exige al menos un UUID, rechaza duplicados o certificados ajenos, y una repetición idéntica es idempotente.
 
+## Paso 4: revisión y confirmación
+
+`GET /api/v1/cancellation-requests/current/review` devuelve el resumen autoritativo de la solicitud activa con DNI y UUID enmascarados, certificados seleccionados, motivo, consecuencias y la versión vigente del consentimiento. El navegador no envía esos datos como fuente de verdad.
+
+`POST /api/v1/cancellation-requests/current/confirmation` recibe únicamente la aceptación expresa y la versión mostrada. El backend revalida sesión, identidad, estado, motivo y selección dentro de una transacción con bloqueo. Una confirmación repetida idéntica devuelve el mismo resultado y conserva una sola fecha y un solo evento de auditoría.
+
+La versión inicial es `CANCELACION_CERTIFICADOS_V1`. La confirmación bloquea cambios posteriores y deja la solicitud en `CONFIRMED`; no consume todavía el proveedor de revocación ni genera una constancia.
+
 ## Detener y reiniciar MySQL local
 
 La detención normal conserva el volumen y sus datos migrados:
@@ -306,4 +314,4 @@ La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del
 
 ## Fuera de alcance
 
-Permanecen diferidos el contrato real del segundo servicio, motivo, confirmación, revocación externa, constancia, recuperación de trámites, retención definitiva, rate limiting productivo, módulos administrativos y despliegue productivo. Compose contiene solo MySQL.
+Permanecen diferidos el contrato real del segundo servicio, la revocación externa, la constancia, la recuperación de trámites, la retención definitiva, el rate limiting productivo, los módulos administrativos y el despliegue productivo. Compose contiene solo MySQL.
