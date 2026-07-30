@@ -36,7 +36,7 @@ public class CancellationConfirmationController {
 	@GetMapping(value = "/review", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "getCurrentCancellationReview",
 			summary = "Obtiene el resumen autoritativo previo a confirmar",
-			description = "Construye el paso 4 desde persistencia y devuelve solo identificadores enmascarados.")
+			description = "Construye el paso 4 desde persistencia con exactamente un certificado y devuelve solo identificadores enmascarados.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "Resumen vigente o confirmación ya registrada"),
 		@ApiResponse(responseCode = "401", description = "Sesión ausente o expirada", content = @Content(schema = @Schema(implementation = ApiError.class))),

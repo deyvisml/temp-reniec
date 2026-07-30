@@ -4,25 +4,29 @@
 
 El proyecto consiste en el diseño e implementación de un sistema web institucional para el **Registro Nacional de Identificación y Estado Civil (RENIEC) del Perú**, dirigido a ciudadanos que actúan como personas naturales.
 
-Su propósito es proporcionar un canal digital de autoservicio mediante el cual el titular pueda **cancelar de forma inmediata uno o varios certificados digitales vigentes asociados a su DNI**, cuando exista una situación que pueda comprometer su seguridad, como pérdida, robo, cambio de equipo o sospecha de uso no autorizado.
+Su propósito es proporcionar un canal digital de autoservicio mediante el cual el titular pueda **cancelar de forma inmediata un certificado digital vigente asociado a su DNI por cada solicitud**, cuando exista una situación que pueda comprometer su seguridad, como pérdida, robo, cambio de equipo o sospecha de uso no autorizado.
+
+## Regla vigente de unidad de operación
+
+Cada solicitud selecciona, confirma y posteriormente revoca **exactamente un certificado digital vigente**. El segundo servicio continúa devolviendo la lista completa asociada al DNI autenticado, pero el ciudadano realiza una elección exclusiva. Antes de confirmar puede reemplazarla; después de confirmar queda inmutable. Los demás certificados permanecen fuera de la operación. Esta regla sustituye cualquier referencia posterior o histórica dentro de este documento a seleccionar, revocar o emitir constancia para varios certificados en una misma solicitud.
 
 En la comunicación dirigida al ciudadano se utilizará preferentemente el término **cancelación de certificados digitales**. Desde la perspectiva técnica y del dominio de certificación digital, la operación ejecutada corresponde a una **revocación**.
 
 Un ciudadano puede tener una o más **emisiones vigentes de certificados digitales** asociadas a su DNI. Cada emisión corresponde a un certificado generado en un momento determinado y puede identificarse mediante un número de orden, una fecha de creación y un UUID único. En la interfaz ciudadana, estas emisiones se presentarán como **certificados digitales vigentes**.
 
-El sistema no cancela la identidad civil, el número de DNI, el documento físico, el DNI electrónico ni la cuenta de ID Perú. Su objeto funcional son los certificados digitales vigentes seleccionados expresamente por el ciudadano.
+El sistema no cancela la identidad civil, el número de DNI, el documento físico, el DNI electrónico ni la cuenta de ID Perú. Su objeto funcional es el certificado digital vigente seleccionado expresamente por el ciudadano en la solicitud actual.
 
 El flujo general comprende una pantalla de inicio y cinco pasos:
 
 1. Ingreso del número de DNI y consulta de existencia de certificados digitales disponibles.
 2. Autenticación del titular mediante ID Perú.
-3. Selección de uno o varios certificados digitales vigentes.
+3. Selección de un certificado digital vigente.
 4. Selección del motivo de cancelación.
 5. Confirmación informada de la operación.
 6. Ejecución inmediata de la revocación.
 7. Presentación del resultado y generación de una constancia o comprobante.
 
-El sistema dependerá de dos servicios de certificados claramente separados, además de ID Perú y del servicio de revocación. El primer servicio se consumirá desde la pantalla de inicio y responderá únicamente si existen certificados disponibles para cancelar, sin devolver lista, cantidad, número de orden, fecha de creación ni UUID. Después de autenticar al ciudadano, un segundo servicio devolverá la lista detallada de certificados vigentes. El servicio de revocación recibirá en una sola operación la lista completa de UUID confirmados y deberá aplicar una regla atómica: cancelar todos los certificados seleccionados o no cancelar ninguno.
+El sistema dependerá de dos servicios de certificados claramente separados, además de ID Perú y del servicio de revocación. El primer servicio se consumirá desde la pantalla de inicio y responderá únicamente si existen certificados disponibles para cancelar, sin devolver lista, cantidad, número de orden, fecha de creación ni UUID. Después de autenticar al ciudadano, un segundo servicio devolverá la lista detallada de certificados vigentes. El ciudadano elegirá exactamente uno y el servicio de revocación recibirá su UUID en una operación individual e idempotente.
 
 ---
 
@@ -70,9 +74,9 @@ A partir de la información disponible, se identifican las siguientes dificultad
 - El ciudadano necesita distinguir los certificados por datos simples, sin depender de detalles criptográficos o técnicos.
 - La operación requiere consultar previamente los certificados susceptibles de cancelación.
 - La cancelación debe ser autorizada exclusivamente por el titular.
-- El sistema debe permitir seleccionar uno o varios certificados.
-- La operación debe producir un único resultado común para el conjunto confirmado.
-- El ciudadano necesita recibir evidencia clara del conjunto seleccionado y de su resultado común.
+- El sistema debe permitir seleccionar exactamente un certificado por solicitud.
+- La operación debe producir el resultado del único certificado confirmado.
+- El ciudadano necesita recibir evidencia clara del certificado seleccionado y de su resultado.
 
 ### 3.3. Causas preliminares
 
@@ -108,18 +112,18 @@ Se requiere un servicio web que permita al ciudadano:
 - Impedir la continuidad cuando no exista ningún certificado disponible.
 - Demostrar que es el titular mediante ID Perú.
 - Visualizar las emisiones vigentes mediante información comprensible.
-- Seleccionar uno o varios certificados digitales vigentes.
+- Seleccionar un certificado digital vigente.
 - Registrar el motivo de la operación.
 - Comprender las consecuencias antes de confirmar.
-- Ejecutar la revocación de los certificados seleccionados.
-- Consultar el resultado común de la operación confirmada.
+- Ejecutar la revocación del certificado seleccionado.
+- Consultar el resultado de la operación confirmada.
 - Obtener una constancia verificable del resultado.
 
 ---
 
 ## 4. Objetivo general del proyecto
 
-Implementar un servicio web institucional de RENIEC que permita a una persona natural cancelar de manera segura e inmediata uno o varios certificados digitales vigentes asociados a su DNI, previa consulta de las emisiones disponibles, autenticación del titular mediante ID Perú, selección expresa de los certificados, registro del motivo y confirmación de la operación.
+Implementar un servicio web institucional de RENIEC que permita a una persona natural cancelar de manera segura e inmediata un certificado digital vigente asociado a su DNI por solicitud, previa consulta de las emisiones disponibles, autenticación del titular mediante ID Perú, selección expresa del certificado, registro del motivo y confirmación de la operación.
 
 ---
 
@@ -134,15 +138,15 @@ Implementar un servicio web institucional de RENIEC que permita a una persona na
 - Consultar mediante un segundo servicio la lista detallada de certificados vigentes después de autenticar al titular.
 - Recibir y conservar temporalmente la lista vinculada con la solicitud.
 - Mostrar los certificados digitales vigentes después de la autenticación.
-- Permitir seleccionar uno o varios certificados.
+- Permitir seleccionar exactamente un certificado.
 - Mostrar siempre el paso de selección, incluso cuando exista un solo certificado.
-- Exigir la selección de al menos un certificado antes de continuar.
+- Exigir exactamente una selección antes de continuar.
 - Registrar el motivo de la cancelación.
 - Incorporar una opción abierta para motivos no contemplados en el catálogo.
 - Informar al ciudadano sobre el carácter inmediato y las consecuencias de la operación.
 - Obtener una confirmación explícita antes de ejecutar la revocación.
-- Enviar al servicio de revocación la lista de UUID seleccionados.
-- Recibir un único resultado atómico para toda la lista procesada.
+- Enviar al servicio de revocación el UUID seleccionado.
+- Recibir el resultado del único certificado procesado.
 - Comunicar un resultado exitoso, fallido o incierto, sin estados parciales.
 - Generar una constancia o comprobante coherente con el resultado real.
 
@@ -156,17 +160,17 @@ En la pantalla de inicio, el ciudadano ingresará su número de DNI. El sistema 
 
 La consulta inicial no devolverá ni persistirá certificados individuales, cantidades, números de orden, fechas de creación o UUID.
 
-Después de autenticar su identidad mediante ID Perú, el sistema consumirá un segundo servicio para obtener la lista real de certificados vigentes. Cada elemento incluirá número de orden, fecha de creación y UUID. La lista quedará vinculada con la solicitud y se mostrará en el paso de selección, incluso cuando contenga un solo elemento. El usuario deberá seleccionar al menos un certificado para continuar.
+Después de autenticar su identidad mediante ID Perú, el sistema consumirá un segundo servicio para obtener la lista real de certificados vigentes. Cada elemento incluirá número de orden, fecha de creación y UUID. La lista quedará vinculada con la solicitud y se mostrará en el paso de selección, incluso cuando contenga un solo elemento. El usuario deberá seleccionar exactamente un certificado para continuar.
 
 La confirmación positiva del primer servicio no garantiza que el listado posterior siga conteniendo elementos. Si el segundo servicio devuelve una lista vacía después de la autenticación, el ciudadano no podrá continuar; se informará que actualmente no existen certificados disponibles, sin presentarlo como error de autenticación ni inventar certificados.
 
 Posteriormente, el titular seleccionará el motivo de la cancelación. El sistema ofrecerá un conjunto de motivos predefinidos y una alternativa denominada **Otro motivo**, que permitirá registrar una explicación adicional.
 
-Antes de ejecutar la operación, el sistema presentará un resumen que incluirá los certificados seleccionados, el motivo registrado y las advertencias correspondientes. La revocación solo se solicitará después de la confirmación expresa del ciudadano. Desde ese momento, la selección queda inmutable.
+Antes de ejecutar la operación, el sistema presentará un resumen que incluirá el certificado seleccionado, el motivo registrado y las advertencias correspondientes. La revocación solo se solicitará después de la confirmación expresa del ciudadano. Desde ese momento, la selección queda inmutable.
 
-El servicio de revocación recibirá la lista completa de UUID seleccionados bajo una única clave de idempotencia. El proveedor deberá garantizar semántica atómica para la lista: un éxito confirma la revocación de todos los seleccionados; un fallo confirma que ninguno fue revocado; un resultado incierto no permite afirmar ninguno de los dos resultados y deberá reconciliarse sobre la misma operación. Un proveedor que solo permita resultados independientes o parciales es incompatible con esta regla.
+El servicio de revocación recibirá el UUID seleccionado bajo una única clave de idempotencia. Un éxito confirma su revocación, un fallo confirma que no fue revocado y un resultado incierto deberá reconciliarse sobre la misma operación.
 
-Cuando la operación concluya, el sistema mostrará el conjunto de certificados procesados y su resultado común, y pondrá a disposición una constancia o comprobante coherente con dicho resultado.
+Cuando la operación concluya, el sistema mostrará el certificado procesado y su resultado, y pondrá a disposición una constancia o comprobante coherente con dicho resultado.
 
 ---
 
@@ -184,14 +188,14 @@ El alcance preliminar comprende:
 - Consulta posterior de la lista detallada de certificados digitales vigentes.
 - Conservación temporal de la lista dentro de la solicitud.
 - Visualización de certificados digitales vigentes.
-- Selección de uno o varios certificados.
-- Validación de selección mínima.
+- Selección de un certificado.
+- Validación de selección única.
 - Registro del motivo de cancelación.
 - Registro de un motivo personalizado mediante la opción Otro.
 - Presentación de advertencias y consecuencias.
 - Confirmación expresa de la cancelación.
-- Envío de una lista de UUID al servicio de revocación.
-- Recepción de un resultado atómico para el conjunto seleccionado.
+- Envío del UUID seleccionado al servicio de revocación.
+- Recepción de un resultado para el certificado seleccionado.
 - Determinación del resultado general de la operación.
 - Presentación del resultado.
 - Generación y descarga de una constancia o comprobante.
@@ -203,13 +207,13 @@ El alcance preliminar comprende:
 - Continuar o abandonar el proceso.
 - Autenticarse mediante ID Perú.
 - Revisar los certificados digitales vigentes.
-- Seleccionar uno o varios certificados.
+- Seleccionar un certificado.
 - Desmarcar certificados antes de confirmar.
 - Seleccionar un motivo.
 - Escribir un motivo alternativo.
 - Revisar la información antes de confirmar.
 - Confirmar la cancelación.
-- Consultar el resultado común de la operación.
+- Consultar el resultado de la operación.
 - Descargar una constancia.
 - Finalizar el proceso.
 
@@ -257,12 +261,12 @@ No forman parte del alcance confirmado:
 
 | Actor | Rol dentro del proceso | Necesidad principal | Acciones o responsabilidades | Situaciones de participación |
 |---|---|---|---|---|
-| Ciudadano o persona natural | Usuario principal y titular de los certificados digitales | Cancelar oportunamente uno o varios certificados vigentes | Ingresar DNI, autenticarse, seleccionar certificados, registrar motivo, confirmar y descargar la constancia | Robo, pérdida, cambio de equipo o número, sospecha de uso no autorizado u otro motivo |
+| Ciudadano o persona natural | Usuario principal y titular de los certificados digitales | Cancelar oportunamente un certificado vigente por solicitud | Ingresar DNI, autenticarse, seleccionar un certificado, registrar motivo, confirmar y descargar la constancia | Robo, pérdida, cambio de equipo o número, sospecha de uso no autorizado u otro motivo |
 | RENIEC | Institución responsable del servicio | Proporcionar un canal confiable y trazable | Administrar el servicio, definir reglas, comunicar resultados y garantizar la trazabilidad institucional | Durante todo el proceso |
 | ID Perú | Servicio externo de autenticación | Confirmar que la persona que realiza el proceso es quien afirma ser | Autenticar al ciudadano y devolver el resultado correspondiente | Después de verificar que existe al menos un certificado |
 | Servicio de existencia de certificados | Sistema externo colaborador | Confirmar si el DNI tiene al menos un certificado disponible para cancelar | Recibir el DNI y devolver únicamente un resultado positivo o negativo, sin lista ni datos individuales | Desde la pantalla de inicio |
 | Servicio de listado de certificados vigentes | Sistema externo colaborador | Obtener las emisiones vigentes después de autenticar al ciudadano | Recibir la referencia necesaria y devolver una lista con número de orden, fecha de creación y UUID | En el paso 2, después de ID Perú |
-| Servicio de revocación | Sistema externo colaborador | Ejecutar de forma atómica la revocación de los certificados seleccionados | Recibir la lista completa de UUID y una clave de idempotencia, y devolver un único resultado para el conjunto | Después de la confirmación |
+| Servicio de revocación | Sistema externo colaborador | Ejecutar la revocación del certificado seleccionado | Recibir un UUID y una clave de idempotencia, y devolver su resultado | Después de la confirmación |
 | Servicio o mecanismo de constancias | Actor conceptual pendiente de validación | Generar evidencia de la operación | Producir o proporcionar el comprobante correspondiente | Después de contar con el resultado de la revocación |
 | Personal de soporte o atención | Actor potencial pendiente de validación | Atender incidencias o casos no resueltos en línea | Orientar, revisar incidencias o derivar casos | Errores, indisponibilidad o resultados inciertos |
 
@@ -280,7 +284,7 @@ El primer servicio confirma que existen certificados. El ciudadano se autentica 
 
 ### 9.3. DNI con varios certificados vigentes
 
-El primer servicio confirma que existen certificados. Después de autenticarse, el segundo servicio devuelve varias emisiones vigentes; el ciudadano visualiza la lista y puede seleccionar uno, varios o todos los certificados disponibles.
+El primer servicio confirma que existen certificados. Después de autenticarse, el segundo servicio devuelve varias emisiones vigentes; el ciudadano visualiza la lista completa y selecciona exactamente un certificado para la solicitud actual. Si necesita cancelar otro certificado, deberá iniciar una nueva solicitud.
 
 ### 9.3.1. Existencia positiva y listado posterior vacío
 
@@ -288,21 +292,21 @@ El primer servicio confirma que existen certificados y el ciudadano se autentica
 
 ### 9.4. Robo
 
-El ciudadano sufre el robo del dispositivo o elemento relacionado con el uso de uno o varios certificados y decide cancelarlos.
+El ciudadano sufre el robo del dispositivo o elemento relacionado con sus certificados y decide cancelar uno de los certificados vigentes mediante la solicitud actual.
 
 ### 9.5. Pérdida
 
-El ciudadano pierde el dispositivo o medio asociado y requiere cancelar los certificados vinculados con esa situación.
+El ciudadano pierde el dispositivo o medio asociado y requiere cancelar un certificado vinculado con esa situación.
 
 ### 9.6. Cambio de equipo o número
 
-El ciudadano cambia de dispositivo, equipo o número relacionado con el servicio y considera necesario cancelar una o varias emisiones anteriores.
+El ciudadano cambia de dispositivo, equipo o número relacionado con el servicio y considera necesario cancelar una emisión anterior.
 
 El efecto real del cambio de número sobre los certificados debe confirmarse.
 
 ### 9.7. Sospecha de uso no autorizado
 
-El ciudadano identifica señales de posible compromiso, acceso no reconocido o utilización indebida y decide cancelar preventivamente los certificados correspondientes.
+El ciudadano identifica señales de posible compromiso, acceso no reconocido o utilización indebida y decide cancelar preventivamente un certificado vigente.
 
 ### 9.8. Otro motivo
 
@@ -318,19 +322,19 @@ El ciudadano llega al paso de selección, pero no marca ningún certificado. El 
 
 ### 9.11. Revocación exitosa
 
-Todos los certificados seleccionados son cancelados correctamente. El resultado general es exitoso y la constancia refleja el conjunto procesado y el resultado común.
+El certificado seleccionado es cancelado correctamente. El resultado es exitoso y la constancia refleja el certificado procesado.
 
-### 9.12. Respuesta mixta incompatible
+### 9.12. Respuesta incompatible
 
-Una respuesta que afirme éxito para algunos UUID y fallo para otros contradice la regla atómica. No debe normalizarse como resultado ciudadano: la integración debe rechazarla y tratarla como una incompatibilidad del proveedor que requiere validación operativa.
+Una respuesta que contenga resultados para varios UUID contradice el contrato de una solicitud con un único certificado. No debe normalizarse como resultado ciudadano: la integración debe rechazarla y tratarla como una incompatibilidad del proveedor que requiere validación operativa.
 
 ### 9.13. Revocación fallida
 
-Ninguno de los certificados seleccionados es cancelado. El sistema no comunica éxito y muestra el resultado común de la operación.
+El certificado seleccionado no es cancelado. El sistema no comunica éxito y muestra el resultado de la operación.
 
 ### 9.14. Resultado incierto
 
-El servicio no puede confirmar el resultado atómico del conjunto. El sistema no debe presentar ningún certificado seleccionado como cancelado mientras no exista confirmación, no debe crear una operación incompatible y debe reconciliar utilizando la misma clave de idempotencia.
+El servicio no puede confirmar el resultado del certificado. El sistema no debe presentarlo como cancelado mientras no exista confirmación, no debe crear otra operación incompatible y debe reconciliar utilizando la misma clave de idempotencia.
 
 ### 9.15. Fallo de generación de constancia
 
@@ -399,7 +403,7 @@ El proceso funcional esperado está compuesto por una pantalla de inicio y cinco
    - Fecha de creación.
    - Identificador o UUID, según la política de presentación.
 4. El paso se muestra incluso cuando exista un solo certificado.
-5. El ciudadano selecciona uno o varios certificados.
+5. El ciudadano selecciona un certificado.
 6. El sistema exige al menos una selección para continuar.
 
 ### 11.4. Paso 3: motivo
@@ -414,20 +418,20 @@ El proceso funcional esperado está compuesto por una pantalla de inicio y cinco
 2. El resumen incluye:
    - DNI parcialmente oculto.
    - Datos básicos del ciudadano, cuando corresponda.
-   - Certificados seleccionados.
+   - Certificado seleccionado.
    - Motivo registrado.
    - Consecuencias de la cancelación.
 3. El ciudadano confirma expresamente la operación.
-4. Solo después de la confirmación se envían los UUID al servicio de revocación.
+4. Solo después de la confirmación se envía el UUID seleccionado al servicio de revocación.
 
 ### 11.6. Paso 5: constancia
 
-1. El servicio de revocación devuelve un único resultado para el conjunto confirmado.
+1. El servicio de revocación devuelve el resultado del certificado confirmado.
 2. El sistema clasifica el resultado como:
    - Exitoso.
    - Fallido.
    - Incierto.
-3. El sistema presenta los certificados incluidos y el resultado común de la operación.
+3. El sistema presenta el certificado incluido y el resultado de la operación.
 4. Se genera una constancia o comprobante coherente con ese resultado.
 5. El ciudadano puede visualizarla o descargarla.
 
@@ -472,7 +476,7 @@ Resultado y constancia
 | Número de orden | Dato devuelto por el servicio para identificar o diferenciar una emisión dentro de la lista | Confirmado, significado exacto pendiente |
 | Fecha de creación | Fecha asociada a la generación o creación de una emisión de certificado digital | Confirmado, formato pendiente |
 | UUID | Identificador único utilizado para reconocer un certificado y solicitar su revocación | Confirmado |
-| Selección de certificados | Acción mediante la cual el ciudadano elige uno o varios certificados vigentes | Confirmado |
+| Selección de certificados | Acción mediante la cual el ciudadano elige exactamente un certificado vigente | Confirmado |
 | Cancelación | Término recomendado para comunicar al ciudadano que el certificado dejará de ser válido | Confirmado |
 | Revocación | Operación técnica mediante la cual un certificado digital deja de ser válido | Confirmado |
 | Cancelación inmediata | Característica por la cual la revocación se ejecuta después de la confirmación, sin evaluación administrativa posterior | Confirmado |
@@ -483,10 +487,10 @@ Resultado y constancia
 | Motivo de cancelación | Causa seleccionada por el ciudadano para registrar por qué realiza la operación | Confirmado |
 | Otro motivo | Alternativa que permite ingresar una causa no contemplada en el catálogo | Confirmado |
 | Confirmación | Manifestación expresa del ciudadano antes de ejecutar una operación inmediata e irreversible | Confirmado |
-| Resultado atómico | Estado único devuelto para el conjunto completo de UUID confirmados | Confirmado |
-| Resultado exitoso | Todos los certificados seleccionados fueron cancelados correctamente | Confirmado |
-| Resultado fallido | Ningún certificado seleccionado fue cancelado correctamente | Confirmado |
-| Resultado incierto | No se puede determinar con certeza el resultado final del conjunto seleccionado | Confirmado conceptualmente |
+| Resultado de revocación | Estado devuelto para el único UUID confirmado en la solicitud | Confirmado |
+| Resultado exitoso | El certificado seleccionado fue cancelado correctamente | Confirmado |
+| Resultado fallido | El certificado seleccionado no fue cancelado correctamente | Confirmado |
+| Resultado incierto | No se puede determinar con certeza el resultado final del certificado seleccionado | Confirmado conceptualmente |
 | Constancia o comprobante | Documento que acredita el resultado de la operación. Su nombre oficial y contenido están pendientes | Preliminar |
 | Identidad digital | Concepto amplio que no debe utilizarse como objeto directo de la cancelación | Confirmado como término no recomendado para la acción |
 | Credencial digital | Término genérico insuficiente para identificar con precisión el objeto de la operación | Confirmado como término no recomendado |
@@ -509,8 +513,8 @@ Resultado y constancia
 | RN-09 | La identidad autenticada debe corresponder al DNI ingresado | Preliminar, necesario para seguridad |
 | RN-10 | Después de la autenticación, un segundo servicio debe obtener la lista con número de orden, fecha de creación y UUID | Confirmado |
 | RN-11 | El paso de selección debe mostrarse siempre, incluso cuando exista un solo certificado | Confirmado |
-| RN-12 | El ciudadano puede seleccionar uno o varios certificados | Confirmado |
-| RN-13 | El ciudadano debe seleccionar al menos un certificado para continuar | Confirmado |
+| RN-12 | El ciudadano debe seleccionar exactamente un certificado por solicitud | Confirmado |
+| RN-13 | Una solicitud sin certificado seleccionado no puede continuar | Confirmado |
 | RN-14 | Cada certificado se identifica técnicamente mediante su UUID | Confirmado |
 | RN-15 | La selección no se basará inicialmente en tipos de certificado | Confirmado |
 | RN-16 | El ciudadano debe registrar un motivo antes de confirmar | Confirmado |
@@ -518,13 +522,13 @@ Resultado y constancia
 | RN-18 | Cuando se seleccione Otro, debe habilitarse un campo para describir el motivo | Confirmado |
 | RN-19 | La obligatoriedad, longitud y validaciones del texto de Otro están pendientes | Pendiente de validación |
 | RN-20 | La operación debe requerir una confirmación expresa | Confirmado |
-| RN-21 | El resumen debe mostrar los certificados seleccionados | Confirmado |
-| RN-22 | El servicio de revocación debe recibir una lista de UUID | Confirmado |
-| RN-23 | El servicio de revocación debe procesar atómicamente la lista completa y devolver un resultado común | Confirmado |
+| RN-21 | El resumen debe mostrar el certificado seleccionado | Confirmado |
+| RN-22 | El servicio de revocación debe recibir el UUID del único certificado confirmado | Confirmado |
+| RN-23 | Cada solicitud debe producir una sola operación técnica de revocación para su certificado confirmado | Confirmado |
 | RN-24 | La operación general puede ser exitosa, fallida o incierta; no existe resultado parcial | Confirmado |
-| RN-25 | El sistema solo debe comunicar éxito cuando el servicio confirme todos los certificados seleccionados | Confirmado |
-| RN-26 | Una respuesta mixta es incompatible y no debe traducirse a un resultado parcial | Confirmado |
-| RN-27 | La constancia debe identificar los certificados seleccionados y reflejar su resultado común | Confirmado |
+| RN-25 | El sistema solo debe comunicar éxito cuando el servicio confirme el certificado seleccionado | Confirmado |
+| RN-26 | El resultado no puede ser parcial porque la solicitud contiene un único certificado | Confirmado |
+| RN-27 | La constancia debe identificar el certificado seleccionado y reflejar su resultado | Confirmado |
 | RN-28 | La cancelación no implica cancelar el DNI, la identidad civil ni la cuenta de ID Perú | Confirmado |
 | RN-29 | La operación no corresponde a una renovación | Confirmado |
 | RN-30 | El término cancelación debe priorizarse en la interfaz y revocación en el contexto técnico | Confirmado |
@@ -585,7 +589,7 @@ Información adicional pendiente de validación:
 
 ### 14.4. Lista de certificados digitales vigentes
 
-Resultado de la consulta inicial.
+Resultado del segundo servicio, consumido después de autenticar al ciudadano.
 
 Posibles resultados conceptuales:
 
@@ -597,17 +601,16 @@ Posibles resultados conceptuales:
 
 La lista debe mantenerse vinculada al proceso iniciado por el ciudadano y utilizarse en el paso de selección después de la autenticación.
 
-### 14.5. Selección de certificados
+### 14.5. Selección de certificado
 
-Conjunto de certificados elegidos por el ciudadano.
+Elección exclusiva de un certificado realizada por el ciudadano para la solicitud actual.
 
 Información conceptual:
 
-- UUID seleccionados.
+- UUID seleccionado.
 - Fecha y hora de la selección.
-- Cantidad seleccionada.
 - Relación con el proceso.
-- Versión o referencia de la consulta inicial, si fuera necesaria.
+- Versión o referencia del listado detallado, si fuera necesaria.
 
 ### 14.6. Autenticación de identidad
 
@@ -639,14 +642,14 @@ Texto ingresado cuando las alternativas predefinidas no representan la situació
 
 ### 14.9. Operación de revocación
 
-Acción mediante la cual se solicita que los certificados seleccionados dejen de ser válidos.
+Acción mediante la cual se solicita que el certificado seleccionado deje de ser válido.
 
 Información conceptual:
 
 - Ciudadano.
 - DNI relacionado.
-- Certificados seleccionados.
-- Lista de UUID.
+- Certificado seleccionado.
+- UUID seleccionado.
 - Motivo.
 - Fecha y hora.
 - Confirmación del ciudadano.
@@ -654,14 +657,14 @@ Información conceptual:
 - Código de operación.
 - Mensaje devuelto por el servicio.
 
-### 14.10. Resultado atómico de revocación
+### 14.10. Resultado de revocación
 
-Respuesta común correspondiente al conjunto completo de UUID confirmados.
+Respuesta correspondiente al único UUID confirmado en la solicitud.
 
 Información conceptual:
 
-- Lista de UUID solicitados.
-- Estado común del resultado.
+- UUID solicitado.
+- Estado del resultado.
 - Código devuelto.
 - Mensaje del servicio.
 - Fecha y hora.
@@ -678,7 +681,7 @@ Su contenido exacto está pendiente de validación, pero preliminarmente podría
 - Identificación parcial del titular.
 - Fecha y hora.
 - Motivo.
-- Cantidad de certificados seleccionados.
+- Identificación del certificado seleccionado.
 - Identificación de cada certificado.
 - Resultado común de la operación.
 - Mecanismo de verificación.
@@ -709,14 +712,14 @@ Componentes institucionales o externos necesarios para:
 | Autenticación fallida o cancelada | No se acreditó al titular | Reintento o finalización |
 | Autenticado y listado pendiente | La identidad fue verificada, pero todavía debe ejecutarse el segundo servicio | Consulta detallada |
 | Certificados disponibles | El segundo servicio devolvió y el sistema persistió una lista no vacía | Selección de certificados |
-| En selección | El ciudadano revisa las emisiones vigentes | Selección de uno o varios elementos |
-| Certificados seleccionados | Existe al menos un UUID seleccionado | Registro del motivo |
+| En selección | El ciudadano revisa las emisiones vigentes | Selección exclusiva de un elemento |
+| Certificado seleccionado | Existe exactamente un UUID seleccionado | Registro del motivo |
 | Motivo registrado | Se cuenta con una causa válida | Revisión y confirmación |
 | Pendiente de confirmación | La operación está lista para ser autorizada | Confirmación o abandono |
-| En revocación | El servicio está procesando los UUID | Resultado del servicio |
-| Exitosa | Todos los certificados fueron cancelados | Generación de constancia |
-| Fallida | Ningún certificado fue cancelado | Presentación del resultado |
-| Incierta | No puede determinarse el resultado atómico del conjunto | Reconciliación sobre la misma operación |
+| En revocación | El servicio está procesando el UUID seleccionado | Resultado del servicio |
+| Exitosa | El certificado fue cancelado | Generación de constancia |
+| Fallida | El certificado no fue cancelado | Presentación del resultado |
+| Incierta | No puede determinarse el resultado del certificado | Reconciliación sobre la misma operación |
 | Constancia disponible | El comprobante puede consultarse o descargarse | Finalización |
 | Constancia no disponible | Existe resultado de revocación, pero falló el documento | Reintento documental o soporte |
 
@@ -758,15 +761,15 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 
 9. El paso de selección se mostrará aun cuando exista un solo certificado.
 
-10. El servicio de revocación aceptará una lista de UUID.
+10. El servicio de revocación aceptará el UUID seleccionado.
 
-11. El servicio devolverá un único resultado atómico para la lista completa.
+11. El servicio devolverá un único resultado para el certificado solicitado.
 
 12. El resultado será exitoso, fallido o incierto; no existirá resultado parcial.
 
 13. La revocación se ejecutará inmediatamente después de la confirmación.
 
-14. La constancia identificará el conjunto seleccionado y reflejará su resultado común.
+14. La constancia identificará el certificado seleccionado y reflejará su resultado.
 
 15. Los motivos mostrados representan un catálogo preliminar y pueden requerir ajustes.
 
@@ -799,14 +802,14 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 - La revocación es una operación sensible e irreversible.
 - Debe impedirse su ejecución sin autenticación válida.
 - Debe comprobarse la correspondencia entre el DNI consultado y la identidad autenticada.
-- Los UUID enviados deben pertenecer a la lista asociada al proceso.
+- El UUID enviado debe pertenecer a la lista asociada al proceso.
 - No debe permitirse inyectar UUID arbitrarios desde el cliente.
 - Deben evitarse solicitudes duplicadas.
-- El resultado debe ser trazable respecto del conjunto confirmado.
+- El resultado debe ser trazable respecto del certificado confirmado.
 - El sistema no debe mostrar éxito sin confirmación del servicio.
 - Debe analizarse el tratamiento de respuestas tardías o inciertas sobre la misma operación idempotente.
 - La selección no puede alterarse después de la confirmación.
-- Una respuesta mixta debe rechazarse como incompatible; no debe convertirse en un estado parcial.
+- Una respuesta con resultados para varios UUID debe rechazarse como incompatible con la solicitud singular.
 - Debe evaluarse la revalidación del estado de los certificados antes de ejecutar la revocación.
 - El backend debe controlar la integridad de la selección y no confiar únicamente en el frontend.
 
@@ -829,7 +832,7 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 - No debe afirmarse que se cancela el DNI.
 - No deben comunicarse efectos que el servicio real no garantice.
 - Debe diferenciarse entre cancelar el trámite y cancelar certificados.
-- Debe indicarse claramente que el ciudadano puede seleccionar uno o varios.
+- Debe indicarse claramente que el ciudadano debe seleccionar exactamente uno.
 - La consecuencia inmediata debe presentarse antes de la confirmación.
 - El resultado debe comunicarse como exitoso, fallido o incierto para todo el conjunto; no debe sugerirse un éxito parcial.
 
@@ -839,7 +842,7 @@ La clasificación exacta dependerá de los estados proporcionados por los servic
 - La lista debe permitir diferenciar claramente cada certificado.
 - La selección debe funcionar con teclado y tecnologías de asistencia.
 - Los mensajes no deben depender únicamente del color.
-- Debe existir una indicación clara del número de certificados seleccionados.
+- Debe existir una indicación clara de si ya existe un certificado seleccionado.
 - Cuando exista un solo certificado, el paso debe seguir siendo comprensible y no parecer innecesario.
 - Los criterios institucionales de accesibilidad están pendientes de validación.
 
@@ -868,7 +871,7 @@ Debe identificarse:
 - Necesidad de términos y condiciones.
 - Obligaciones de auditoría.
 - Tratamiento de datos personales.
-- Forma válida de acreditar la selección de certificados.
+- Forma válida de acreditar la selección exclusiva de un certificado.
 - Tratamiento legal de resultados inciertos y su reconciliación.
 
 ---
@@ -896,15 +899,15 @@ Debe identificarse:
 - Después de obtener esa lista, el ciudadano verá el paso de certificados vigentes.
 - El paso de selección siempre se mostrará.
 - Esto también se aplica cuando exista un solo certificado.
-- El ciudadano podrá seleccionar uno o varios certificados.
-- Debe seleccionar al menos uno.
+- El ciudadano podrá seleccionar exactamente un certificado.
+- Debe existir exactamente una selección para continuar.
 - El ciudadano deberá seleccionar un motivo.
 - Se incluirá la opción Otro motivo.
 - Al seleccionar Otro, podrá indicar una causa no contemplada.
-- La confirmación mostrará los certificados seleccionados.
-- El servicio de revocación recibirá una lista de UUID.
+- La confirmación mostrará el certificado seleccionado.
+- El servicio de revocación recibirá el UUID seleccionado.
 - La selección quedará inmutable después de la confirmación.
-- El servicio procesará la lista completa de forma atómica y devolverá un resultado común.
+- El servicio procesará el certificado seleccionado y devolverá su resultado.
 - La operación puede tener un resultado exitoso, fallido o incierto; no existe resultado parcial.
 - Los certificados no seleccionados permanecerán fuera de la operación y no cambiarán de estado.
 - La constancia deberá reflejar el resultado real.
@@ -938,7 +941,7 @@ Debe identificarse:
    Definir si se muestra completo, parcial o mediante un identificador alternativo.
 
 7. **Contrato del servicio de revocación**
-   Confirmar que recibe la lista completa de UUID y una clave de idempotencia, y que garantiza un único resultado atómico.
+   Confirmar que recibe un UUID y una clave de idempotencia, y que devuelve un resultado inequívoco.
 
 8. **Resultado incierto y reconciliación**
    Precisar códigos, mensajes y consultas permitidas sobre la misma operación idempotente.
@@ -960,8 +963,8 @@ Debe identificarse:
 13. **Información visible en el paso de selección**
     Validar textos, orden, ocultamiento y datos complementarios.
 
-14. **Selección de todos**
-    Confirmar si existirá una acción para marcar o desmarcar todos los certificados.
+14. **Presentación de la selección exclusiva**
+    Validar institucionalmente el control visual utilizado para elegir y reemplazar un único certificado antes de continuar.
 
 15. **Catálogo definitivo de motivos**
     Validar nombres, descripciones y códigos institucionales.
@@ -975,8 +978,8 @@ Debe identificarse:
 18. **Constancia o comprobante**
     Definir nombre oficial, campos, formato, mecanismo de verificación y valor institucional.
 
-19. **Constancia para el conjunto confirmado**
-    Determinar cómo documentar la lista seleccionada y su único resultado exitoso, fallido o incierto.
+19. **Constancia para el certificado confirmado**
+    Determinar cómo documentar el certificado seleccionado y su resultado exitoso, fallido o incierto.
 
 20. **Proceso actual**
     Documentar el procedimiento vigente y los problemas que se espera resolver.
@@ -1052,11 +1055,11 @@ Aunque exista un único elemento, el paso de selección siempre debe mostrarse y
 
 ### 20.9. Interpretar que se cancelan todos los certificados
 
-El ciudadano puede seleccionar uno o varios. Los no seleccionados quedan fuera de la operación actual.
+El ciudadano selecciona exactamente uno. Los no seleccionados quedan fuera de la operación actual.
 
-### 20.10. Aceptar una respuesta mixta del proveedor
+### 20.10. Aceptar resultados para varios UUID
 
-Una respuesta diferente por UUID contradice la regla de todos o ninguno. Debe rechazarse como contrato incompatible y nunca comunicarse como éxito parcial.
+Una respuesta con varios resultados contradice la regla de un certificado por solicitud. Debe rechazarse como contrato incompatible y nunca comunicarse como éxito parcial.
 
 ### 20.11. Interpretar ID Perú como la credencial cancelada
 
@@ -1120,17 +1123,17 @@ Las definiciones aquí incluidas deben revisarse cuando RENIEC proporcione docum
 
 ## 22. Resumen reutilizable para otras herramientas
 
-El proyecto consiste en un sistema web institucional para RENIEC, dirigido a personas naturales, que permite cancelar de manera inmediata uno o varios certificados digitales vigentes asociados a un DNI.
+El proyecto consiste en un sistema web institucional para RENIEC, dirigido a personas naturales, que permite cancelar de manera inmediata un certificado digital vigente asociado a un DNI por solicitud.
 
 Un ciudadano puede tener una o más emisiones vigentes de certificados digitales generadas en momentos diferentes. En la interfaz, estas emisiones se presentan como certificados digitales vigentes. Cada certificado se identifica mediante un número de orden, una fecha de creación y un UUID único.
 
 El flujo comienza en una pantalla de inicio donde el ciudadano ingresa su DNI. Un primer servicio web indica únicamente si existen certificados disponibles. Si confirma ausencia, el proceso finaliza; si confirma existencia, el ciudadano continúa con la autenticación mediante ID Perú. Los errores o resultados inciertos bloquean la continuidad sin interpretarse como ausencia.
 
-Después de autenticarse, un segundo servicio obtiene la lista con número de orden, fecha de creación y UUID. Solo entonces se persisten y muestran los certificados en el paso de selección. Si la lista posterior está vacía, el proceso se bloquea sin considerarlo un error de autenticación. El paso siempre se presenta cuando existe al menos un certificado, incluso si solo hay uno, y el ciudadano debe seleccionar uno o varios para continuar.
+Después de autenticarse, un segundo servicio obtiene la lista con número de orden, fecha de creación y UUID. Solo entonces se persisten y muestran los certificados en el paso de selección. Si la lista posterior está vacía, el proceso se bloquea sin considerarlo un error de autenticación. El paso siempre se presenta cuando existe al menos un certificado, incluso si solo hay uno, y el ciudadano debe seleccionar exactamente uno para continuar.
 
-Luego selecciona el motivo de cancelación, revisa un resumen y confirma expresamente la operación. La selección queda inmutable. El sistema envía al servicio de revocación la lista completa de UUID seleccionados bajo una única clave de idempotencia. El servicio debe procesarla de forma atómica: el resultado es exitoso si revoca todos, fallido si no revoca ninguno o incierto mientras no pueda confirmarse uno de esos resultados.
+Luego selecciona el motivo de cancelación, revisa un resumen y confirma expresamente la operación. La selección queda inmutable. El sistema envía al servicio de revocación el UUID seleccionado bajo una única clave de idempotencia. El resultado es exitoso si lo revoca, fallido si no lo revoca o incierto mientras no pueda confirmarse uno de esos resultados.
 
-Finalmente, el sistema muestra el conjunto procesado y su resultado común, y genera una constancia coherente. Los certificados no seleccionados permanecen fuera de la operación.
+Finalmente, el sistema muestra el certificado procesado y su resultado, y genera una constancia coherente. Los certificados no seleccionados permanecen fuera de la operación.
 
 Cada ingreso posterior del DNI desde la página de inicio inicia una solicitud nueva y una consulta actualizada. El progreso, la selección y la constancia de solicitudes anteriores no se recuperan automáticamente. El historial se conserva para evidencia y trazabilidad; una revocación todavía en curso o incierta solo puede bloquear temporalmente un nuevo inicio para evitar operaciones duplicadas.
 
@@ -1142,4 +1145,4 @@ Permanecen pendientes los contratos definitivos de los servicios, los estados ex
 
 ## 23. Contexto compacto para prompts
 
-> Proyecto web de RENIEC para que personas naturales cancelen inmediatamente uno o varios certificados digitales vigentes asociados a su DNI. El ciudadano ingresa su DNI y un primer servicio indica únicamente si existen certificados disponibles, sin devolver lista, cantidad ni datos individuales. Solo un resultado positivo permite continuar hacia ID Perú; los errores y la incertidumbre no equivalen a ausencia. Después de autenticar al ciudadano, un segundo servicio devuelve la lista con número de orden, fecha de creación y UUID. Si está vacía, el proceso se bloquea sin tratarlo como error de autenticación; si contiene elementos, se persisten y se muestra siempre el paso de selección, incluso cuando exista uno solo. El ciudadano elige uno o varios, registra el motivo, revisa y confirma; desde ese momento la selección es inmutable. El servicio de revocación recibe la lista completa de UUID bajo una clave de idempotencia y aplica todos o ninguno. La operación puede ser exitosa, fallida o incierta, nunca parcial, y la constancia identifica el conjunto seleccionado y su resultado común. Cada ingreso posterior desde inicio crea una solicitud nueva y no recupera progreso anterior. En la interfaz se usa “cancelación de certificados digitales”; técnicamente es una revocación. No se cancela la identidad civil, el DNI, el DNIe ni ID Perú.
+> Proyecto web de RENIEC para que personas naturales cancelen inmediatamente un certificado digital vigente asociado a su DNI por solicitud. El ciudadano ingresa su DNI y un primer servicio indica únicamente si existen certificados disponibles, sin devolver lista, cantidad ni datos individuales. Solo un resultado positivo permite continuar hacia ID Perú; los errores y la incertidumbre no equivalen a ausencia. Después de autenticar al ciudadano, un segundo servicio devuelve la lista con número de orden, fecha de creación y UUID. Si está vacía, el proceso se bloquea; si contiene elementos, se persisten y siempre se muestra el paso de selección, incluso cuando exista uno solo. El ciudadano elige exactamente un certificado, registra el motivo, revisa y confirma; desde ese momento la selección es inmutable. El servicio de revocación recibirá ese UUID bajo una clave de idempotencia. La operación puede ser exitosa, fallida o incierta, y la constancia identifica el certificado y su resultado. Cada ingreso posterior desde inicio crea una solicitud nueva y no recupera progreso anterior. En la interfaz se usa “cancelación de certificados digitales”; técnicamente es una revocación. No se cancela la identidad civil, el DNI, el DNIe ni ID Perú.

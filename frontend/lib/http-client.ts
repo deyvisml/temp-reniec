@@ -76,6 +76,9 @@ export async function requestJson<T>(
     response = await fetch(url, {
       ...init,
       headers,
+      // El estado del trámite puede cambiar tras el retorno de ID Perú. Nunca
+      // reutilizamos una respuesta GET anterior para decidir el siguiente paso.
+      cache: init.cache ?? "no-store",
       credentials: "include",
       signal: controller.signal,
     });

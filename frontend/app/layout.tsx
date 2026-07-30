@@ -20,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="es">
       <body className="min-h-dvh bg-[radial-gradient(circle_at_20%_18%,#edf4ff_0,transparent_32rem)] bg-[#f9fbff] font-sans text-[#071847] antialiased">
         <a
-          className="fixed top-3 left-3 z-[100] -translate-y-[160%] rounded-lg bg-white px-4 py-3 font-extrabold text-[#081a45] shadow-[0_12px_32px_#00143c33] transition-transform focus:translate-y-0 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400]"
+          className="fixed top-3 left-3 z-[100] -translate-y-[160%] rounded-lg bg-white px-4 py-3 font-extrabold text-[#081a45] shadow-[0_12px_32px_#00143c33] transition-transform focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400]"
           href="#main-content"
         >
           Ir al contenido principal

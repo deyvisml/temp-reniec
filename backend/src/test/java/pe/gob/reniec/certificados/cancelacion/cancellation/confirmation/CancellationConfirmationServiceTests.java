@@ -60,7 +60,7 @@ class CancellationConfirmationServiceTests {
 
 		assertThat(response.maskedDni()).isEqualTo("******91");
 		assertThat(response.reasonLabel()).isEqualTo("Robo");
-		assertThat(response.certificates()).singleElement().satisfies(item -> {
+		assertThat(response.certificate()).satisfies(item -> {
 			assertThat(item.orderNumber()).isEqualTo("0000123456");
 			assertThat(item.maskedUuid()).isEqualTo("11111111…1111");
 			assertThat(item.maskedUuid()).doesNotContain("-1111-4111-");
@@ -154,6 +154,43 @@ class CancellationConfirmationServiceTests {
 				.isInstanceOfSatisfying(CancellationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 							CancellationConfirmationException.Reason.INVALID_SELECTION));
+		assertThat(request.getConfirmedAt()).isNull();
+	}
+
+	@Test
+	void rejectsAReviewWithZeroOrMultipleSelectedCertificates() {
+		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
+				.thenReturn(List.of());
+		assertThatThrownBy(() -> service.review(7L))
+				.isInstanceOfSatisfying(CancellationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								CancellationConfirmationException.Reason.INVALID_SELECTION));
+
+		CancellationRequestCertificateEntity second = new CancellationRequestCertificateEntity(request,
+				"0000123457", Instant.parse("2026-07-16T15:24:00Z"),
+				"22222222-2222-4222-8222-222222222222", Instant.now().minusSeconds(9));
+		second.select(Instant.now().minusSeconds(4));
+		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
+				.thenReturn(List.of(certificate, second));
+		assertThatThrownBy(() -> service.review(7L))
+				.isInstanceOfSatisfying(CancellationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								CancellationConfirmationException.Reason.INVALID_SELECTION));
+	}
+
+	@Test
+	void rejectsConfirmationWithMultiplePersistedSelections() {
+		CancellationRequestCertificateEntity second = new CancellationRequestCertificateEntity(request,
+				"0000123457", Instant.parse("2026-07-16T15:24:00Z"),
+				"22222222-2222-4222-8222-222222222222", Instant.now().minusSeconds(9));
+		second.select(Instant.now().minusSeconds(4));
+		when(certificates.findByRequestIdForUpdate(7L)).thenReturn(List.of(certificate, second));
+
+		assertThatThrownBy(() -> service.confirm(7L,
+				new CancellationConfirmationRequest(true, CancellationConsentCatalog.VERSION), "correlation"))
+				.isInstanceOfSatisfying(CancellationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								CancellationConfirmationException.Reason.INVALID_SELECTION));
 		assertThat(request.getConfirmedAt()).isNull();
 	}
 

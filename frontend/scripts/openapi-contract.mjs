@@ -22,6 +22,7 @@ const contract = structuredClone(schema);
 delete contract.servers;
 assertInitialResponseBoundary(contract);
 assertRecaptchaRequestBoundary(contract);
+assertSingleCertificateBoundary(contract);
 const snapshot = `${JSON.stringify(sortRecursively(contract), null, 2)}\n`;
 const generated = astToString(await openapiTS(contract));
 
@@ -107,5 +108,25 @@ function assertRecaptchaRequestBoundary(document) {
     if (serialized.includes(forbidden)) {
       throw new Error(`El contrato OpenAPI expone configuración o evidencia prohibida: ${forbidden}.`);
     }
+  }
+}
+
+function assertSingleCertificateBoundary(document) {
+  const selection = document.components?.schemas?.CertificateSelectionRequest;
+  const selectionProperties = selection?.properties ?? {};
+  const selectionRequired = new Set(selection?.required ?? []);
+  if (!("certificateUuid" in selectionProperties) || !selectionRequired.has("certificateUuid")) {
+    throw new Error("El contrato de selección debe exigir un certificateUuid singular.");
+  }
+  if ("certificateUuids" in selectionProperties || selectionProperties.certificateUuid?.type === "array") {
+    throw new Error("El contrato de selección no debe aceptar colecciones de certificados.");
+  }
+
+  const review = document.components?.schemas?.CancellationReviewResponse;
+  const reviewProperties = review?.properties ?? {};
+  const reviewRequired = new Set(review?.required ?? []);
+  if (!("certificate" in reviewProperties) || !reviewRequired.has("certificate")
+      || "certificates" in reviewProperties) {
+    throw new Error("El resumen de confirmación debe exponer un certificate singular.");
   }
 }

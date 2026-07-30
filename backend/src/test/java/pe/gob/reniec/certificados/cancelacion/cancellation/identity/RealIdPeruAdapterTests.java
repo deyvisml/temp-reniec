@@ -25,6 +25,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.mock.env.MockEnvironment;
 
 class RealIdPeruAdapterTests {
@@ -34,7 +35,12 @@ class RealIdPeruAdapterTests {
 	private AtomicReference<String> jwksBody;
 	private AtomicReference<String> tokenBody;
 	private AtomicReference<String> userinfoBody;
+	private AtomicReference<String> tokenAccept;
+	private AtomicReference<String> userinfoAccept;
 	private AtomicInteger tokenStatus;
+	private AtomicInteger tokenCalls;
+	private AtomicInteger userinfoTransientFailures;
+	private AtomicInteger userinfoCalls;
 	private AtomicLong tokenDelayMillis;
 
 	@BeforeEach
@@ -54,10 +60,17 @@ class RealIdPeruAdapterTests {
 		jwksBody = new AtomicReference<>(new JWKSet(key.toPublicJWK()).toString());
 		tokenBody = new AtomicReference<>(tokenResponse(jwt(key, false)));
 		userinfoBody = new AtomicReference<>("{\"jwt\":\"" + jwt(key, true) + "\"}");
+		tokenAccept = new AtomicReference<>();
+		userinfoAccept = new AtomicReference<>();
 		tokenStatus = new AtomicInteger(200);
+		tokenCalls = new AtomicInteger();
+		userinfoTransientFailures = new AtomicInteger();
+		userinfoCalls = new AtomicInteger();
 		tokenDelayMillis = new AtomicLong();
 		server.createContext("/service/jwks", exchange -> respond(exchange, 200, jwksBody.get()));
 		server.createContext("/service/token", exchange -> {
+			tokenCalls.incrementAndGet();
+			tokenAccept.set(exchange.getRequestHeaders().getFirst("Accept"));
 			try {
 				Thread.sleep(tokenDelayMillis.get());
 			}
@@ -66,7 +79,15 @@ class RealIdPeruAdapterTests {
 			}
 			respond(exchange, tokenStatus.get(), tokenBody.get());
 		});
-		server.createContext("/service/userinfo", exchange -> respond(exchange, 200, userinfoBody.get()));
+		server.createContext("/service/userinfo", exchange -> {
+			userinfoCalls.incrementAndGet();
+			userinfoAccept.set(exchange.getRequestHeaders().getFirst("Accept"));
+			if (userinfoTransientFailures.getAndUpdate(value -> Math.max(0, value - 1)) > 0) {
+				respond(exchange, 500, "{\"error\":\"temporarily_unavailable\"}");
+				return;
+			}
+			respond(exchange, 200, userinfoBody.get());
+		});
 		server.start();
 	}
 
@@ -90,6 +111,8 @@ class RealIdPeruAdapterTests {
 				"code-test", "session-test", "verifier-test", "12345678");
 		assertThat(citizen.dni()).isEqualTo("12345678");
 		assertThat(citizen.subject()).isEqualTo("subject-test");
+		assertThat(tokenAccept.get()).contains(MediaType.APPLICATION_JSON_VALUE);
+		assertThat(userinfoAccept.get()).contains(MediaType.APPLICATION_JSON_VALUE);
 	}
 
 	@Test
@@ -160,6 +183,23 @@ class RealIdPeruAdapterTests {
 		assertThatThrownBy(() -> adapter.authenticate("code-test", "session-test", "verifier-test", "12345678"))
 				.isInstanceOfSatisfying(IdentityIntegrationException.class,
 						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.TIMEOUT));
+	}
+
+	@Test
+	void retriesOnlyUserinfoOnceAfterATransientServerFailure() {
+		properties.setVersion(IdPeruVersion.V1);
+		tokenBody.set("{\"access_token\":\"access-test\",\"expires_in\":300,"
+				+ "\"id_token\":\"unused\",\"token_type\":\"bearer\"}");
+		userinfoBody.set("{\"sub\":\"subject-test\",\"doc\":\"12345678\",\"first_name\":\"ANA\"}");
+		userinfoTransientFailures.set(1);
+		IdPeruHttpClientFactory clients = testClients();
+		RealIdPeruAdapter adapter = new RealIdPeruAdapter(properties, new IdPeruDniEncryptor(),
+				new IdPeruJwtValidator(properties, clients), clients);
+
+		assertThat(adapter.authenticate("code-test", null, "unused-verifier", "12345678").dni())
+				.isEqualTo("12345678");
+		assertThat(tokenCalls).hasValue(1);
+		assertThat(userinfoCalls).hasValue(2);
 	}
 
 	private URI uri(String path) { return URI.create("http://localhost:" + server.getAddress().getPort() + path); }

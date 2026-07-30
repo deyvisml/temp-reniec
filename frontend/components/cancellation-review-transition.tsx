@@ -125,19 +125,15 @@ export function ReviewView({ review, accepted, submitting, onAccepted, onBack, o
         {review.otherReason ? <SummaryRow label="Descripción" value={review.otherReason} /> : null}
       </dl>
 
-      <section className="mt-6" aria-labelledby="selected-certificates-title">
-        <h2 id="selected-certificates-title" className="text-base font-black text-[#0a2259]">
-          Certificados seleccionados <span className="ml-1 text-reniec-red">({review.certificates.length})</span>
+      <section className="mt-6" aria-labelledby="selected-certificate-title">
+        <h2 id="selected-certificate-title" className="text-base font-black text-[#0a2259]">
+          Certificado seleccionado
         </h2>
-        <div className="mt-3 divide-y divide-[#dce5f2] rounded-xl border border-[#dce5f2]">
-          {review.certificates.map(certificate => (
-            <article key={`${certificate.orderNumber}-${certificate.maskedUuid}`} className="grid gap-2 px-4 py-4 sm:grid-cols-3 sm:items-center">
-              <Data label="N.º de orden" value={certificate.orderNumber} strong />
-              <Data label="Fecha de creación" value={formatDate(certificate.emissionCreatedAt)} />
-              <Data label="Identificador" value={certificate.maskedUuid} mono />
-            </article>
-          ))}
-        </div>
+        <article className="mt-3 grid gap-2 rounded-xl border border-[#dce5f2] px-4 py-4 sm:grid-cols-3 sm:items-center">
+          <Data label="N.º de orden" value={review.certificate.orderNumber} strong />
+          <Data label="Fecha de creación" value={formatDate(review.certificate.emissionCreatedAt)} />
+          <Data label="Identificador" value={review.certificate.maskedUuid} mono />
+        </article>
       </section>
 
       <section className="mt-6 rounded-xl border border-[#f1c66d] bg-[#fffaf0] p-4" aria-labelledby="consequences-title">
@@ -147,7 +143,7 @@ export function ReviewView({ review, accepted, submitting, onAccepted, onBack, o
         </ul>
       </section>
 
-      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[#cbd8ea] p-4 text-sm leading-6 text-[#233968] focus-within:ring-3 focus-within:ring-[#f4cada]">
+      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-[#cbd8ea] p-4 text-sm leading-6 text-[#233968] focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#f4cada]">
         <input
           type="checkbox"
           checked={accepted}
@@ -160,11 +156,11 @@ export function ReviewView({ review, accepted, submitting, onAccepted, onBack, o
 
       <div className="mt-6 flex flex-col-reverse justify-between gap-3 border-t border-[#e1e8f2] pt-5 sm:flex-row">
         <button type="button" onClick={onBack} disabled={submitting}
-          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-6 font-bold text-[#173a78] hover:bg-[#f1f5fb] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df] disabled:cursor-default disabled:opacity-60 sm:w-[280px]">
+          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-6 font-bold text-[#173a78] hover:bg-[#f1f5fb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0755df] disabled:cursor-default disabled:opacity-60 sm:w-[280px]">
           <BackIcon /> Regresar
         </button>
         <button type="button" onClick={onConfirm} disabled={!accepted || submitting}
-          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-reniec-red px-6 font-bold text-white hover:bg-[#a8003f] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df] disabled:cursor-default disabled:bg-[#c9cfdb] sm:w-[280px]">
+          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-reniec-red px-6 font-bold text-white hover:bg-[#a8003f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0755df] disabled:cursor-default disabled:bg-[#c9cfdb] sm:w-[280px]">
           {submitting ? "Confirmando…" : "Confirmar cancelación"}<ArrowIcon />
         </button>
       </div>
@@ -201,7 +197,7 @@ function LoadingState() {
 }
 
 function ErrorState({ state, onRetry }: { state: Extract<ReviewState, { kind: "error" }>; onRetry: () => void }) {
-  return <div className="grid min-h-[390px] place-items-center text-center" role="alert"><div className="max-w-[520px]"><h1 id="review-title" className="text-2xl font-black text-[#061a50]">{state.title}</h1><p className="mt-3 leading-7 text-[#52678f]">{state.description}</p><button type="button" onClick={state.reload ? () => window.location.reload() : onRetry} className="mt-6 min-h-11 cursor-pointer rounded-lg bg-reniec-red px-6 font-bold text-white focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#0755df]">{state.reload ? "Recargar resumen" : "Reintentar"}</button></div></div>;
+  return <div className="grid min-h-[390px] place-items-center text-center" role="alert"><div className="max-w-[520px]"><h1 id="review-title" className="text-2xl font-black text-[#061a50]">{state.title}</h1><p className="mt-3 leading-7 text-[#52678f]">{state.description}</p><button type="button" onClick={state.reload ? () => window.location.reload() : onRetry} className="mt-6 min-h-11 cursor-pointer rounded-lg bg-reniec-red px-6 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0755df]">{state.reload ? "Recargar resumen" : "Reintentar"}</button></div></div>;
 }
 
 function errorState(error: unknown): Extract<ReviewState, { kind: "error" }> {

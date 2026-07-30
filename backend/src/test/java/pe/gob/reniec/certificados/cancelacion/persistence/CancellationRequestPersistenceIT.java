@@ -299,6 +299,9 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		HttpResponse<String> current = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port + "/api/v1/identity-verifications/current"))
 				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
+		HttpResponse<String> currentSession = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/session/current"))
+				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
 
 		assertThat(initiation.statusCode()).isEqualTo(200);
 		assertThat(beforeStart.statusCode()).isEqualTo(200);
@@ -309,6 +312,10 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(current.body()).contains("\"status\":\"VERIFIED\"", "\"canContinue\":true",
 				"\"nextStep\":\"CERTIFICATE_SELECTION\"")
 				.doesNotContain("00000001", "mock-code", state);
+		assertThat(current.headers().firstValue("Cache-Control")).hasValue("no-store");
+		assertThat(currentSession.statusCode()).isEqualTo(200);
+		assertThat(currentSession.headers().firstValue("Cache-Control")).hasValue("no-store");
+		assertThat(currentSession.body()).contains("\"nextStep\":\"CERTIFICATE_SELECTION\"");
 		assertThat(initiationCookie).isNotEqualTo(authorizationCookie);
 
 		HttpResponse<String> listed = client.send(HttpRequest.newBuilder(
@@ -319,8 +326,7 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				.compile("\\\"certificateUuid\\\":\\\"([^\\\"]+)\\\"").matcher(listed.body());
 		assertThat(certificate.find()).isTrue();
 		String certificateUuid = certificate.group(1);
-
-		HttpResponse<String> selected = client.send(HttpRequest.newBuilder(
+		HttpResponse<String> obsoleteSelection = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port
 						+ "/api/v1/cancellation-requests/current/certificate-selection"))
 				.header("Cookie", authorizationCookie)
@@ -329,6 +335,16 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				.PUT(HttpRequest.BodyPublishers.ofString(
 						"{\"certificateUuids\":[\"" + certificateUuid + "\"]}"))
 				.build(), HttpResponse.BodyHandlers.ofString());
+
+		HttpResponse<String> selected = client.send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port
+						+ "/api/v1/cancellation-requests/current/certificate-selection"))
+				.header("Cookie", authorizationCookie)
+				.header("Origin", "http://localhost:3000")
+				.header("Content-Type", "application/json")
+				.PUT(HttpRequest.BodyPublishers.ofString(
+						"{\"certificateUuid\":\"" + certificateUuid + "\"}"))
+				.build(), HttpResponse.BodyHandlers.ofString());
 		HttpResponse<String> session = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port + "/api/v1/session/current"))
 				.header("Cookie", authorizationCookie).GET().build(), HttpResponse.BodyHandlers.ofString());
@@ -336,9 +352,11 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(listed.statusCode()).isEqualTo(200);
 		assertThat(listed.body()).contains("\"requestStatus\":\"CERTIFICATES_AVAILABLE\"",
 				"\"canContinue\":false");
+		assertThat(obsoleteSelection.statusCode()).isEqualTo(400);
+		assertThat(obsoleteSelection.body()).contains("\"code\":\"VALIDATION_ERROR\"");
 		assertThat(selected.statusCode()).isEqualTo(200);
 		assertThat(selected.body()).contains("\"requestStatus\":\"CERTIFICATES_SELECTED\"",
-				"\"selectedCount\":1", "\"canContinue\":true");
+				"\"canContinue\":true");
 		assertThat(session.statusCode()).isEqualTo(200);
 		assertThat(session.body()).contains("\"requestStatus\":\"CERTIFICATES_SELECTED\"",
 				"\"nextStep\":\"REASON\"");
@@ -355,7 +373,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 						.GET().build(), HttpResponse.BodyHandlers.ofString());
 
 		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
-		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/cancelacion");
+		assertThat(callback.headers().firstValue("Location"))
+				.hasValue("http://localhost:3000/cancelacion?identityOutcome=ERROR");
 		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
 				.contains("idperu_callback_outcome=ERROR", "HttpOnly", "SameSite=Lax")
 				.doesNotContain("provider-code", "unknown-state"));
@@ -372,7 +391,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 						HttpResponse.BodyHandlers.ofString());
 
 		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
-		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/cancelacion");
+		assertThat(callback.headers().firstValue("Location"))
+				.hasValue("http://localhost:3000/cancelacion?identityOutcome=ERROR");
 		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
 				.contains("idperu_callback_outcome=ERROR", "HttpOnly", "SameSite=Lax")
 				.doesNotContain("provider-code", "unknown-state", "provider-session"));
@@ -417,6 +437,12 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'
 				AND TRIM(COALESCE(column_comment, '')) <> ''
 				""", Integer.class);
+		Integer singleSelectionIndexCount = jdbcTemplate.queryForObject("""
+				SELECT COUNT(*) FROM information_schema.statistics
+				WHERE table_schema = DATABASE()
+				  AND table_name = 'cancellation_request_certificate'
+				  AND index_name = 'uq_request_certificate_single_selected'
+				""", Integer.class);
 		HttpResponse<String> health = HttpClient.newHttpClient().send(
 				HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/actuator/health")).GET().build(),
 				HttpResponse.BodyHandlers.ofString());
@@ -426,7 +452,8 @@ class CancellationRequestPersistenceIT extends MySqlContainerSupport {
 				"cancellation_request_certificate", "certificate_availability_check",
 				"certificate_cancellation_request", "identity_verification", "revocation_operation");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(8);
+		assertThat(migrationCount).isEqualTo(9);
+		assertThat(singleSelectionIndexCount).isEqualTo(1);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
 		assertThat(documentedColumnCount).isEqualTo(104);

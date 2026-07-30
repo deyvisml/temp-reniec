@@ -107,6 +107,13 @@ public class CertificateCancellationRequestEntity {
 		requestStatus = CancellationRequestStatus.REASON_REGISTERED;
 	}
 
+	public void clearReasonForCertificateReselection() {
+		ensureReasonMutable();
+		reasonCode = null;
+		otherReason = null;
+		requestStatus = CancellationRequestStatus.CERTIFICATES_SELECTED;
+	}
+
 	public void confirm(Instant confirmedAt, String consentVersion) {
 		if (reasonCode == null) throw new IllegalStateException("A reason is required before confirmation");
 		if (this.confirmedAt != null) throw new IllegalStateException("The request is already confirmed");

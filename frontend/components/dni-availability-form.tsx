@@ -16,7 +16,7 @@ export const RECAPTCHA_ENABLED = process.env.NEXT_PUBLIC_RECAPTCHA_ENABLED?.trim
 const LOCAL_ANTI_BOT_EVIDENCE = "local-development-bypass";
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
-const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
+const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
 
 export function validateDni(value: string): string | undefined {
   if (!value) return "Ingresa tu número de DNI.";

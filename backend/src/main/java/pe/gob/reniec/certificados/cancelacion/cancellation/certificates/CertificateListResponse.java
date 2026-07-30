@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record CertificateListResponse(
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) String requestStatus,
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<CertificateItem> certificates,
-		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) int selectedCount,
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean canContinue) {
 
 	@Schema(description = "Certificado vigente obtenido después de autenticar al ciudadano.")

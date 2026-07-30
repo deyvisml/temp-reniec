@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record CancellationReviewResponse(
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) String requestStatus,
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED, example = "******91") String maskedDni,
-		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) List<SelectedCertificate> certificates,
+		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) SelectedCertificate certificate,
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) String reasonCode,
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED) String reasonLabel,
 		@Schema(description = "Descripción persistida solo para el motivo OTHER.") String otherReason,

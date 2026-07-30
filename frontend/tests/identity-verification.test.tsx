@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 import { CertificateSelectionTransition } from "@/components/certificate-selection-transition";
@@ -85,11 +86,15 @@ describe("paso de verificación de identidad", () => {
   it("bloquea el doble inicio y usa el aviso compartido para errores", () => {
     const source = readFileSync(resolve(process.cwd(), "components/identity-verification-panel.tsx"), "utf8");
     const alertSource = readFileSync(resolve(process.cwd(), "components/identity-callback-alert.tsx"), "utf8");
+    const flowSource = readFileSync(resolve(process.cwd(), "components/cancellation-flow.tsx"), "utf8");
 
     expect(source).toContain("const inFlight = useRef(false)");
     expect(source).toContain("if (inFlight.current) return");
     expect(source).toContain('disabled={view === "starting"}');
     expect(source).toContain("IdentityCallbackAlert");
+    expect(flowSource).toContain('searchParams.get("identityOutcome")');
+    expect(flowSource).toContain("onCallbackOutcomeAcknowledged");
+    expect(flowSource).toContain('router.replace("/autorizacion", { scroll: false })');
     expect(source).not.toContain("Verificación completada");
     expect(source).not.toContain("function Stepper");
     expect(alertSource).toContain("const shownOutcome = useRef");

@@ -37,6 +37,20 @@ describe("Tailwind-first styling convention", () => {
     }
   });
 
+  it("keeps focus indicators compact across the application", () => {
+    const sourceFiles = [
+      ...filesBelow(join(frontendRoot, "app"), ".tsx"),
+      ...filesBelow(join(frontendRoot, "components"), ".tsx"),
+    ];
+
+    for (const sourceFile of sourceFiles) {
+      const source = readFileSync(sourceFile, "utf8");
+      expect(source, relative(frontendRoot, sourceFile)).not.toMatch(/(?:focus|focus-visible|focus-within):outline-3\b/);
+      expect(source, relative(frontendRoot, sourceFile)).not.toMatch(/(?:focus|focus-visible|focus-within):outline-offset-3\b/);
+      expect(source, relative(frontendRoot, sourceFile)).not.toMatch(/focus-within:ring-3\b/);
+    }
+  });
+
   it("keeps the citizen home presentation colocated as Tailwind utilities", () => {
     const homeSource = readFileSync(join(frontendRoot, "components", "cancellation-entry.tsx"), "utf8");
     const formSource = readFileSync(join(frontendRoot, "components", "dni-availability-form.tsx"), "utf8");

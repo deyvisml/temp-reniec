@@ -12,6 +12,8 @@ export type CertificateListContract = components["schemas"]["CertificateListResp
 export type CertificateSelectionContract = components["schemas"]["CertificateSelectionRequest"];
 export type CancellationReviewContract = components["schemas"]["CancellationReviewResponse"];
 export type CancellationConfirmationContract = components["schemas"]["CancellationConfirmationRequest"];
+export type CancellationReasonContract = components["schemas"]["CancellationReasonResponse"];
+export type CancellationReasonRequestContract = components["schemas"]["CancellationReasonRequest"];
 
 export const SYSTEM_STATUS_PATH = "/api/v1/system/status" satisfies keyof paths;
 export const CANCELLATION_REQUESTS_PATH = "/api/v1/cancellation-requests" satisfies keyof paths;
@@ -21,3 +23,4 @@ export const CURRENT_CERTIFICATES_PATH = "/api/v1/cancellation-requests/current/
 export const CERTIFICATE_SELECTION_PATH = "/api/v1/cancellation-requests/current/certificate-selection" satisfies keyof paths;
 export const CANCELLATION_REVIEW_PATH = "/api/v1/cancellation-requests/current/review" satisfies keyof paths;
 export const CANCELLATION_CONFIRMATION_PATH = "/api/v1/cancellation-requests/current/confirmation" satisfies keyof paths;
+export const CANCELLATION_REASON_PATH = "/api/v1/cancellation-requests/current/reason" satisfies keyof paths;

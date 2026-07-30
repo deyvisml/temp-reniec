@@ -99,7 +99,7 @@ function identityAlertOptions(presentation: { title: string; description: string
       popup: "rounded-2xl! px-6! pb-8! text-[#061a50]!",
       title: "text-balance text-2xl! font-extrabold! text-[#061a50]!",
       htmlContainer: "text-pretty text-[15px]! leading-6! text-[#465a85]!",
-      confirmButton: "min-h-12 w-full cursor-pointer rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 py-3 font-extrabold text-white focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400]",
+      confirmButton: "min-h-12 w-full cursor-pointer rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 py-3 font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400]",
       actions: "mt-7! w-full! px-2!",
     },
   };

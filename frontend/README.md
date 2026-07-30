@@ -69,7 +69,7 @@ Usa los DNI ficticios documentados en el README del backend para reproducir cada
 
 `/`, `/verificacion-identidad` y `/verificacion-identidad/retorno` existen únicamente como redirecciones hacia `/cancelacion`. `/autorizacion` renderiza el mismo componente compartido del flujo cuando el ambiente es local y redirige a `/cancelacion` fuera de local. Ningún DNI, `requestId`, certificado o resultado de autenticación se transporta en la URL. Una recarga consulta solo el contexto temporal vigente del backend; no recupera solicitudes terminadas ni progreso histórico.
 
-Tras autenticar la identidad, la misma ruta muestra siempre el paso 2. La lista se obtiene del backend y no de parámetros o almacenamiento del navegador. El ciudadano selecciona explícitamente uno o varios certificados —también cuando solo existe uno— y el botón continúa bloqueado mientras la selección esté vacía o se esté enviando. Una lista vacía finaliza la operación activa de forma controlada; timeout, indisponibilidad y respuestas inválidas permiten un reintento seguro.
+Tras autenticar la identidad, la misma ruta muestra siempre el paso 2. La lista se obtiene del backend y no de parámetros o almacenamiento del navegador. El ciudadano selecciona explícitamente un solo certificado —también cuando solo existe uno— mediante un grupo de opciones exclusivas; elegir otra opción reemplaza la anterior. El botón continúa bloqueado mientras no exista una selección o se esté enviando. Una lista vacía finaliza la operación activa de forma controlada; timeout, indisponibilidad y respuestas inválidas permiten un reintento seguro.
 
 ## Cliente HTTP
 

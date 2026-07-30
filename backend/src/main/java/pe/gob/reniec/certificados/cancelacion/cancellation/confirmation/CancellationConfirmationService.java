@@ -53,7 +53,7 @@ public class CancellationConfirmationService {
 				.orElseThrow(() -> failure(NOT_ALLOWED, "Request not found"));
 		validateIdentity(requestId);
 		validateReviewable(request);
-		List<CancellationRequestCertificateEntity> selected = selectedCertificates(requestId);
+		CancellationRequestCertificateEntity selected = selectedCertificate(requestId);
 		return response(request, selected);
 	}
 
@@ -68,13 +68,13 @@ public class CancellationConfirmationService {
 
 		if (request.getRequestStatus() == CancellationRequestStatus.CONFIRMED) {
 			if (request.getConfirmedAt() != null && consent.version().equals(request.getConsentVersion())) {
-				return response(request, selectedCertificatesForUpdate(requestId));
+				return response(request, selectedCertificateForUpdate(requestId));
 			}
 			throw failure(CONFLICT, "Confirmed request does not match current consent");
 		}
 
 		validateReviewable(request);
-		List<CancellationRequestCertificateEntity> selected = selectedCertificatesForUpdate(requestId);
+		CancellationRequestCertificateEntity selected = selectedCertificateForUpdate(requestId);
 		CancellationRequestStatus previous = request.getRequestStatus();
 		Instant confirmedAt = Instant.now();
 		request.confirm(confirmedAt, consent.version());
@@ -117,33 +117,32 @@ public class CancellationConfirmationService {
 		}
 	}
 
-	private List<CancellationRequestCertificateEntity> selectedCertificates(Long requestId) {
+	private CancellationRequestCertificateEntity selectedCertificate(Long requestId) {
 		return validateSelected(requestId, certificates
 				.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(requestId));
 	}
 
-	private List<CancellationRequestCertificateEntity> selectedCertificatesForUpdate(Long requestId) {
+	private CancellationRequestCertificateEntity selectedCertificateForUpdate(Long requestId) {
 		return validateSelected(requestId, certificates.findByRequestIdForUpdate(requestId).stream()
 				.filter(CancellationRequestCertificateEntity::isSelected).toList());
 	}
 
-	private static List<CancellationRequestCertificateEntity> validateSelected(Long requestId,
+	private static CancellationRequestCertificateEntity validateSelected(Long requestId,
 			List<CancellationRequestCertificateEntity> selected) {
-		if (selected.isEmpty() || selected.stream().anyMatch(certificate ->
+		if (selected.size() != 1 || selected.stream().anyMatch(certificate ->
 				certificate.getAvailabilityStatus() != CertificateAvailabilityStatus.AVAILABLE
 						|| certificate.getRequest().getId() == null
 						|| !requestId.equals(certificate.getRequest().getId()))) {
-			throw failure(INVALID_SELECTION, "At least one selected available certificate is required");
+			throw failure(INVALID_SELECTION, "Exactly one selected available certificate is required");
 		}
-		return selected;
+		return selected.getFirst();
 	}
 
 	private CancellationReviewResponse response(CertificateCancellationRequestEntity request,
-			List<CancellationRequestCertificateEntity> selected) {
+			CancellationRequestCertificateEntity selected) {
 		return new CancellationReviewResponse(request.getRequestStatus().name(), maskDni(request.getDni()),
-				selected.stream().map(certificate -> new CancellationReviewResponse.SelectedCertificate(
-						certificate.getOrderNumber(), certificate.getEmissionCreatedAt(),
-						maskUuid(certificate.getCertificateUuid()))).toList(),
+				new CancellationReviewResponse.SelectedCertificate(selected.getOrderNumber(),
+						selected.getEmissionCreatedAt(), maskUuid(selected.getCertificateUuid())),
 				request.getReasonCode().name(), REASON_LABELS.get(request.getReasonCode()),
 				request.getOtherReason(), consent.consequences(), consent.text(), consent.version(),
 				request.getConfirmedAt(), request.getRequestStatus() == CancellationRequestStatus.CONFIRMED);

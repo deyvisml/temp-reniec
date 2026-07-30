@@ -1,8 +1,8 @@
 # Modelo de datos de solicitudes de cancelación
 
-> La solicitud de cancelación representa el trámite ciudadano completo. La revocación es una operación técnica atómica ejecutada como consecuencia de la confirmación de dicha solicitud.
+> La solicitud de cancelación representa el trámite ciudadano completo. Cada solicitud selecciona y posteriormente revoca un único certificado digital.
 
-Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V7. El modelo efectivo mantiene ocho tablas. V7 incorpora una única sesión transaccional por solicitud activa y retira de `identity_verification` los campos de autorización temporal reemplazados. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
+Este documento describe el esquema MySQL vigente después de las migraciones Flyway V1 a V9. El modelo efectivo mantiene ocho tablas. V9 refuerza la selección exclusiva sin agregar entidades. No existe una tabla por pantalla, paso, estado, navegador o dispositivo; la auditoría tampoco es la fuente de verdad del estado actual.
 
 ## Diagrama entidad-relación
 
@@ -29,7 +29,7 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 | `cancellation_request_certificate` | Cada emisión vigente que obtendrá el futuro segundo servicio después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
 | `identity_verification` | Cada intento de autenticación con ID Perú, su state hasheado y PKCE protegido. | La verificación puede cancelarse, fallar o repetirse sin guardar códigos ni tokens. |
 | `cancellation_flow_session` | Sesión transaccional única de la solicitud activa, estado, familia y hashes de refresh. | Permite recargas y renovación segura sin recuperar trámites históricos ni guardar tokens en texto plano. |
-| `revocation_operation` | Cada ejecución técnica idempotente y atómica de revocación. | Conserva el único resultado técnico del conjunto confirmado. |
+| `revocation_operation` | Cada ejecución técnica idempotente de revocación. | Conserva el resultado técnico del certificado confirmado. |
 | `cancellation_receipt` | Generación y disponibilidad de la constancia. | Su falla no cambia una revocación ya confirmada. |
 | `cancellation_audit_event` | Trazabilidad cronológica mínima. | Conserva hechos relevantes sin implementar event sourcing. |
 
@@ -49,25 +49,25 @@ La solicitud no contiene colecciones JPA automáticas. Los intentos, certificado
 
 Una solicitud puede tener cero, uno o varios certificados. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, certificate_uuid)` es único. No existe `eligibility_check_id` ni otra relación con la consulta inicial porque ese servicio nunca obtiene certificados.
 
-`selected` y `selected_at` siempre son coherentes. Antes de confirmar pueden seleccionarse uno, varios o todos los certificados disponibles. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación y no cambian de disponibilidad por la revocación.
+`selected` y `selected_at` siempre son coherentes. Antes de confirmar debe seleccionarse exactamente un certificado disponible y elegir otro reemplaza la selección anterior. El índice funcional único `uq_request_certificate_single_selected` impide que dos filas de una solicitud queden seleccionadas. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación.
 
-Las filas seleccionadas constituyen el conjunto atómico: sus UUID se envían juntos bajo una única clave de idempotencia. No se crea una tabla snapshot porque las mismas filas quedan inmutables tras la confirmación.
+La fila seleccionada constituye el objetivo de la operación: su UUID se enviará bajo una única clave de idempotencia. No se crea una tabla snapshot porque esa misma fila queda inmutable tras la confirmación.
 
 ## Operación de revocación atómica
 
 `revocation_operation` conserva la llamada técnica global, la clave única de idempotencia, el estado, las referencias y fechas técnicas, y `normalized_result` como resultado autoritativo. Los únicos resultados normalizados son:
 
-- `SUCCEEDED`: todos los certificados seleccionados fueron revocados.
-- `FAILED`: ninguno de los certificados seleccionados fue revocado.
+- `SUCCEEDED`: el certificado seleccionado fue revocado.
+- `FAILED`: el certificado seleccionado no fue revocado.
 - `OUTCOME_UNKNOWN`: todavía no puede confirmarse éxito ni fallo.
 
-No existe `PARTIAL` ni se calculan resultados mezclando filas independientes. Una respuesta diferente por UUID contradice el contrato de todos o ninguno y debe rechazarse como incompatible. `OUTCOME_UNKNOWN` conserva la misma operación y clave de idempotencia para reconciliación, y bloquea una ejecución incompatible.
+No existe `PARTIAL` porque cada solicitud opera sobre un certificado. `OUTCOME_UNKNOWN` conserva la misma operación y clave de idempotencia para reconciliación, y bloquea una ejecución incompatible.
 
-No existe `certificate_revocation_result`: duplicar un resultado común por cada certificado añadiría relaciones, columnas y concurrencia sin aportar información. El conjunto afectado se obtiene de las filas seleccionadas y el resultado se obtiene de la operación.
+No existe `certificate_revocation_result`: cada solicitud solo puede confirmar un certificado, por lo que el certificado afectado se obtiene de su única fila seleccionada y el resultado se obtiene directamente de la operación.
 
 ## Constancia
 
-`cancellation_receipt` se asocia con la solicitud y la operación que la sustenta. La constancia debe identificar los certificados seleccionados y reflejar el único resultado común. El documento no se guarda como BLOB. Un fallo documental no transforma una revocación atómica ya confirmada en fallo.
+`cancellation_receipt` se asocia con la solicitud y la operación que la sustenta. La constancia debe identificar el certificado seleccionado y reflejar su resultado. El documento no se guarda como BLOB. Un fallo documental no transforma una revocación ya confirmada en fallo.
 
 ## Estados controlados
 
@@ -85,7 +85,8 @@ Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas 
 - `idempotency_key`, `receipt_code` y `(request_id, certificate_uuid)` son únicos según su responsabilidad.
 - La consulta inicial solo referencia la solicitud y nunca es fuente de una fila de certificado.
 - Los checks verifican UUID canónico, fechas coherentes y consistencia de selección.
-- Los índices permiten listar certificados por solicitud, consultar seleccionados o disponibles y recuperar intentos e historial.
+- El índice funcional único permite varios valores `NULL`, pero como máximo un `request_id` cuando `selected=true`. Su migración falla si encuentra datos previos incompatibles y nunca elige ni elimina una fila de forma silenciosa.
+- Los índices permiten listar certificados por solicitud, consultar el único seleccionado o los disponibles y recuperar intentos e historial.
 - `@Version` protege la fila de certificado que puede modificarse concurrentemente antes de confirmar.
 - Un conflicto de versión se rechaza para que el caso de uso recargue el estado; no hay reintentos automáticos generales.
 - La reserva `CHECKING_CERTIFICATE_LIST` evita llamadas simultáneas al segundo servicio. Si una ejecución queda interrumpida, una reserva vencida puede recuperarse; un fallo técnico vuelve a `AUTHENTICATED_PENDING_CERTIFICATE_LIST`.
@@ -121,8 +122,10 @@ Ese bloqueo no recupera el trámite anterior ni devuelve su identificador, paso,
 - `V5__separate_certificate_availability_from_listing.sql` renombra la consulta y el resultado iniciales a disponibilidad, convierte valores heredados inequívocos y elimina de los certificados la relación incorrecta con el primer intento.
 - `V6__add_id_peru_identity_security.sql` agrega modo, hash/expiración/consumo de state, verifier PKCE cifrado temporalmente, referencias técnicas y hash/vigencia/invalidez de la autorización.
 - `V7__add_citizen_flow_session.sql` crea la sesión transaccional y elimina de la verificación los campos de autorización que ya no son fuente de continuidad.
-- Una base vacía ejecuta V1 a V7 y termina con las mismas ocho tablas.
-- Una base existente en V6 ejecuta V7 sin perder solicitudes, intentos, verificaciones, certificados, selecciones, operaciones, constancias ni auditoría.
+- `V8__add_confirmation_consent_version.sql` registra la versión del consentimiento ciudadano.
+- `V9__enforce_single_certificate_selection.sql` agrega la restricción de una sola fila seleccionada por solicitud, sin crear tablas o columnas.
+- Una base vacía ejecuta V1 a V9 y termina con las mismas ocho tablas.
+- Una base existente en V8 ejecuta V9 sin perder datos compatibles. Si contiene varias selecciones por solicitud, la migración se detiene para exigir una decisión explícita.
 
 Flyway no revierte migraciones automáticamente. Cualquier cambio posterior requiere una nueva migración hacia adelante.
 
@@ -142,7 +145,7 @@ WHERE table_schema = DATABASE()
   AND table_name <> 'flyway_schema_history'
 ORDER BY table_name;
 
--- Certificados obtenidos y conjunto confirmado.
+-- Certificados obtenidos y única selección de la solicitud.
 SELECT order_number, emission_created_at, certificate_uuid,
        availability_status, selected, selected_at
 FROM cancellation_request_certificate
@@ -156,7 +159,7 @@ FROM certificate_availability_check
 WHERE request_id = 1
 ORDER BY attempt_number;
 
--- Operaciones atómicas y su resultado común.
+-- Operación técnica y resultado del único certificado confirmado.
 SELECT id, idempotency_key, operation_status, normalized_result,
        correlation_id, created_at, updated_at
 FROM revocation_operation

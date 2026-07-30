@@ -26,59 +26,72 @@ const certificates: CertificateItem[] = [
 ];
 
 describe("selección de certificados", () => {
-  it("renderiza uno o varios certificados con controles accesibles", () => {
-    const markup = renderToStaticMarkup(
-      <CertificateSelectionView certificates={certificates} selected={new Set()}
-        submitting={false} onToggle={() => undefined} onToggleAll={() => undefined}
-        onSubmit={() => undefined} onBack={() => undefined} />,
-    );
+  it("renderiza los certificados como un grupo de selección exclusiva accesible", () => {
+    const markup = renderToStaticMarkup(
+      <CertificateSelectionView certificates={certificates} selected={null}
+        submitting={false} onSelect={() => undefined}
+        onSubmit={() => undefined} onBack={() => undefined} />,
+    );
 
     expect(markup).toContain("PASO 2 DE 5");
+    expect(markup).toContain("Selecciona un certificado");
+    expect(markup).toContain("Elige cuál deseas cancelar para continuar.");
+    expect(markup).not.toContain("asociado a tu DNI para incluirlo en esta solicitud");
     expect(markup).toContain("ORD-0001");
     expect(markup).toContain("ORD-0002");
-    expect(markup).toContain("Seleccionar todos los certificados");
-    expect(markup).toContain("Seleccionar certificado ORD-0001");
-    expect(markup).toContain("Regresar");
-    expect(markup).not.toContain("Solo se cancelarán los certificados seleccionados");
-    expect(markup.match(/sm:w-\[280px\]/g)?.length).toBe(2);
-    expect(markup).toContain("disabled");
-  });
+    expect(markup).toContain("Certificado digital vigente 01");
+    expect(markup).toContain("Certificado digital vigente 02");
+    expect(markup).not.toMatch(/>UUID</);
+    expect(markup).not.toContain("Emisión asociada a tu DNI");
+    expect(markup.match(/viewBox="0 0 56 64"/g)?.length).toBe(2);
+    expect(markup.match(/type="radio"/g)?.length).toBe(2);
+    expect(markup).toContain('type="radio"');
+    expect(markup).not.toContain("Seleccionar todos");
+    expect(markup).toContain("Seleccionar certificado ORD-0001");
+    expect(markup).toContain("Regresar");
+    expect(markup).toContain("Debes seleccionar un certificado");
+    expect(markup.match(/sm:w-\[280px\]/g)?.length).toBe(2);
+    expect(markup).toContain("disabled");
+  });
 
   it("muestra la cantidad exacta y habilita continuar con una selección", () => {
-    const markup = renderToStaticMarkup(
-      <CertificateSelectionView certificates={certificates}
-        selected={new Set([certificates[0].certificateUuid])} submitting={false}
-        onToggle={() => undefined} onToggleAll={() => undefined} onSubmit={() => undefined}
-        onBack={() => undefined} />,
+    const markup = renderToStaticMarkup(
+      <CertificateSelectionView certificates={certificates}
+        selected={certificates[0].certificateUuid} submitting={false}
+        onSelect={() => undefined} onSubmit={() => undefined}
+        onBack={() => undefined} />,
     );
 
-    expect(markup).toContain("1 seleccionado");
+    expect(markup).toContain("1 certificado seleccionado");
     expect(markup).toContain("checked");
+    expect(markup).toContain('data-selected="true"');
+    expect(markup).toContain('data-selected="false"');
     expect(markup).not.toContain('disabled=""');
   });
 
   it("mantiene la selección explícita con un único certificado", () => {
-    const markup = renderToStaticMarkup(
-      <CertificateSelectionView certificates={[certificates[0]]} selected={new Set()}
-        submitting={false} onToggle={() => undefined} onToggleAll={() => undefined}
-        onSubmit={() => undefined} onBack={() => undefined} />,
+    const markup = renderToStaticMarkup(
+      <CertificateSelectionView certificates={[certificates[0]]} selected={null}
+        submitting={false} onSelect={() => undefined}
+        onSubmit={() => undefined} onBack={() => undefined} />,
     );
 
     expect(markup).toContain("Certificados vigentes");
     expect(markup).toContain("ORD-0001");
-    expect(markup).toContain("0 seleccionados");
-    expect(markup).toContain("disabled");
-  });
+    expect(markup).toContain("Ningún certificado seleccionado");
+    expect(markup).not.toContain("checked");
+    expect(markup).toContain("disabled");
+  });
 
-  it("bloquea un segundo envío mientras guarda la selección", () => {
-    const markup = renderToStaticMarkup(
-      <CertificateSelectionView certificates={certificates}
-        selected={new Set(certificates.map(item => item.certificateUuid))} submitting
-        onToggle={() => undefined} onToggleAll={() => undefined} onSubmit={() => undefined}
-        onBack={() => undefined} />,
-    );
+  it("bloquea un segundo envío mientras guarda la selección", () => {
+    const markup = renderToStaticMarkup(
+      <CertificateSelectionView certificates={certificates}
+        selected={certificates[1].certificateUuid} submitting
+        onSelect={() => undefined} onSubmit={() => undefined}
+        onBack={() => undefined} />,
+    );
 
-    expect(markup).toContain("2 seleccionados");
+    expect(markup).toContain("1 certificado seleccionado");
     expect(markup).toContain("Guardando selección…");
     expect(markup).toContain("disabled");
   });
@@ -111,10 +124,13 @@ describe("selección de certificados", () => {
     const source = readFileSync(resolve(process.cwd(), "components/certificate-selection-transition.tsx"), "utf8");
     expect(source).not.toMatch(/localStorage|sessionStorage|URLSearchParams/);
     expect(source).toContain("submissionInFlight.current");
-    expect(source).toContain("disabled={selected.size === 0 || submitting}");
+    expect(source).toContain("disabled={selected === null || submitting}");
     expect(source).toContain("CERTIFICATE_LIST_TIMEOUT");
     expect(source).toContain("CERTIFICATE_LIST_UNAVAILABLE");
     expect(source).toContain("CERTIFICATE_LIST_INVALID_RESPONSE");
+    expect(source).toContain("CERTIFICATE_LIST_IN_PROGRESS");
+    expect(source).toContain("getCurrentCertificates()");
+    expect(source).not.toContain("MAX_LISTING_IN_PROGRESS_RETRIES");
     expect(source).toContain("CERTIFICATE_SELECTION_CONFLICT");
   });
 });

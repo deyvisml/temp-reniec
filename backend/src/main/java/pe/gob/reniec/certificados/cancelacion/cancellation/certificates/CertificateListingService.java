@@ -57,20 +57,8 @@ public class CertificateListingService {
 		}
 	}
 
-	public CertificateListResponse select(Long requestId, List<String> submittedUuids, String correlationId) {
-		if (submittedUuids == null || submittedUuids.isEmpty()) {
-			throw new CertificateListingException(Reason.INVALID_SELECTION,
-					"At least one certificate is required");
-		}
-		Set<String> normalized = new HashSet<>();
-		for (String value : submittedUuids) {
-			String uuid = canonicalUuid(value);
-			if (!normalized.add(uuid)) {
-				throw new CertificateListingException(Reason.INVALID_SELECTION,
-						"Duplicate certificate UUID in selection");
-			}
-		}
-		return response(persistence.replaceSelection(requestId, Set.copyOf(normalized), correlationId));
+	public CertificateListResponse select(Long requestId, String submittedUuid, String correlationId) {
+		return response(persistence.replaceSelection(requestId, canonicalUuid(submittedUuid), correlationId));
 	}
 
 	private static List<CertificateListingResult.ListedCertificate> validateAndNormalize(
@@ -142,7 +130,7 @@ public class CertificateListingService {
 						entity.getEmissionCreatedAt(), entity.getCertificateUuid(),
 						entity.getAvailabilityStatus().name(), entity.isSelected()))
 				.toList();
-		int selected = (int) entities.stream().filter(CancellationRequestCertificateEntity::isSelected).count();
-		return new CertificateListResponse(requestStatus, items, selected, selected > 0);
+		boolean selected = entities.stream().anyMatch(CancellationRequestCertificateEntity::isSelected);
+		return new CertificateListResponse(requestStatus, items, selected);
 	}
 }

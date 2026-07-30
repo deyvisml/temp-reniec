@@ -210,6 +210,8 @@ APP_BACKEND_BASE_URL=http://localhost:8080
 
 En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/cancelacion`. Reinicia el backend después de cambiar el perfil o el modo; no es necesario modificar YAML ni Java.
 
+Para la integración real local, ejecuta el backend con **JDK 21** (también es la versión de compilación del proyecto). Se comprobó que el endpoint institucional de ID Perú valida su cadena TLS con el almacén de certificados de JDK 21, mientras que la instalación local de JDK 22 puede rechazarla con `PKIX path building failed`. En IntelliJ selecciona `C:\Program Files\Java\jdk-21.0.11` como JRE de la configuración de ejecución. No se debe desactivar la validación TLS ni agregar un trust manager permisivo para sortear este error.
+
 Tras iniciar una consulta con cualquier DNI válido que no sea un fixture especial, abre `/cancelacion`. El resultado positivo debe llevarte a `/autorizacion`; desde allí inicia la verificación. El navegador debe salir hacia la URL institucional, ID Perú debe retornar al callback local y la vista final debe permanecer en `/autorizacion`. Si el DNI autenticado no coincide con el ingresado, el rechazo es esperado y no debe deshabilitarse.
 
 La aplicación mantiene internamente las decisiones estables de ID Perú: conexión 3 s, lectura 5 s, `state` 5 min, caché JWKS 15 min y ACR `face_mobile`. La continuidad del trámite ya no depende de una cookie temporal de ID Perú: utiliza las cookies JWT de sesión documentadas en [`docs/session/README.md`](../docs/session/README.md). Modificar estos valores requiere una necesidad operativa comprobada y un cambio de código revisado.
@@ -243,7 +245,7 @@ Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que e
 
 ## Paso 2: listado y selección local
 
-Después de una identidad verificada, `GET /api/v1/cancellation-requests/current/certificates` obtiene una sola vez el listado detallado y devuelve en recargas la instantánea persistida. `PUT /api/v1/cancellation-requests/current/certificate-selection` reemplaza el conjunto completo seleccionado. Ambos endpoints derivan la solicitud desde la cookie de sesión; no aceptan DNI ni `requestId` del navegador.
+Después de una identidad verificada, `GET /api/v1/cancellation-requests/current/certificates` obtiene una sola vez el listado detallado y devuelve en recargas la instantánea persistida. `PUT /api/v1/cancellation-requests/current/certificate-selection` reemplaza el único certificado seleccionado. Ambos endpoints derivan la solicitud desde la cookie de sesión; no aceptan DNI ni `requestId` del navegador.
 
 El perfil `local` usa `CERTIFICATE_LISTING_MODE=mock`. El contrato institucional del segundo servicio aún no está disponible, por lo que el modo `real` falla al iniciar en vez de inventar URL, autenticación o payload. Los escenarios deterministas del mock son:
 
@@ -263,7 +265,7 @@ La lista vacía no crea filas y bloquea el avance. Los errores técnicos restaur
 
 ## Paso 4: revisión y confirmación
 
-`GET /api/v1/cancellation-requests/current/review` devuelve el resumen autoritativo de la solicitud activa con DNI y UUID enmascarados, certificados seleccionados, motivo, consecuencias y la versión vigente del consentimiento. El navegador no envía esos datos como fuente de verdad.
+`GET /api/v1/cancellation-requests/current/review` devuelve el resumen autoritativo de la solicitud activa con DNI y UUID enmascarados, el certificado seleccionado, motivo, consecuencias y la versión vigente del consentimiento. El navegador no envía esos datos como fuente de verdad.
 
 `POST /api/v1/cancellation-requests/current/confirmation` recibe únicamente la aceptación expresa y la versión mostrada. El backend revalida sesión, identidad, estado, motivo y selección dentro de una transacción con bloqueo. Una confirmación repetida idéntica devuelve el mismo resultado y conserva una sola fecha y un solo evento de auditoría.
 

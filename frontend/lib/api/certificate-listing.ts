@@ -10,13 +10,24 @@ import {
 export type CertificateItem = CertificateItemContract;
 export type CertificateList = CertificateListContract;
 
-export const getCurrentCertificates = (signal?: AbortSignal) =>
-  requestJson<CertificateList>(CURRENT_CERTIFICATES_PATH, { signal });
+let currentCertificatesRequest: ReturnType<typeof requestJson<CertificateList>> | undefined;
 
-export const replaceCertificateSelection = (certificateUuids: string[], signal?: AbortSignal) =>
+/**
+ * Comparte únicamente la lectura que está en curso. Esto evita que un
+ * remontaje de React en desarrollo cancele una consulta y cree otra idéntica.
+ * La promesa se libera al terminar, por lo que cada entrada posterior vuelve
+ * a consultar el estado vigente del trámite.
+ */
+export function getCurrentCertificates() {
+  currentCertificatesRequest ??= requestJson<CertificateList>(CURRENT_CERTIFICATES_PATH)
+    .finally(() => { currentCertificatesRequest = undefined; });
+  return currentCertificatesRequest;
+}
+
+export const replaceCertificateSelection = (certificateUuid: string, signal?: AbortSignal) =>
   requestJson<CertificateList>(CERTIFICATE_SELECTION_PATH, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ certificateUuids } satisfies CertificateSelectionContract),
+    body: JSON.stringify({ certificateUuid } satisfies CertificateSelectionContract),
     signal,
   });

@@ -29,6 +29,7 @@ describe("requestJson", () => {
     const headers = new Headers(init?.headers);
     expect(String(url)).toBe("http://server-backend:8080/technical/example");
     expect(init?.credentials).toBe("include");
+    expect(init?.cache).toBe("no-store");
     expect(headers.get("Accept")).toBe("application/json");
     expect(headers.get("X-Client")).toBe("frontend");
     expect(headers.get(CORRELATION_HEADER)).toMatch(/^[0-9a-f-]{36}$/);

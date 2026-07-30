@@ -85,7 +85,7 @@ export function InternalFlowHeaderActions({
         onClick={onLogout}
         disabled={pending}
         aria-describedby={logoutFailed ? "logout-error" : undefined}
-        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent px-1 py-2 text-xs font-semibold text-[#d7e3f8] transition-colors hover:text-white focus-visible:rounded-sm focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] disabled:cursor-not-allowed disabled:opacity-60 min-[520px]:gap-2 min-[520px]:text-sm"
+        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent px-1 py-2 text-xs font-semibold text-[#d7e3f8] transition-colors hover:text-white focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] disabled:cursor-not-allowed disabled:opacity-60 min-[520px]:gap-2 min-[520px]:text-sm"
       >
         <LogoutIcon />
         <span className="hidden min-[420px]:inline">{pending ? "Saliendo…" : logoutFailed ? "Reintentar salida" : "Cerrar sesión"}</span>

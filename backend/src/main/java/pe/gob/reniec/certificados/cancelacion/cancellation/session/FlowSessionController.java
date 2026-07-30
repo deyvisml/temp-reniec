@@ -19,8 +19,10 @@ public class FlowSessionController {
 	@GetMapping("/current")
 	@Operation(operationId = "getCurrentFlowSession", summary = "Consulta la sesión y el paso actualmente autorizado",
 			security = @SecurityRequirement(name = "FlowSessionCookie"))
-	public FlowSessionService.CurrentSession current(HttpServletRequest request) {
-		return service.current(cookies.access(request).orElseThrow(() -> required()));
+	public ResponseEntity<FlowSessionService.CurrentSession> current(HttpServletRequest request) {
+		return ResponseEntity.ok()
+				.cacheControl(CacheControl.noStore())
+				.body(service.current(cookies.access(request).orElseThrow(() -> required())));
 	}
 	@PostMapping("/refresh")
 	@Operation(operationId = "refreshFlowSession", summary = "Rota el refresh token y renueva el access token",

@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import pe.gob.reniec.certificados.cancelacion.shared.error.ApiError;
 import pe.gob.reniec.certificados.cancelacion.shared.web.CorrelationIdFilter;
@@ -89,20 +90,26 @@ public class IdentityVerificationController {
 						callbackOutcomes.clear().toString());
 			}
 			else {
-				response.header(HttpHeaders.SET_COOKIE,
-						callbackOutcomes.create(IdentityCallbackOutcome.fromStatus(result.status())).toString());
+				response = failureRedirect(response, IdentityCallbackOutcome.fromStatus(result.status()));
 			}
 		}
 		catch (IdentityIntegrationException exception) {
-			response.header(HttpHeaders.SET_COOKIE,
-					callbackOutcomes.create(IdentityCallbackOutcome.fromFailure(exception.failure())).toString());
+			response = failureRedirect(response, IdentityCallbackOutcome.fromFailure(exception.failure()));
 		}
 		catch (RuntimeException exception) {
 			LOGGER.error("Unexpected ID Peru callback failure type={}", exception.getClass().getSimpleName());
-			response.header(HttpHeaders.SET_COOKIE,
-					callbackOutcomes.create(IdentityCallbackOutcome.ERROR).toString());
+			response = failureRedirect(response, IdentityCallbackOutcome.ERROR);
 		}
 		return response.build();
+	}
+
+	private ResponseEntity.BodyBuilder failureRedirect(ResponseEntity.BodyBuilder response,
+			IdentityCallbackOutcome outcome) {
+		IdentityCallbackOutcome safeOutcome = outcome == null ? IdentityCallbackOutcome.ERROR : outcome;
+		return response.location(UriComponentsBuilder.fromUri(properties.getFrontendReturnUri())
+				.queryParam("identityOutcome", safeOutcome.name())
+				.build(true).toUri())
+				.header(HttpHeaders.SET_COOKIE, callbackOutcomes.create(safeOutcome).toString());
 	}
 
 	@GetMapping(path = "/api/v1/identity-verifications/current", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -112,7 +119,7 @@ public class IdentityVerificationController {
 	public ResponseEntity<CurrentIdentityResponse> current(HttpServletRequest request) {
 		IdentityVerificationService.CurrentIdentityStatus status = service.current(cookies.access(request).orElseThrow(() -> unauthorized()));
 		IdentityCallbackOutcome callbackOutcome = callbackOutcomes.read(request).orElse(null);
-		ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+		ResponseEntity.BodyBuilder response = ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore());
 		if (callbackOutcome != null) {
 			response.header(HttpHeaders.SET_COOKIE, callbackOutcomes.clear().toString());
 		}

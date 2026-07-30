@@ -1,6 +1,7 @@
 package pe.gob.reniec.certificados.cancelacion.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.sql.DriverManager;
 import java.util.ArrayList;
@@ -20,6 +21,10 @@ class FlywayIncrementalMigrationIT {
 	static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.4.0")
 			.withDatabaseName("cancelacion_incremental_test");
 
+	@Container
+	static final MySQLContainer CONFLICT_MYSQL = new MySQLContainer("mysql:8.4.0")
+			.withDatabaseName("cancelacion_conflict_test");
+
 	@Test
 	void upgradesV4ToLatestPreservingDataAndAddingCurrentSchemaChanges() throws Exception {
 		Flyway v4 = Flyway.configure()
@@ -34,7 +39,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(4);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(5);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
@@ -98,6 +103,31 @@ class FlywayIncrementalMigrationIT {
 				  AND TRIM(COALESCE(table_comment, '')) = ''
 				ORDER BY table_name
 				""")).isEmpty();
+		assertThat(singleInt("""
+				SELECT COUNT(*) FROM information_schema.statistics
+				WHERE table_schema = DATABASE()
+				  AND table_name = 'cancellation_request_certificate'
+				  AND index_name = 'uq_request_certificate_single_selected'
+				""")).isEqualTo(1);
+	}
+
+	@Test
+	void rejectsLegacyMultipleSelectionsWithoutChangingTheirEvidence() throws Exception {
+		Flyway v4 = Flyway.configure()
+				.dataSource(CONFLICT_MYSQL.getJdbcUrl(), CONFLICT_MYSQL.getUsername(), CONFLICT_MYSQL.getPassword())
+				.target(MigrationVersion.fromVersion("4"))
+				.load();
+		v4.migrate();
+		insertConflictingV4Data();
+
+		Flyway latest = Flyway.configure()
+				.dataSource(CONFLICT_MYSQL.getJdbcUrl(), CONFLICT_MYSQL.getUsername(), CONFLICT_MYSQL.getPassword())
+				.load();
+		assertThatThrownBy(latest::migrate).hasMessageContaining("uq_request_certificate_single_selected");
+		assertThat(singleInt(CONFLICT_MYSQL, """
+				SELECT COUNT(*) FROM cancellation_request_certificate
+				WHERE request_id = 1 AND selected = TRUE
+				""")).isEqualTo(2);
 	}
 
 	private void insertRepresentativeV4Data() throws Exception {
@@ -131,6 +161,41 @@ class FlywayIncrementalMigrationIT {
 		}
 	}
 
+	private void insertConflictingV4Data() throws Exception {
+		try (var connection = DriverManager.getConnection(
+				CONFLICT_MYSQL.getJdbcUrl(), CONFLICT_MYSQL.getUsername(), CONFLICT_MYSQL.getPassword());
+				var statement = connection.createStatement()) {
+			statement.executeUpdate("""
+					INSERT INTO certificate_cancellation_request
+					(id, dni, request_status, eligibility_result, created_at, updated_at)
+					VALUES (1, '87654321', 'ELIGIBLE', 'ELIGIBLE',
+					 '2026-07-20 12:00:00', '2026-07-20 12:05:00')
+					""");
+			statement.executeUpdate("""
+					INSERT INTO certificate_eligibility_check
+					(id, request_id, attempt_number, check_status, normalized_result,
+					 requested_at, responded_at, correlation_id, created_at)
+					VALUES (1, 1, 1, 'COMPLETED', 'ELIGIBLE',
+					 '2026-07-20 12:00:00', '2026-07-20 12:00:01', 'conflict-v4', '2026-07-20 12:00:00')
+					""");
+			statement.executeUpdate("""
+					INSERT INTO cancellation_request_certificate
+					(id, request_id, eligibility_check_id, order_number, emission_created_at,
+					 certificate_uuid, availability_status, consulted_at, selected, selected_at,
+					 version, created_at, updated_at)
+					VALUES
+					(1, 1, 1, 'ORD-V4-001', '2026-07-19 10:00:00',
+					 '3ff0c799-5845-4c30-bb3d-f5ea260dad61', 'AVAILABLE',
+					 '2026-07-20 12:00:01', TRUE, '2026-07-20 12:04:00', 1,
+					 '2026-07-20 12:00:01', '2026-07-20 12:04:00'),
+					(2, 1, 1, 'ORD-V4-002', '2026-07-19 11:00:00',
+					 '31ab4d38-e7ef-47af-af8c-f7fedc05a1d2', 'AVAILABLE',
+					 '2026-07-20 12:00:01', TRUE, '2026-07-20 12:04:01', 1,
+					 '2026-07-20 12:00:01', '2026-07-20 12:04:01')
+					""");
+		}
+	}
+
 	private List<String> legacyRows() throws Exception {
 		return schemaRows("""
 				SELECT CONCAT('request:', id, ':', dni) FROM certificate_cancellation_request
@@ -150,8 +215,12 @@ class FlywayIncrementalMigrationIT {
 	}
 
 	private int singleInt(String sql) throws Exception {
+		return singleInt(MYSQL, sql);
+	}
+
+	private int singleInt(MySQLContainer container, String sql) throws Exception {
 		try (var connection = DriverManager.getConnection(
-				MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+				container.getJdbcUrl(), container.getUsername(), container.getPassword());
 				var statement = connection.createStatement();
 				var result = statement.executeQuery(sql)) {
 			result.next();

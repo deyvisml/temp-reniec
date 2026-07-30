@@ -11,16 +11,16 @@ import type { CancellationReview } from "@/lib/api/cancellation-confirmation";
 const review: CancellationReview = {
   requestStatus: "REASON_REGISTERED",
   maskedDni: "******91",
-  certificates: [{
+  certificate: {
     orderNumber: "0000123456",
     emissionCreatedAt: "2026-07-15T15:24:00Z",
     maskedUuid: "11111111…1111",
-  }],
+  },
   reasonCode: "OTHER",
   reasonLabel: "Otro motivo",
   otherReason: "Ya no utilizaré este certificado.",
   consequences: ["La cancelación se ejecutará de forma inmediata en el siguiente paso."],
-  consentText: "Confirmo que revisé los certificados seleccionados.",
+  consentText: "Confirmo que revisé el certificado seleccionado.",
   consentVersion: "CANCELACION_CERTIFICADOS_V1",
   confirmed: false,
 };

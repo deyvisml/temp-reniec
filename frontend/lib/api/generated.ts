@@ -1,4 +1,22 @@
 export interface paths {
+    "/api/v1/cancellation-requests/current/reason": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Obtiene el motivo de la solicitud activa */
+        get: operations["getCurrentCancellationReason"];
+        /** Registra o reemplaza el motivo antes de la confirmación */
+        put: operations["replaceCurrentCancellationReason"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cancellation-requests/current/certificate-selection": {
         parameters: {
             query?: never;
@@ -8,8 +26,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Confirma el conjunto completo de certificados seleccionados
-         * @description Reemplazo idempotente del conjunto seleccionado. Cada UUID debe pertenecer al listado persistido de la solicitud autenticada.
+         * Selecciona un certificado de la solicitud activa
+         * @description Reemplazo idempotente de la selección singular. El UUID debe pertenecer al listado persistido de la solicitud autenticada.
          */
         put: operations["replaceCurrentCertificateSelection"];
         post?: never;
@@ -203,7 +221,7 @@ export interface paths {
         };
         /**
          * Obtiene el resumen autoritativo previo a confirmar
-         * @description Construye el paso 4 desde persistencia y devuelve solo identificadores enmascarados.
+         * @description Construye el paso 4 desde persistencia con exactamente un certificado y devuelve solo identificadores enmascarados.
          */
         get: operations["getCurrentCancellationReview"];
         put?: never;
@@ -258,10 +276,31 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @description Conjunto completo de certificados que el ciudadano selecciona para cancelar. */
+        CancellationReasonRequest: {
+            /**
+             * @description Código controlado del motivo.
+             * @enum {string}
+             */
+            reasonCode: "THEFT" | "LOSS" | "DEVICE_OR_NUMBER_CHANGE" | "SUSPECTED_UNAUTHORIZED_USE" | "OTHER";
+            /** @description Descripción requerida únicamente cuando el motivo es OTHER. */
+            otherReason?: string;
+        };
+        /** @description Motivo registrado para la solicitud activa. */
+        CancellationReasonResponse: {
+            requestStatus?: string;
+            /** @enum {string} */
+            reasonCode?: "THEFT" | "LOSS" | "DEVICE_OR_NUMBER_CHANGE" | "SUSPECTED_UNAUTHORIZED_USE" | "OTHER";
+            otherReason?: string;
+            canContinue?: boolean;
+            nextStep?: string;
+        };
+        /** @description Certificado que el ciudadano selecciona para cancelar. */
         CertificateSelectionRequest: {
-            /** @description UUID canónicos de la solicitud activa; no admite duplicados. */
-            certificateUuids: string[];
+            /**
+             * Format: uuid
+             * @description UUID canónico de un certificado disponible de la solicitud activa.
+             */
+            certificateUuid: string;
         };
         /** @description Formato común y seguro de los errores controlados de la API. */
         ApiError: {
@@ -306,8 +345,6 @@ export interface components {
         CertificateListResponse: {
             requestStatus: string;
             certificates: components["schemas"]["CertificateItem"][];
-            /** Format: int32 */
-            selectedCount: number;
             canContinue: boolean;
         };
         IdentityStartResponse: {
@@ -373,7 +410,7 @@ export interface components {
             requestStatus: string;
             /** @example ******91 */
             maskedDni: string;
-            certificates: components["schemas"]["SelectedCertificate"][];
+            certificate: components["schemas"]["SelectedCertificate"];
             reasonCode: string;
             reasonLabel: string;
             /** @description Descripción persistida solo para el motivo OTHER. */
@@ -472,6 +509,50 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getCurrentCancellationReason: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationReasonResponse"];
+                };
+            };
+        };
+    };
+    replaceCurrentCancellationReason: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancellationReasonRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationReasonResponse"];
+                };
+            };
+        };
+    };
     replaceCurrentCertificateSelection: {
         parameters: {
             query?: never;
@@ -530,7 +611,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description UUID duplicado, ajeno o no disponible */
+            /** @description UUID ajeno o no disponible */
             422: {
                 headers: {
                     [name: string]: unknown;

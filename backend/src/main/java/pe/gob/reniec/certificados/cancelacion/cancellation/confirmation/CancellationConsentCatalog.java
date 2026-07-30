@@ -9,13 +9,13 @@ public final class CancellationConsentCatalog {
 
 	public static final String VERSION = "CANCELACION_CERTIFICADOS_V1";
 
-	private static final String TEXT = "Confirmo que revisé los certificados seleccionados y comprendo "
-			+ "que su cancelación será inmediata. Una vez cancelados, dejarán de ser válidos.";
+	private static final String TEXT = "Confirmo que revisé el certificado seleccionado y comprendo "
+			+ "que su cancelación será inmediata. Una vez cancelado, dejará de ser válido.";
 
 	private static final List<String> CONSEQUENCES = List.of(
 			"La cancelación se ejecutará de forma inmediata en el siguiente paso.",
-			"Los certificados seleccionados dejarán de ser válidos.",
-			"Solo se procesará el conjunto de certificados que seleccionaste.");
+			"El certificado seleccionado dejará de ser válido.",
+			"Solo se procesará el certificado que seleccionaste.");
 
 	public String version() { return VERSION; }
 	public String text() { return TEXT; }

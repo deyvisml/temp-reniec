@@ -12,7 +12,7 @@ export default function NotFound() {
       </p>
       <a
         href={CANCELLATION_FLOW_ROUTE}
-        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400]"
+        className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400]"
       >
         Volver al inicio
       </a>

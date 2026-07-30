@@ -102,7 +102,7 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 				.header(HttpHeaders.ORIGIN, LOCAL_ORIGIN)
 				.header(HttpHeaders.CONTENT_TYPE, "application/json")
 				.PUT(HttpRequest.BodyPublishers.ofString(
-						"{\"certificateUuids\":[\"11111111-1111-4111-8111-111111111111\"]}"))
+						"{\"certificateUuid\":\"11111111-1111-4111-8111-111111111111\"}"))
 				.build());
 		HttpResponse<String> preflight = send(HttpRequest.newBuilder(
 				uri("/api/v1/cancellation-requests/current/certificate-selection"))

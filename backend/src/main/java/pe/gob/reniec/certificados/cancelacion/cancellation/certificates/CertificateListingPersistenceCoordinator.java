@@ -3,7 +3,6 @@ package pe.gob.reniec.certificados.cancelacion.cancellation.certificates;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,37 +110,43 @@ public class CertificateListingPersistenceCoordinator {
 	}
 
 	@Transactional
-	List<CancellationRequestCertificateEntity> replaceSelection(Long requestId, Set<String> selectedUuids,
+	List<CancellationRequestCertificateEntity> replaceSelection(Long requestId, String selectedUuid,
 			String correlationId) {
 		CertificateCancellationRequestEntity request = lockRequest(requestId);
 		if (request.getRequestStatus() != CancellationRequestStatus.CERTIFICATES_AVAILABLE
-				&& request.getRequestStatus() != CancellationRequestStatus.CERTIFICATES_SELECTED) {
+				&& request.getRequestStatus() != CancellationRequestStatus.CERTIFICATES_SELECTED
+				&& request.getRequestStatus() != CancellationRequestStatus.REASON_REGISTERED
+				&& request.getRequestStatus() != CancellationRequestStatus.PENDING_CONFIRMATION) {
 			throw new CertificateListingException(CertificateListingException.Reason.NOT_ALLOWED,
 					"Request is not ready for selection");
 		}
 		List<CancellationRequestCertificateEntity> current = certificates.findByRequestIdForUpdate(requestId);
-		Set<String> available = current.stream()
+		CancellationRequestCertificateEntity target = current.stream()
 				.filter(item -> item.getAvailabilityStatus() == CertificateAvailabilityStatus.AVAILABLE)
-				.map(CancellationRequestCertificateEntity::getCertificateUuid).collect(java.util.stream.Collectors.toSet());
-		if (!available.containsAll(selectedUuids)) {
+				.filter(item -> item.getCertificateUuid().equals(selectedUuid))
+				.findFirst().orElseThrow(() -> new CertificateListingException(
+						CertificateListingException.Reason.INVALID_SELECTION,
+						"Certificate does not belong to the active request or is unavailable"));
+		List<CancellationRequestCertificateEntity> persisted = current.stream()
+				.filter(CancellationRequestCertificateEntity::isSelected).toList();
+		if (persisted.size() > 1) {
 			throw new CertificateListingException(CertificateListingException.Reason.INVALID_SELECTION,
-					"Selection contains a certificate outside the active request");
+					"Request contains an inconsistent certificate selection");
 		}
-		Set<String> persisted = current.stream().filter(CancellationRequestCertificateEntity::isSelected)
-				.map(CancellationRequestCertificateEntity::getCertificateUuid).collect(java.util.stream.Collectors.toSet());
-		if (persisted.equals(selectedUuids)) return current;
+		if (persisted.size() == 1 && persisted.getFirst().getId().equals(target.getId())) return current;
 		CancellationRequestStatus previousStatus = request.getRequestStatus();
 		Instant selectedAt = Instant.now();
-		for (CancellationRequestCertificateEntity certificate : current) {
-			if (selectedUuids.contains(certificate.getCertificateUuid())) certificate.select(selectedAt);
-			else certificate.deselect();
+		for (CancellationRequestCertificateEntity certificate : persisted) {
+			certificate.deselect();
 		}
+		if (!persisted.isEmpty()) certificates.flush();
+		target.select(selectedAt);
 		certificates.flush();
-		request.transitionTo(CancellationRequestStatus.CERTIFICATES_SELECTED, null);
+		request.clearReasonForCertificateReselection();
 		auditEvents.save(new CancellationAuditEventEntity(request,
 				CancellationAuditEventType.CERTIFICATES_SELECTED,
 				previousStatus,
-				CancellationRequestStatus.CERTIFICATES_SELECTED, "COUNT_" + selectedUuids.size(),
+				CancellationRequestStatus.CERTIFICATES_SELECTED, "CERTIFICATE_SELECTED",
 				correlationId, AuditEventOrigin.CITIZEN, selectedAt));
 		return current;
 	}

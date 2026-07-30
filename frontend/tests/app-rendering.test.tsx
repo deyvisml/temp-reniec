@@ -9,8 +9,9 @@ import { InternalFlowHeaderActions } from "@/components/internal-flow-header";
 import { parseCurrentFlowSession } from "@/lib/api/flow-session";
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 afterEach(() => {

@@ -8,10 +8,10 @@ import type {
 } from "sweetalert2";
 
 const primaryActionClasses =
-  "min-h-12 w-full cursor-pointer rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-5 py-3 font-extrabold text-white shadow-[0_6px_8px_#a8003c2b] transition-[transform,box-shadow,filter] hover:-translate-y-0.5 hover:saturate-[1.08] hover:shadow-[0_8px_8px_#a8003c36] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none";
+  "min-h-12 w-full cursor-pointer rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-5 py-3 font-extrabold text-white shadow-[0_6px_8px_#a8003c2b] transition-[transform,box-shadow,filter] hover:-translate-y-0.5 hover:saturate-[1.08] hover:shadow-[0_8px_8px_#a8003c36] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transform-none motion-reduce:transition-none";
 
 const secondaryActionClasses =
-  "min-h-12 w-full cursor-pointer rounded-lg border border-[#b8c6df] bg-white px-5 py-3 font-extrabold text-[#164aa8] transition-colors hover:bg-[#f3f7fd] focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none";
+  "min-h-12 w-full cursor-pointer rounded-lg border border-[#b8c6df] bg-white px-5 py-3 font-extrabold text-[#164aa8] transition-colors hover:bg-[#f3f7fd] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none";
 
 export type AvailabilityOutcomeView =
   | { kind: "not-available" }

@@ -8,9 +8,9 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - La consulta inicial recibe el DNI y devuelve únicamente si existen certificados disponibles; no devuelve ni persiste lista, cantidad o datos individuales.
 - Después de autenticar al ciudadano, un segundo servicio obtiene las emisiones vigentes con número de orden, fecha de creación y UUID para su persistencia y selección en el paso 2.
 - Un resultado positivo inicial seguido de una lista vacía bloquea el avance y se comunica como ausencia actual de certificados, no como error de autenticación.
-- El flujo permite seleccionar uno, varios o todos los certificados disponibles. Después de confirmar, esa selección es inmutable y forma el conjunto atómico de revocación; los no seleccionados permanecen fuera de la operación.
-- La integración de revocación deberá enviar la lista completa bajo una única clave de idempotencia y aceptar solo un resultado común: exitoso, fallido o incierto. Un proveedor que produzca resultados mixtos por UUID será incompatible y no se normalizará como resultado parcial.
-- `revocation_operation.normalized_result` será la fuente técnica del resultado; no se persistirán filas de resultado por certificado. La constancia identificará el conjunto seleccionado y su resultado común.
+- El flujo exige seleccionar exactamente un certificado disponible por solicitud. Elegir otro antes de confirmar reemplaza la selección; los demás permanecen fuera de la operación.
+- La integración futura de revocación enviará un solo UUID bajo una clave de idempotencia y aceptará un resultado exitoso, fallido o incierto. No existirá resultado parcial dentro de una solicitud.
+- `revocation_operation.normalized_result` será la fuente técnica del resultado y la constancia identificará el único certificado seleccionado.
 - Las adaptaciones de contratos, persistencia y vistas se realizarán mediante cambios funcionales posteriores, sin anticipar contratos institucionales externos aún no confirmados.
 
 ## Tecnologías y estructura
@@ -45,7 +45,7 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - Las integraciones externas se definirán mediante interfaces y usarán mocks reemplazables mientras no existan contratos oficiales.
 - El segundo servicio de certificados utiliza un puerto propio y un mock determinista en desarrollo. Como no existe un contrato institucional verificado, el adaptador real no inventa endpoints ni payloads y el modo `real` falla de forma cerrada hasta incorporarlo mediante un incremento específico.
 - La consulta detallada se reserva en una transacción breve, ejecuta la llamada externa fuera de la transacción y persiste la colección completa atómicamente. Una recarga reutiliza la instantánea persistida y no vuelve a consumir el proveedor.
-- La selección se guarda en `cancellation_request_certificate`; no existe una tabla adicional. El backend reemplaza el conjunto completo, valida pertenencia y disponibilidad, acepta repeticiones idénticas y permite corregirla mientras no exista confirmación ciudadana. Después de esa confirmación, la selección queda inmutable.
+- La selección se guarda en `cancellation_request_certificate`; no existe una tabla adicional. El backend reemplaza de forma transaccional el certificado elegido, valida pertenencia y disponibilidad, acepta la repetición del mismo UUID y permite cambiarlo mientras no exista confirmación ciudadana. Un índice único condicionado impide más de una fila seleccionada por solicitud.
 - El paso 4 obtiene del backend el resumen autoritativo persistido. La aceptación expresa registra `confirmed_at`, la versión estable `CANCELACION_CERTIFICADOS_V1` y un único evento `CONSENT_CONFIRMED`.
 - La confirmación es el punto de no retorno para modificar selección o motivo. Deja la solicitud en `CONFIRMED`, preparada para el siguiente incremento, pero no ejecuta la revocación ni crea una constancia.
 - El texto completo de consentimiento permanece versionado en el backend; MySQL conserva solo su identificador de versión para evitar duplicación y permitir demostrar qué texto fue aceptado.

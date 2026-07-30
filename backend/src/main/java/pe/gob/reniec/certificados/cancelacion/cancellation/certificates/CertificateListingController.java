@@ -55,19 +55,19 @@ public class CertificateListingController {
 	@PutMapping(value = "/certificate-selection", consumes = MediaType.APPLICATION_JSON_VALUE,
 			produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "replaceCurrentCertificateSelection",
-			summary = "Confirma el conjunto completo de certificados seleccionados",
-			description = "Reemplazo idempotente del conjunto seleccionado. Cada UUID debe pertenecer al listado persistido de la solicitud autenticada.")
+			summary = "Selecciona un certificado de la solicitud activa",
+			description = "Reemplazo idempotente de la selección singular. El UUID debe pertenecer al listado persistido de la solicitud autenticada.")
 	@ApiResponses({
 		@ApiResponse(responseCode = "200", description = "Selección persistida y paso 3 habilitado"),
 		@ApiResponse(responseCode = "400", description = "Formato inválido", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "401", description = "Sesión ausente o expirada", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "403", description = "Origen o paso no permitido", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "409", description = "Actualización concurrente de la selección", content = @Content(schema = @Schema(implementation = ApiError.class))),
-		@ApiResponse(responseCode = "422", description = "UUID duplicado, ajeno o no disponible", content = @Content(schema = @Schema(implementation = ApiError.class)))
+		@ApiResponse(responseCode = "422", description = "UUID ajeno o no disponible", content = @Content(schema = @Schema(implementation = ApiError.class)))
 	})
 	public CertificateListResponse select(@Valid @RequestBody CertificateSelectionRequest body,
 			HttpServletRequest request) {
-		return service.select(requestId(request), body.certificateUuids(), correlation(request));
+		return service.select(requestId(request), body.certificateUuid(), correlation(request));
 	}
 
 	private Long requestId(HttpServletRequest request) {

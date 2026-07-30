@@ -17,10 +17,12 @@ export function IdentityVerificationPanel({
   callbackOutcome,
   identityVerified = false,
   onContinue,
+  onCallbackOutcomeAcknowledged,
 }: {
   callbackOutcome?: IdentityCallbackOutcome;
   identityVerified?: boolean;
   onContinue?: () => void;
+  onCallbackOutcomeAcknowledged?: () => void;
 }) {
   const [view, setView] = useState<IdentityView>("ready");
   const [outcome, setOutcome] = useState<IdentityCallbackOutcome | undefined>(callbackOutcome);
@@ -45,7 +47,10 @@ export function IdentityVerificationPanel({
   return (
     <section className="mx-auto w-full max-w-[1040px]" aria-labelledby="identity-title" aria-busy={view === "starting"}>
       {outcome ? (
-        <IdentityCallbackAlert outcome={outcome} onAcknowledge={() => setOutcome(undefined)} />
+        <IdentityCallbackAlert outcome={outcome} onAcknowledge={() => {
+          setOutcome(undefined);
+          onCallbackOutcomeAcknowledged?.();
+        }} />
       ) : null}
       <div className="px-2 sm:px-8 lg:px-14">
         <CancellationStepper
@@ -87,11 +92,11 @@ export function IdentityVerificationPanel({
           </div>
 
           {identityVerified ? (
-            <button type="button" onClick={onContinue} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
+            <button type="button" onClick={onContinue} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
               Continuar a selección de certificados <ForwardIcon />
             </button>
           ) : (
-            <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-3 focus-visible:outline-offset-3 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
+            <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
               <FaceScanIcon />
               {view === "starting" ? "Conectando con ID Perú…" : "Iniciar verificación facial con ID Perú"}
             </button>

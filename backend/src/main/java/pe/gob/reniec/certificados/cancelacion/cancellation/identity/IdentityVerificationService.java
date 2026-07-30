@@ -87,7 +87,7 @@ public class IdentityVerificationService {
 		}
 		catch (IdentityIntegrationException exception) {
 			persistence.completeFailure(attempt.attemptId(), mapStatus(exception.failure()),
-					IdentityMatchResult.INCONCLUSIVE, exception.failure().name(), sessionState);
+					IdentityMatchResult.INCONCLUSIVE, exception.technicalCode(), sessionState);
 			return new CallbackResult(false, null, exception.failure().name());
 		}
 	}
