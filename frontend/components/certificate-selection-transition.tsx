@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { CancellationStepper } from "@/components/cancellation-stepper";
+import { FlowNavigationButton } from "@/components/flow-navigation-button";
+import { FlowStepContent } from "@/components/flow-step-content";
 import {
   getCurrentCertificates,
-  replaceCertificateSelection,
   type CertificateItem,
   type CertificateList,
 } from "@/lib/api/certificate-listing";
@@ -33,11 +34,13 @@ const dateFormatter = new Intl.DateTimeFormat("es-PE", {
   hour12: false,
 });
 
-export function CertificateSelectionTransition({ onBack, onContinue }: { onBack?: () => void; onContinue?: () => void } = {}) {
+export function CertificateSelectionTransition({ selected, onSelect, onBack, onContinue }: {
+  selected: string | null;
+  onSelect: (uuid: string) => void;
+  onBack?: () => void;
+  onContinue?: () => void;
+}) {
   const [view, setView] = useState<ViewState>({ kind: "loading" });
-  const [selected, setSelected] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const submissionInFlight = useRef(false);
 
   const load = useCallback(async (signal?: AbortSignal): Promise<void> => {
     setView({ kind: "loading" });
@@ -45,9 +48,7 @@ export function CertificateSelectionTransition({ onBack, onContinue }: { onBack?
       const result = await getCurrentCertificates();
       if (signal?.aborted) return;
       if (!result.data) throw new Error("Missing certificate response");
-      setSelected(result.data.certificates.find(item => item.selected)?.certificateUuid ?? null);
       if (result.data.certificates.length === 0) {
-        setSelected(null);
         setView({ kind: "empty" });
         return;
       }
@@ -65,19 +66,8 @@ export function CertificateSelectionTransition({ onBack, onContinue }: { onBack?
   }, [load]);
 
   const submit = async () => {
-    if (view.kind !== "ready" || selected === null || submissionInFlight.current) return;
-    submissionInFlight.current = true;
-    setSubmitting(true);
-    try {
-      const result = await replaceCertificateSelection(selected);
-      if (!result.data?.canContinue) throw new Error("Selection was not confirmed");
-      onContinue?.();
-    } catch (error) {
-      setView({ kind: "error", presentation: errorPresentation(error) });
-    } finally {
-      submissionInFlight.current = false;
-      setSubmitting(false);
-    }
+    if (view.kind !== "ready" || selected === null) return;
+    onContinue?.();
   };
 
   const exitToHome = async () => {
@@ -93,7 +83,7 @@ export function CertificateSelectionTransition({ onBack, onContinue }: { onBack?
       <div className="px-2 sm:px-8 lg:px-14">
         <CancellationStepper currentStep={2} />
       </div>
-      <div className="mx-2 mt-6 rounded-[22px] border border-[#dfe7f3] bg-white/95 px-4 py-7 sm:mx-8 sm:px-8 sm:py-9 lg:mx-14">
+      <div className="mx-2 mt-6 rounded-2xl bg-white px-4 py-7 sm:mx-8 sm:px-8 sm:py-9 lg:mx-14">
         {view.kind === "loading" ? <LoadingState /> : null}
         {view.kind === "empty" ? <EmptyState onExit={() => void exitToHome()} /> : null}
         {view.kind === "error" ? (
@@ -103,8 +93,8 @@ export function CertificateSelectionTransition({ onBack, onContinue }: { onBack?
           <CertificateSelectionView
             certificates={view.data.certificates}
             selected={selected}
-            submitting={submitting}
-            onSelect={setSelected}
+            submitting={false}
+            onSelect={onSelect}
             onSubmit={() => void submit()}
             onBack={onBack}
           />
@@ -123,33 +113,38 @@ export function CertificateSelectionView({ certificates, selected, submitting, o
   onBack?: () => void;
 }) {
   const selectedLabel = selected ? "1 certificado seleccionado" : "Ningún certificado seleccionado";
+  const selectionStatusColor = selected ? "text-[#1768f2]" : "text-[#52678f]";
 
   return (
-    <div className="mx-auto max-w-[920px]">
+    <FlowStepContent>
       <header className="text-center">
-        <p className="inline-flex rounded-full bg-[#fae9f0] px-4 py-1.5 text-xs font-black text-reniec-red">
-          PASO 2 DE 5
-        </p>
-        <h1 id="selection-title" className="mt-4 text-balance text-2xl font-black tracking-[-0.025em] text-[#061a50] sm:text-3xl">
+        <h1 id="selection-title" className="text-balance text-2xl font-black tracking-[-0.025em] text-[#061a50] sm:text-3xl">
           Selecciona un certificado
         </h1>
-        <p className="mx-auto mt-3 max-w-[660px] text-pretty text-sm leading-6 text-[#52678f] sm:text-base">
+        <p className="mx-auto mt-2 max-w-[660px] text-pretty text-sm leading-6 text-[#52678f] sm:text-base">
           Elige cuál deseas cancelar para continuar.
         </p>
       </header>
 
-      <div className="mt-7 flex flex-wrap items-end justify-between gap-3 border-b border-[#dce6f5] pb-4">
-        <p className="flex items-center gap-2 text-sm font-semibold text-[#233968]">
-          <span className="size-2 rounded-full bg-[#16865b]" aria-hidden="true" />
-          Certificados vigentes <strong className="text-lg font-black leading-none text-[#061a50]">{certificates.length}</strong>
+      <div className="mt-7 flex flex-col gap-3 rounded-lg bg-[#f8f9fb] px-4 py-3.5 ring-1 ring-[#e5e9f0] sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <p className="flex items-center gap-3 text-sm font-medium text-[#243654]">
+          <span className="grid size-8 place-items-center rounded-full bg-white text-[#314a73] ring-1 ring-[#e1e6ed]" aria-hidden="true"><CertificateListIcon /></span>
+          <span>Certificados vigentes</span>
+          <span className="text-lg font-medium leading-none text-[#061a50]">{certificates.length}</span>
         </p>
-        <p className="text-sm font-bold text-reniec-red" aria-live="polite" aria-atomic="true">
-          {selectedLabel}
+        <p className={`flex items-center gap-2 border-t border-[#e1e5eb] pt-3 text-sm font-medium sm:border-t-0 sm:border-l sm:py-1 sm:pl-5 ${selectionStatusColor}`} aria-live="polite" aria-atomic="true">
+          <InfoIcon /> <span>{selectedLabel}</span>
         </p>
       </div>
 
-      <fieldset className="mt-4 space-y-3" aria-describedby="certificate-selection-help">
+      <fieldset className="mt-6" aria-describedby="certificate-selection-help">
         <legend className="sr-only">Certificados digitales vigentes</legend>
+        <div className="mb-2 hidden grid-cols-[64px_minmax(0,1fr)_160px_96px] gap-x-4 px-5 text-[11px] font-semibold uppercase text-[#687893] md:grid">
+          <span>Seleccionar</span>
+          <span>Certificado</span>
+          <span>Fecha de creación</span>
+          <span className="text-center">Estado</span>
+        </div>
         <div className="space-y-3">
           {certificates.map((certificate, index) => (
             <CertificateRow key={certificate.certificateUuid} certificate={certificate}
@@ -158,20 +153,20 @@ export function CertificateSelectionView({ certificates, selected, submitting, o
         </div>
       </fieldset>
 
-      <p id="certificate-selection-help" className="mt-4 flex items-start gap-2 text-sm text-[#52678f]">
-        <InfoIcon /> <span>Debes seleccionar un certificado para continuar.</span>
-      </p>
-      <div className="mt-6 flex flex-col-reverse items-stretch justify-between gap-3 border-t border-[#e1e8f2] pt-5 sm:flex-row sm:items-center">
-        {onBack ? <button type="button" onClick={onBack}
-          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg px-6 font-bold text-[#173a78] transition-colors hover:bg-[#f1f5fb] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0755df] sm:w-[280px]">
-          <BackIcon /> Regresar
-        </button> : <span aria-hidden="true" />}
-        <button type="button" onClick={onSubmit} disabled={selected === null || submitting}
-          className="inline-flex min-h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-reniec-red px-6 font-bold text-white transition-colors hover:bg-[#a8003f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0755df] disabled:cursor-default disabled:bg-[#c9cfdb] sm:w-[280px]">
-          {submitting ? "Guardando selección…" : "Continuar"}<ArrowIcon />
-        </button>
+      <div className="mt-7 flex flex-col-reverse items-stretch justify-between gap-4 border-t border-[#e1e8f2] pt-5 sm:flex-row sm:items-center">
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
+          {onBack ? <FlowNavigationButton variant="secondary" onClick={onBack}>
+            <BackIcon /> Regresar
+          </FlowNavigationButton> : null}
+          <p id="certificate-selection-help" className="flex items-start gap-2 text-sm text-[#52678f]">
+            <InfoIcon /> <span>Debes seleccionar un certificado para continuar.</span>
+          </p>
+        </div>
+        <FlowNavigationButton variant="primary" onClick={onSubmit} disabled={selected === null || submitting}>
+          {submitting ? "Continuando…" : "Continuar"}<ArrowIcon />
+        </FlowNavigationButton>
       </div>
-    </div>
+    </FlowStepContent>
   );
 }
 
@@ -183,7 +178,7 @@ function CertificateRow({ certificate, position, checked, onSelect }: {
   return (
     <label
       data-selected={checked ? "true" : "false"}
-      className={`grid cursor-pointer grid-cols-[28px_56px_minmax(0,1fr)] items-start gap-x-3 gap-y-3 rounded-xl border px-4 py-4 transition-[border-color,background-color] duration-200 focus-within:ring-1 focus-within:ring-inset focus-within:ring-[#0755df] md:grid-cols-[32px_64px_minmax(0,1fr)_110px] md:items-center md:gap-x-4 md:px-5 ${checked ? "border-[#1768f2] bg-[#f5f8ff]" : "border-[#d6e2f3] bg-white hover:border-[#8eafe9] hover:bg-[#fbfdff]"}`}
+      className={`grid cursor-pointer grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border px-4 py-3.5 transition-[border-color,background-color] duration-200 focus-within:ring-1 focus-within:ring-inset focus-within:ring-[#0755df] md:grid-cols-[64px_minmax(0,1fr)_160px_96px] md:items-center md:gap-x-4 md:px-5 ${checked ? "border-[#1768f2] bg-[#f5f8ff]" : "border-[#dbe4f1] bg-white hover:border-[#8eafe9] hover:bg-[#fbfdff]"}`}
     >
       <input type="radio" name="selected-certificate" value={certificate.certificateUuid}
         checked={checked} onChange={() => onSelect(certificate.certificateUuid)}
@@ -192,46 +187,39 @@ function CertificateRow({ certificate, position, checked, onSelect }: {
 
       <span
         aria-hidden="true"
-        className={`mt-3 grid size-7 shrink-0 place-items-center rounded-full border-2 transition-colors duration-200 md:mt-0 ${checked ? "border-[#1768f2] bg-[#1768f2] text-white" : "border-[#aab5c8] bg-white text-transparent"}`}
+        className={`mt-3 grid size-6 shrink-0 place-items-center justify-self-center rounded-full border-2 transition-colors duration-200 md:mt-0 ${checked ? "border-[#1768f2] bg-[#1768f2] text-white" : "border-[#aab5c8] bg-white text-transparent"}`}
       >
         <CheckIcon />
       </span>
 
-      <span
-        aria-hidden="true"
-        className="grid size-14 place-items-center rounded-lg border border-[#dce6f6] bg-[#f7f9fd] text-[#174ea6] md:size-16"
-      >
-        <CertificateIcon />
+      <span className="min-w-0 md:col-start-2 md:row-start-1">
+        <span className="flex min-w-0 items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="grid size-14 shrink-0 place-items-center rounded-lg border border-[#e1e5eb] bg-[#f8f9fb] text-[#314a73]"
+          >
+            <CertificateIcon />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base font-semibold leading-6 text-[#061a50] md:whitespace-nowrap">
+              {visibleName}
+            </span>
+            <span className="mt-1 block text-sm text-[#52678f]">
+              Orden <span className="ml-2 font-medium text-[#173568]">{certificate.orderNumber}</span>
+            </span>
+          </span>
+        </span>
       </span>
 
-      <span className="col-span-3 min-w-0 md:col-span-1">
-        <span className="block text-base font-black leading-6 text-[#061a50] md:text-lg">
-          {visibleName}
-        </span>
-        <span className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2 sm:gap-0">
-          <DataCell label="Orden" value={certificate.orderNumber} strong />
-          <DataCell label="Creado el" value={formatDate(certificate.emissionCreatedAt)} />
-        </span>
+      <span className="col-start-2 text-sm text-[#425b72] md:col-start-3 md:row-start-1">
+        <span className="block text-xs font-medium text-[#687893]">Creado el</span>
+        <span className="mt-0.5 block font-medium text-[#173568] md:whitespace-nowrap">{formatDate(certificate.emissionCreatedAt)}</span>
       </span>
 
-      <span className="col-start-3 row-start-1 mt-1 w-fit rounded-full bg-[#e3f7ed] px-3.5 py-1.5 text-xs font-bold text-[#087447] md:col-start-4 md:row-auto md:mt-0 md:justify-self-end">
+      <span className="col-start-2 w-fit rounded-full bg-[#e7f5ed] px-3.5 py-1.5 text-xs font-medium text-[#087447] md:col-start-4 md:row-start-1 md:justify-self-center">
         ✓ Vigente
       </span>
     </label>
-  );
-}
-
-function DataCell({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <span className="min-w-0 sm:px-4 sm:first:pl-0 sm:last:pr-0 sm:[&+span]:border-l sm:[&+span]:border-[#dce6f5]">
-      <span className="mb-1 block text-xs font-semibold text-[#52678f]">{label}</span>
-      <span
-        title={value}
-        className={`block min-w-0 truncate text-sm text-[#314a7d] ${strong ? "font-bold text-[#0a2259]" : ""}`}
-      >
-        {value}
-      </span>
-    </span>
   );
 }
 
@@ -266,6 +254,7 @@ function formatDate(value: string) {
 }
 
 function InfoIcon() { return <svg viewBox="0 0 24 24" className="mt-0.5 size-5 shrink-0 fill-none stroke-current stroke-2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/></svg>; }
+function CertificateListIcon() { return <svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current stroke-2" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v5h5M8 12h7m-7 4h5" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
 function ArrowIcon() { return <svg viewBox="0 0 24 24" className="size-5 fill-none stroke-current stroke-2" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>; }
 function BackIcon() { return <svg viewBox="0 0 24 24" className="size-5 fill-none stroke-current stroke-2" aria-hidden="true"><path d="M19 12H5m5-5-5 5 5 5"/></svg>; }
 function CheckIcon() { return <svg viewBox="0 0 20 20" className="size-4 fill-none stroke-current stroke-[2.5]" aria-hidden="true"><path d="m4.5 10 3.2 3.2 7.8-7.8" /></svg>; }

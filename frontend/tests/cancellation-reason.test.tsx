@@ -9,11 +9,19 @@ import { CancellationReasonTransition } from "@/components/cancellation-reason-t
 describe("motivo de cancelación", () => {
   it("renderiza el paso funcional y no la transición provisional", () => {
     const markup = renderToStaticMarkup(
-      <CancellationReasonTransition onBack={() => undefined} onContinue={() => undefined} />,
+      <CancellationReasonTransition
+        reason={null}
+        otherReason=""
+        onReasonChange={() => undefined}
+        onOtherReasonChange={() => undefined}
+        onBack={() => undefined}
+        onContinue={() => undefined}
+      />,
     );
 
-    expect(markup).toContain("Cargando el motivo");
+    expect(markup).toContain("PASO 3 DE 5");
     expect(markup).not.toContain("Selección guardada");
+    expect(markup.match(/sm:w-\[280px\]/g)?.length).toBe(2);
   });
 
   it("usa los mismos estados azules de interacción que el paso de certificados", () => {
@@ -24,5 +32,13 @@ describe("motivo de cancelación", () => {
     expect(source).toContain('accent-[#1768f2]');
     expect(source).not.toContain('"border-reniec-red"');
     expect(source).not.toContain("accent-reniec-red");
+  });
+
+  it("mantiene el motivo como estado controlado sin persistencia previa", () => {
+    const source = readFileSync(resolve(process.cwd(), "components/cancellation-reason-transition.tsx"), "utf8");
+    expect(source).not.toMatch(/fetch|saveCurrentCancellationReason|getCurrentCancellationReason|localStorage|sessionStorage/);
+    expect(source).toContain("onReasonChange");
+    expect(source).toContain("onOtherReasonChange");
+    expect(source).not.toContain("Guardando motivo");
   });
 });

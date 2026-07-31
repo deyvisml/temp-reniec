@@ -108,9 +108,11 @@ public class FlowSessionService {
 		CertificateCancellationRequestEntity request = session.getRequest();
 		String next = switch (request.getRequestStatus()) {
 			case IDENTITY_VERIFIED, AUTHENTICATED_PENDING_CERTIFICATE_LIST, CHECKING_CERTIFICATE_LIST,
-					CERTIFICATES_AVAILABLE -> "CERTIFICATE_SELECTION";
-			case CERTIFICATES_SELECTED -> "REASON";
-			case REASON_REGISTERED, PENDING_CONFIRMATION, CONFIRMED -> "CONFIRMATION";
+					CERTIFICATES_AVAILABLE, CERTIFICATES_SELECTED, REASON_REGISTERED,
+					PENDING_CONFIRMATION -> "CERTIFICATE_SELECTION";
+			case CONFIRMED, REVOCATION_IN_PROGRESS, REVOCATION_FAILED, REVOCATION_OUTCOME_UNKNOWN,
+					FAILED, OUTCOME_UNKNOWN, REVOCATION_SUCCEEDED, COMPLETED -> "CONFIRMATION";
+			case RECEIPT_AVAILABLE -> "RECEIPT";
 			default -> "IDENTITY_VERIFICATION";
 		};
 		return new CurrentSession(session.getId(), request.getId(), request.getDni(),
@@ -145,5 +147,5 @@ public class FlowSessionService {
 			@Schema(requiredMode = Schema.RequiredMode.REQUIRED, pattern = "^[0-9]{8}$", description = "DNI completo mostrado únicamente dentro de la sesión autenticada.") String dni,
 			@Schema(requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"PENDING_IDENTITY", "IDENTITY_VERIFIED"}) String sessionStatus,
 			@Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "Estado controlado de la solicitud.") String requestStatus,
-			@Schema(requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"IDENTITY_VERIFICATION", "CERTIFICATE_SELECTION", "REASON", "CONFIRMATION"}) String nextStep) { }
+			@Schema(requiredMode = Schema.RequiredMode.REQUIRED, allowableValues = {"IDENTITY_VERIFICATION", "CERTIFICATE_SELECTION", "CONFIRMATION", "RECEIPT"}) String nextStep) { }
 }

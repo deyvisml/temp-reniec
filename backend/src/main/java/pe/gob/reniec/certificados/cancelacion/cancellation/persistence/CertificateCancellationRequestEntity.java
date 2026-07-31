@@ -76,6 +76,9 @@ public class CertificateCancellationRequestEntity {
 	@Transient
 	private String persistedConsentVersion;
 
+	@Transient
+	private Instant confirmedAtAtLoad;
+
 	protected CertificateCancellationRequestEntity() {
 	}
 
@@ -94,7 +97,8 @@ public class CertificateCancellationRequestEntity {
 		requestStatus = CancellationRequestStatus.CHECKING_AVAILABILITY;
 	}
 
-	public void registerReason(CancellationReasonCode reason, String description) {
+	public void confirmDecision(CancellationReasonCode reason, String description,
+			Instant confirmedAt, String consentVersion) {
 		ensureReasonMutable();
 		reasonCode = Objects.requireNonNull(reason, "reason");
 		if (reason == CancellationReasonCode.OTHER) {
@@ -104,19 +108,6 @@ public class CertificateCancellationRequestEntity {
 			if (description != null) throw new IllegalArgumentException("otherReason is only valid for OTHER");
 			otherReason = null;
 		}
-		requestStatus = CancellationRequestStatus.REASON_REGISTERED;
-	}
-
-	public void clearReasonForCertificateReselection() {
-		ensureReasonMutable();
-		reasonCode = null;
-		otherReason = null;
-		requestStatus = CancellationRequestStatus.CERTIFICATES_SELECTED;
-	}
-
-	public void confirm(Instant confirmedAt, String consentVersion) {
-		if (reasonCode == null) throw new IllegalStateException("A reason is required before confirmation");
-		if (this.confirmedAt != null) throw new IllegalStateException("The request is already confirmed");
 		this.confirmedAt = Objects.requireNonNull(confirmedAt, "confirmedAt");
 		this.consentVersion = requireBoundedText(consentVersion, "consentVersion", 64);
 		requestStatus = CancellationRequestStatus.CONFIRMED;
@@ -137,8 +128,16 @@ public class CertificateCancellationRequestEntity {
 
 	@PostPersist
 	@PostLoad
-	@PostUpdate
 	void rememberReason() {
+		persistedReason = reasonCode;
+		persistedOtherReason = otherReason;
+		persistedConfirmedAt = confirmedAt;
+		persistedConsentVersion = consentVersion;
+		confirmedAtAtLoad = confirmedAt;
+	}
+
+	@PostUpdate
+	void rememberUpdatedReason() {
 		persistedReason = reasonCode;
 		persistedOtherReason = otherReason;
 		persistedConfirmedAt = confirmedAt;
@@ -204,4 +203,5 @@ public class CertificateCancellationRequestEntity {
 	public CancellationFinalOutcome getFinalOutcome() { return finalOutcome; }
 	public Instant getCreatedAt() { return createdAt; }
 	public Instant getUpdatedAt() { return updatedAt; }
+	boolean wasConfirmedBeforeCurrentUnitOfWork() { return confirmedAtAtLoad != null; }
 }

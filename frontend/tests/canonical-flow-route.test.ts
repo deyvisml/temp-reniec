@@ -71,5 +71,10 @@ describe("rutas del flujo ciudadano", () => {
     expect(source("components/internal-flow-header.tsx")).toContain("Cerrar sesión");
     expect(flow).not.toMatch(/window\.location|URLSearchParams/);
     expect(flow).not.toMatch(/localStorage|sessionStorage/);
+    expect(flow).toContain("const [draft, setDraft]");
+    expect(flow).toContain("certificateUuid: null");
+    expect(flow).toContain("reasonCode: null");
+    expect(flow).toContain("recoverConfirmed={view.confirmed}");
+    expect(source("lib/api/flow-session.ts")).not.toContain('nextStep !== "REASON"');
   });
 });

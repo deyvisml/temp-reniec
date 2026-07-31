@@ -112,7 +112,7 @@ function assertRecaptchaRequestBoundary(document) {
 }
 
 function assertSingleCertificateBoundary(document) {
-  const selection = document.components?.schemas?.CertificateSelectionRequest;
+  const selection = document.components?.schemas?.CancellationConfirmationRequest;
   const selectionProperties = selection?.properties ?? {};
   const selectionRequired = new Set(selection?.required ?? []);
   if (!("certificateUuid" in selectionProperties) || !selectionRequired.has("certificateUuid")) {

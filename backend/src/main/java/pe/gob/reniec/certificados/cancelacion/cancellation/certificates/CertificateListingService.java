@@ -57,10 +57,6 @@ public class CertificateListingService {
 		}
 	}
 
-	public CertificateListResponse select(Long requestId, String submittedUuid, String correlationId) {
-		return response(persistence.replaceSelection(requestId, canonicalUuid(submittedUuid), correlationId));
-	}
-
 	private static List<CertificateListingResult.ListedCertificate> validateAndNormalize(
 			List<CertificateListingResult.ListedCertificate> listed) {
 		if (listed == null) {
@@ -119,7 +115,7 @@ public class CertificateListingService {
 	private static CertificateListResponse response(List<CancellationRequestCertificateEntity> entities) {
 		String status = entities.isEmpty() ? "NO_CERTIFICATES_AVAILABLE"
 				: entities.stream().anyMatch(CancellationRequestCertificateEntity::isSelected)
-						? "CERTIFICATES_SELECTED" : "CERTIFICATES_AVAILABLE";
+						? "CONFIRMED" : "CERTIFICATES_AVAILABLE";
 		return response(entities, status);
 	}
 

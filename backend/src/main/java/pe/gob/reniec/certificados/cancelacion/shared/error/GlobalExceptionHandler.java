@@ -32,7 +32,6 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.identity.IdentityInte
 import pe.gob.reniec.certificados.cancelacion.cancellation.session.FlowSessionException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.certificates.CertificateListingException;
 import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationException;
-import pe.gob.reniec.certificados.cancelacion.cancellation.reason.CancellationReasonException;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
@@ -222,21 +221,9 @@ public final class GlobalExceptionHandler {
 					"CONSENT_VERSION_CHANGED", "La información de confirmación fue actualizada. Revísala nuevamente.", request);
 			case CONFLICT -> respond(HttpStatus.CONFLICT,
 					"CONFIRMATION_CONFLICT", "La solicitud cambió. Recarga la información e inténtalo nuevamente.", request);
-		};
-	}
-
-	@ExceptionHandler(CancellationReasonException.class)
-	ResponseEntity<ApiError> handleCancellationReason(CancellationReasonException exception,
-			HttpServletRequest request) {
-		return switch (exception.reason()) {
-			case IDENTITY_REQUIRED, NOT_ALLOWED -> respond(HttpStatus.FORBIDDEN,
-					"REASON_STEP_NOT_ALLOWED", "Este paso todavía no está disponible.", request);
-			case INVALID_SELECTION -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
-					"INVALID_CERTIFICATE_SELECTION", "Selecciona un certificado válido antes de continuar.", request);
-			case INVALID_REASON -> respond(HttpStatus.UNPROCESSABLE_ENTITY,
-					"INVALID_CANCELLATION_REASON", "Selecciona un motivo válido para continuar.", request);
-			case CONFLICT -> respond(HttpStatus.CONFLICT,
-					"CANCELLATION_REASON_CONFLICT", "El motivo fue actualizado simultáneamente.", request);
+			case DEPENDENCY_UNAVAILABLE -> respond(HttpStatus.SERVICE_UNAVAILABLE,
+					"REVOCATION_UNAVAILABLE",
+					"No podemos cancelar el certificado en este momento. Inténtalo más tarde.", request);
 		};
 	}
 

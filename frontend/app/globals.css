@@ -6,3 +6,11 @@
   --color-reniec-red: #b00045;
   --font-sans: "Aptos", "Trebuchet MS", sans-serif;
 }
+
+button:enabled {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

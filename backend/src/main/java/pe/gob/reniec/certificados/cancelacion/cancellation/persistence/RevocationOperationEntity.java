@@ -91,7 +91,7 @@ public class RevocationOperationEntity {
 	}
 
 	public void complete(RevocationOperationStatus status, RevocationResult result, Instant responseTime,
-			Instant completionTime, String errorCode) {
+			Instant completionTime, String externalReference, String errorCode) {
 		if (status == RevocationOperationStatus.PREPARED || status == RevocationOperationStatus.SUBMITTED) {
 			throw new IllegalArgumentException("Completion requires a terminal or uncertain status");
 		}
@@ -102,7 +102,9 @@ public class RevocationOperationEntity {
 		}
 		respondedAt = responseTime;
 		completedAt = completionTime;
-		this.errorCode = errorCode;
+		String normalizedReference = optionalBoundedText(externalReference, "externalReference", 128);
+		if (normalizedReference != null) this.externalReference = normalizedReference;
+		this.errorCode = optionalBoundedText(errorCode, "errorCode", 64);
 	}
 
 	@PrePersist
@@ -126,6 +128,13 @@ public class RevocationOperationEntity {
 		if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
 		if (value.length() > maxLength) throw new IllegalArgumentException(name + " is too long");
 		return value;
+	}
+
+	private static String optionalBoundedText(String value, String name, int maxLength) {
+		if (value == null) return null;
+		String normalized = value.trim();
+		if (normalized.isEmpty()) return null;
+		return requireBoundedText(normalized, name, maxLength);
 	}
 
 	public boolean isSucceeded() { return operationStatus == RevocationOperationStatus.SUCCEEDED; }

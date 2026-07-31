@@ -55,8 +55,14 @@
         "type": "object"
       },
       "CancellationConfirmationRequest": {
-        "description": "Evidencia explícita del consentimiento mostrado en el paso 4.",
+        "description": "Decisión completa y consentimiento explícito presentados en el paso 4.",
         "properties": {
+          "certificateUuid": {
+            "format": "uuid",
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          },
           "consentAccepted": {
             "description": "Aceptación expresa del texto mostrado; debe enviarse con valor true.",
             "type": "boolean"
@@ -66,24 +72,14 @@
             "maxLength": 64,
             "minLength": 0,
             "type": "string"
-          }
-        },
-        "required": [
-          "consentAccepted",
-          "consentVersion"
-        ],
-        "type": "object"
-      },
-      "CancellationReasonRequest": {
-        "properties": {
+          },
           "otherReason": {
-            "description": "Descripción requerida únicamente cuando el motivo es OTHER.",
+            "description": "Descripción requerida únicamente para OTHER.",
             "maxLength": 300,
             "minLength": 0,
             "type": "string"
           },
           "reasonCode": {
-            "description": "Código controlado del motivo.",
             "enum": [
               "THEFT",
               "LOSS",
@@ -95,36 +91,85 @@
           }
         },
         "required": [
+          "certificateUuid",
+          "consentAccepted",
+          "consentVersion",
           "reasonCode"
         ],
         "type": "object"
       },
-      "CancellationReasonResponse": {
-        "description": "Motivo registrado para la solicitud activa.",
+      "CancellationExecutionResponse": {
+        "description": "Resultado ciudadano de la cancelacion sin exponer identificadores sensibles.",
         "properties": {
-          "canContinue": {
-            "type": "boolean"
+          "certificate": {
+            "$ref": "#/components/schemas/Certificate"
           },
-          "nextStep": {
+          "completedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "confirmedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "maskedDni": {
+            "example": "******91",
             "type": "string"
           },
           "otherReason": {
             "type": "string"
           },
-          "reasonCode": {
+          "reasonLabel": {
+            "type": "string"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/Receipt"
+          },
+          "requestStatus": {
+            "description": "Estado actual de la solicitud ciudadana de cancelación.",
             "enum": [
-              "THEFT",
-              "LOSS",
-              "DEVICE_OR_NUMBER_CHANGE",
-              "SUSPECTED_UNAUTHORIZED_USE",
-              "OTHER"
+              "STARTED",
+              "CHECKING_AVAILABILITY",
+              "NO_CERTIFICATES_AVAILABLE",
+              "PENDING_IDENTITY_VERIFICATION",
+              "IDENTITY_VERIFIED",
+              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
+              "CHECKING_CERTIFICATE_LIST",
+              "CERTIFICATES_AVAILABLE",
+              "CERTIFICATES_SELECTED",
+              "REASON_REGISTERED",
+              "PENDING_CONFIRMATION",
+              "CONFIRMED",
+              "REVOCATION_IN_PROGRESS",
+              "REVOCATION_SUCCEEDED",
+              "REVOCATION_FAILED",
+              "REVOCATION_OUTCOME_UNKNOWN",
+              "COMPLETED",
+              "FAILED",
+              "OUTCOME_UNKNOWN",
+              "RECEIPT_AVAILABLE",
+              "ABANDONED"
             ],
             "type": "string"
           },
-          "requestStatus": {
+          "state": {
+            "enum": [
+              "PROCESSING",
+              "SUCCEEDED",
+              "FAILED",
+              "OUTCOME_UNKNOWN",
+              "RECEIPT_FAILED"
+            ],
             "type": "string"
           }
         },
+        "required": [
+          "certificate",
+          "maskedDni",
+          "reasonLabel",
+          "requestStatus",
+          "state"
+        ],
         "type": "object"
       },
       "CancellationRequestResponse": {
@@ -208,8 +253,40 @@
         ],
         "type": "object"
       },
+      "CancellationReviewRequest": {
+        "description": "Borrador efímero que se valida para presentar el paso 4 sin persistirlo.",
+        "properties": {
+          "certificateUuid": {
+            "format": "uuid",
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "otherReason": {
+            "description": "Descripción requerida únicamente para OTHER.",
+            "maxLength": 300,
+            "minLength": 0,
+            "type": "string"
+          },
+          "reasonCode": {
+            "enum": [
+              "THEFT",
+              "LOSS",
+              "DEVICE_OR_NUMBER_CHANGE",
+              "SUSPECTED_UNAUTHORIZED_USE",
+              "OTHER"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificateUuid",
+          "reasonCode"
+        ],
+        "type": "object"
+      },
       "CancellationReviewResponse": {
-        "description": "Resumen autoritativo y minimizado de la cancelación que confirmará el ciudadano.",
+        "description": "Resumen autoritativo y minimizado de la cancelación.",
         "properties": {
           "certificate": {
             "$ref": "#/components/schemas/SelectedCertificate"
@@ -240,16 +317,47 @@
             "type": "string"
           },
           "otherReason": {
-            "description": "Descripción persistida solo para el motivo OTHER.",
+            "description": "Descripción validada para el motivo OTHER.",
             "type": "string"
           },
           "reasonCode": {
+            "enum": [
+              "THEFT",
+              "LOSS",
+              "DEVICE_OR_NUMBER_CHANGE",
+              "SUSPECTED_UNAUTHORIZED_USE",
+              "OTHER"
+            ],
             "type": "string"
           },
           "reasonLabel": {
             "type": "string"
           },
           "requestStatus": {
+            "description": "Estado actual de la solicitud ciudadana de cancelación.",
+            "enum": [
+              "STARTED",
+              "CHECKING_AVAILABILITY",
+              "NO_CERTIFICATES_AVAILABLE",
+              "PENDING_IDENTITY_VERIFICATION",
+              "IDENTITY_VERIFIED",
+              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
+              "CHECKING_CERTIFICATE_LIST",
+              "CERTIFICATES_AVAILABLE",
+              "CERTIFICATES_SELECTED",
+              "REASON_REGISTERED",
+              "PENDING_CONFIRMATION",
+              "CONFIRMED",
+              "REVOCATION_IN_PROGRESS",
+              "REVOCATION_SUCCEEDED",
+              "REVOCATION_FAILED",
+              "REVOCATION_OUTCOME_UNKNOWN",
+              "COMPLETED",
+              "FAILED",
+              "OUTCOME_UNKNOWN",
+              "RECEIPT_AVAILABLE",
+              "ABANDONED"
+            ],
             "type": "string"
           }
         },
@@ -263,6 +371,22 @@
           "reasonCode",
           "reasonLabel",
           "requestStatus"
+        ],
+        "type": "object"
+      },
+      "Certificate": {
+        "properties": {
+          "emissionCreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "orderNumber": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "emissionCreatedAt",
+          "orderNumber"
         ],
         "type": "object"
       },
@@ -317,22 +441,6 @@
           "canContinue",
           "certificates",
           "requestStatus"
-        ],
-        "type": "object"
-      },
-      "CertificateSelectionRequest": {
-        "description": "Certificado que el ciudadano selecciona para cancelar.",
-        "properties": {
-          "certificateUuid": {
-            "description": "UUID canónico de un certificado disponible de la solicitud activa.",
-            "format": "uuid",
-            "minLength": 1,
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-            "type": "string"
-          }
-        },
-        "required": [
-          "certificateUuid"
         ],
         "type": "object"
       },
@@ -399,8 +507,8 @@
             "enum": [
               "IDENTITY_VERIFICATION",
               "CERTIFICATE_SELECTION",
-              "REASON",
-              "CONFIRMATION"
+              "CONFIRMATION",
+              "RECEIPT"
             ],
             "type": "string"
           },
@@ -449,15 +557,40 @@
         ],
         "type": "object"
       },
-      "SelectedCertificate": {
-        "description": "Certificado seleccionado presentado sin exponer su UUID completo.",
+      "Receipt": {
         "properties": {
-          "emissionCreatedAt": {
+          "availableAt": {
             "format": "date-time",
             "type": "string"
           },
-          "maskedUuid": {
-            "example": "11111111…1111",
+          "code": {
+            "type": "string"
+          },
+          "downloadAvailable": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "GENERATING",
+              "AVAILABLE",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "downloadAvailable",
+          "status"
+        ],
+        "type": "object"
+      },
+      "SelectedCertificate": {
+        "description": "Certificado identificado por datos visibles, sin exponer su UUID.",
+        "properties": {
+          "emissionCreatedAt": {
+            "format": "date-time",
             "type": "string"
           },
           "orderNumber": {
@@ -467,7 +600,6 @@
         },
         "required": [
           "emissionCreatedAt",
-          "maskedUuid",
           "orderNumber"
         ],
         "type": "object"
@@ -792,96 +924,9 @@
         ]
       }
     },
-    "/api/v1/cancellation-requests/current/certificate-selection": {
-      "put": {
-        "description": "Reemplazo idempotente de la selección singular. El UUID debe pertenecer al listado persistido de la solicitud autenticada.",
-        "operationId": "replaceCurrentCertificateSelection",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CertificateSelectionRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CertificateListResponse"
-                }
-              }
-            },
-            "description": "Selección persistida y paso 3 habilitado"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Formato inválido"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Sesión ausente o expirada"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Origen o paso no permitido"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Actualización concurrente de la selección"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "UUID ajeno o no disponible"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Selecciona un certificado de la solicitud activa",
-        "tags": [
-          "Certificados vigentes"
-        ]
-      }
-    },
     "/api/v1/cancellation-requests/current/certificates": {
       "get": {
-        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida. No recibe DNI ni identificadores de solicitud desde el navegador.",
+        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.",
         "operationId": "getCurrentRequestCertificates",
         "responses": {
           "200": {
@@ -968,7 +1013,7 @@
     },
     "/api/v1/cancellation-requests/current/confirmation": {
       "post": {
-        "description": "Confirma de forma idempotente sin ejecutar todavía la revocación.",
+        "description": "Guarda la decisión, ejecuta una revocación idempotente y genera la constancia cuando el resultado es exitoso.",
         "operationId": "confirmCurrentCancellation",
         "requestBody": {
           "content": {
@@ -985,7 +1030,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CancellationReviewResponse"
+                  "$ref": "#/components/schemas/CancellationExecutionResponse"
                 }
               }
             },
@@ -1029,7 +1074,7 @@
                 }
               }
             },
-            "description": "Versión cambiada, estado incompatible o concurrencia"
+            "description": "Versión o decisión incompatible"
           },
           "422": {
             "content": {
@@ -1039,7 +1084,17 @@
                 }
               }
             },
-            "description": "Motivo o selección persistida inválida"
+            "description": "Motivo o selección inválida"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Integración de revocación no disponible; la decisión no se persiste"
           }
         },
         "security": [
@@ -1047,21 +1102,21 @@
             "FlowSessionCookie": []
           }
         ],
-        "summary": "Registra el consentimiento y confirma la solicitud",
+        "summary": "Persiste la decisión completa y confirma la solicitud",
         "tags": [
           "Confirmación de cancelación"
         ]
       }
     },
-    "/api/v1/cancellation-requests/current/reason": {
-      "get": {
-        "operationId": "getCurrentCancellationReason",
+    "/api/v1/cancellation-requests/current/execution": {
+      "post": {
+        "operationId": "resumeCurrentCancellationExecution",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CancellationReasonResponse"
+                  "$ref": "#/components/schemas/CancellationExecutionResponse"
                 }
               }
             },
@@ -1073,18 +1128,124 @@
             "FlowSessionCookie": []
           }
         ],
-        "summary": "Obtiene el motivo de la solicitud activa",
+        "summary": "Reanuda idempotentemente una revocación ya confirmada",
         "tags": [
-          "Motivo de cancelación"
+          "Confirmación de cancelación"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/outcome": {
+      "get": {
+        "operationId": "getCurrentCancellationOutcome",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationExecutionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Consulta el resultado y la constancia de la solicitud actual",
+        "tags": [
+          "Confirmación de cancelación"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/receipt": {
+      "get": {
+        "operationId": "downloadCurrentCancellationReceipt",
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Descarga la constancia de la sesión autenticada",
+        "tags": [
+          "Confirmación de cancelación"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/receipt/retry": {
+      "post": {
+        "operationId": "retryCurrentCancellationReceipt",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationExecutionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Reintenta únicamente la generación de la constancia",
+        "tags": [
+          "Confirmación de cancelación"
+        ]
+      }
+    },
+    "/api/v1/cancellation-requests/current/review": {
+      "get": {
+        "description": "Disponible únicamente después de confirmar; no recupera borradores.",
+        "operationId": "getConfirmedCancellationReview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancellationReviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Recupera el resumen de una solicitud confirmada",
+        "tags": [
+          "Confirmación de cancelación"
         ]
       },
-      "put": {
-        "operationId": "replaceCurrentCancellationReason",
+      "post": {
+        "operationId": "previewCurrentCancellation",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CancellationReasonRequest"
+                "$ref": "#/components/schemas/CancellationReviewRequest"
               }
             }
           },
@@ -1095,38 +1256,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CancellationReasonResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Registra o reemplaza el motivo antes de la confirmación",
-        "tags": [
-          "Motivo de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/review": {
-      "get": {
-        "description": "Construye el paso 4 desde persistencia con exactamente un certificado y devuelve solo identificadores enmascarados.",
-        "operationId": "getCurrentCancellationReview",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
                   "$ref": "#/components/schemas/CancellationReviewResponse"
                 }
               }
             },
-            "description": "Resumen vigente o confirmación ya registrada"
+            "description": "Resumen vigente sin persistencia del borrador"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Formato inválido"
           },
           "401": {
             "content": {
@@ -1148,16 +1292,6 @@
             },
             "description": "Identidad o paso no permitido"
           },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Solicitud en un estado incompatible"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -1166,7 +1300,7 @@
                 }
               }
             },
-            "description": "Motivo o selección persistida inválida"
+            "description": "Motivo o certificado inválido"
           }
         },
         "security": [
@@ -1174,7 +1308,7 @@
             "FlowSessionCookie": []
           }
         ],
-        "summary": "Obtiene el resumen autoritativo previo a confirmar",
+        "summary": "Valida el borrador y prepara el resumen sin persistirlo",
         "tags": [
           "Confirmación de cancelación"
         ]

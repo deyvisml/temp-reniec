@@ -7,7 +7,7 @@ export type CurrentFlowSession = Omit<Required<CurrentFlowSessionContract>, "ses
   dni: string;
   sessionStatus: "PENDING_IDENTITY" | "IDENTITY_VERIFIED";
   requestStatus: string;
-  nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION" | "REASON" | "CONFIRMATION";
+  nextStep: "IDENTITY_VERIFICATION" | "CERTIFICATE_SELECTION" | "CONFIRMATION" | "RECEIPT";
 };
 
 const CURRENT_SESSION_PATH = "/api/v1/session/current";
@@ -25,7 +25,7 @@ export function parseCurrentFlowSession(value: unknown): CurrentFlowSession | nu
     (session.sessionStatus !== "PENDING_IDENTITY" && session.sessionStatus !== "IDENTITY_VERIFIED") ||
     typeof session.requestStatus !== "string" ||
     (session.nextStep !== "IDENTITY_VERIFICATION" && session.nextStep !== "CERTIFICATE_SELECTION"
-      && session.nextStep !== "REASON" && session.nextStep !== "CONFIRMATION")
+      && session.nextStep !== "CONFIRMATION" && session.nextStep !== "RECEIPT")
   ) {
     return null;
   }

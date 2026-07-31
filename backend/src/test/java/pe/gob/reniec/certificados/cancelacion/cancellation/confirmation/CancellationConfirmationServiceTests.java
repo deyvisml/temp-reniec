@@ -18,6 +18,7 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.*;
 
 class CancellationConfirmationServiceTests {
 
+	private static final String UUID = "11111111-1111-4111-8111-111111111111";
 	private final CertificateCancellationRequestRepository requests = mock(CertificateCancellationRequestRepository.class);
 	private final CancellationRequestCertificateRepository certificates = mock(CancellationRequestCertificateRepository.class);
 	private final IdentityVerificationRepository verifications = mock(IdentityVerificationRepository.class);
@@ -33,8 +34,8 @@ class CancellationConfirmationServiceTests {
 	void setUp() {
 		request = new CertificateCancellationRequestEntity("73905791");
 		ReflectionTestUtils.setField(request, "id", 7L);
-		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE, CancellationRequestStatus.CERTIFICATES_SELECTED);
-		request.registerReason(CancellationReasonCode.THEFT, null);
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				CancellationRequestStatus.CERTIFICATES_AVAILABLE);
 
 		IdentityVerificationEntity verification = new IdentityVerificationEntity(
 				request, 1, "ID_PERU", Instant.now().minusSeconds(30), "identity-correlation");
@@ -42,76 +43,46 @@ class CancellationConfirmationServiceTests {
 				Instant.now().minusSeconds(20), "external", null);
 
 		certificate = new CancellationRequestCertificateEntity(request, "0000123456",
-				Instant.parse("2026-07-15T15:24:00Z"), "11111111-1111-4111-8111-111111111111",
-				Instant.now().minusSeconds(10));
-		certificate.select(Instant.now().minusSeconds(5));
+				Instant.parse("2026-07-15T15:24:00Z"), UUID, Instant.now().minusSeconds(10));
 
 		when(requests.findById(7L)).thenReturn(Optional.of(request));
 		when(requests.findByIdForUpdate(7L)).thenReturn(Optional.of(request));
 		when(verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(7L)).thenReturn(Optional.of(verification));
-		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
+		when(certificates.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(7L))
 				.thenReturn(List.of(certificate));
 		when(certificates.findByRequestIdForUpdate(7L)).thenReturn(List.of(certificate));
+		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
+				.thenAnswer(invocation -> certificate.isSelected() ? List.of(certificate) : List.of());
 	}
 
 	@Test
-	void buildsAnAuthoritativeMinimizedSummary() {
-		CancellationReviewResponse response = service.review(7L);
+	void previewsAnAuthoritativeSummaryWithoutPersistingTheDraft() {
+		CancellationReviewResponse response = service.preview(7L,
+				new CancellationReviewRequest(UUID, CancellationReasonCode.THEFT, null));
 
 		assertThat(response.maskedDni()).isEqualTo("******91");
 		assertThat(response.reasonLabel()).isEqualTo("Robo");
-		assertThat(response.certificate()).satisfies(item -> {
-			assertThat(item.orderNumber()).isEqualTo("0000123456");
-			assertThat(item.maskedUuid()).isEqualTo("11111111…1111");
-			assertThat(item.maskedUuid()).doesNotContain("-1111-4111-");
-		});
+		assertThat(response.certificate().orderNumber()).isEqualTo("0000123456");
+		assertThat(response.confirmed()).isFalse();
+		assertThat(request.getRequestStatus()).isEqualTo(CancellationRequestStatus.CERTIFICATES_AVAILABLE);
+		assertThat(request.getReasonCode()).isNull();
+		assertThat(certificate.isSelected()).isFalse();
+		verifyNoInteractions(auditEvents);
 	}
 
 	@Test
-	void includesThePersistedDescriptionForOtherReason() {
-		request.registerReason(CancellationReasonCode.OTHER, "Ya no utilizaré el dispositivo asociado");
+	void normalizesOtherReasonOnlyForThePreviewResponse() {
+		CancellationReviewResponse response = service.preview(7L,
+				new CancellationReviewRequest(UUID, CancellationReasonCode.OTHER,
+						"  Ya no utilizaré el dispositivo asociado  "));
 
-		CancellationReviewResponse response = service.review(7L);
-
-		assertThat(response.reasonLabel()).isEqualTo("Otro motivo");
 		assertThat(response.otherReason()).isEqualTo("Ya no utilizaré el dispositivo asociado");
+		assertThat(request.getOtherReason()).isNull();
 	}
 
 	@Test
-	void rejectsAnInvalidStateOrAnUnverifiedIdentity() {
-		request.transitionTo(CancellationRequestStatus.CERTIFICATES_SELECTED, null);
-		assertThatThrownBy(() -> service.review(7L))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.NOT_ALLOWED));
-
-		request.registerReason(CancellationReasonCode.THEFT, null);
-		when(verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(7L)).thenReturn(Optional.empty());
-		assertThatThrownBy(() -> service.review(7L))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.IDENTITY_REQUIRED));
-	}
-
-	@Test
-	void rejectsWhenTheLatestIdentityAttemptIsNotVerified() {
-		IdentityVerificationEntity rejected = new IdentityVerificationEntity(
-				request, 2, "ID_PERU", Instant.now().minusSeconds(10), "latest-correlation");
-		rejected.finish(IdentityVerificationStatus.REJECTED, IdentityMatchResult.MISMATCH,
-				Instant.now().minusSeconds(5), null, "IDENTITY_MISMATCH");
-		when(verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(7L))
-				.thenReturn(Optional.of(rejected));
-
-		assertThatThrownBy(() -> service.review(7L))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.IDENTITY_REQUIRED));
-	}
-
-	@Test
-	void confirmsOnceAndKeepsTheSameEvidenceOnRetry() {
-		CancellationConfirmationRequest command = new CancellationConfirmationRequest(
-				true, CancellationConsentCatalog.VERSION);
+	void confirmsTheWholeDecisionAndKeepsTheSameEvidenceOnRetry() {
+		CancellationConfirmationRequest command = command(UUID, CancellationReasonCode.THEFT, null);
 
 		CancellationReviewResponse first = service.confirm(7L, command, "confirmation-correlation");
 		Instant persistedTime = request.getConfirmedAt();
@@ -119,79 +90,67 @@ class CancellationConfirmationServiceTests {
 
 		assertThat(first.confirmed()).isTrue();
 		assertThat(repeated.confirmedAt()).isEqualTo(persistedTime);
-		assertThat(request.getConsentVersion()).isEqualTo(CancellationConsentCatalog.VERSION);
+		assertThat(request.getRequestStatus()).isEqualTo(CancellationRequestStatus.CONFIRMED);
+		assertThat(request.getReasonCode()).isEqualTo(CancellationReasonCode.THEFT);
+		assertThat(certificate.isSelected()).isTrue();
+		assertThat(certificate.getSelectedAt()).isEqualTo(persistedTime);
+		verify(auditEvents, times(1)).save(any(CancellationAuditEventEntity.class));
+	}
+
+	@Test
+	void rejectsAConflictingRetry() {
+		service.confirm(7L, command(UUID, CancellationReasonCode.THEFT, null), "first");
+
+		assertThatThrownBy(() -> service.confirm(7L,
+				command(UUID, CancellationReasonCode.LOSS, null), "second"))
+				.isInstanceOfSatisfying(CancellationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								CancellationConfirmationException.Reason.CONFLICT));
+		assertThat(request.getReasonCode()).isEqualTo(CancellationReasonCode.THEFT);
 		verify(auditEvents, times(1)).save(any(CancellationAuditEventEntity.class));
 	}
 
 	@Test
 	void rejectsMissingOrObsoleteConsentWithoutChangingTheRequest() {
 		assertThatThrownBy(() -> service.confirm(7L,
-				new CancellationConfirmationRequest(false, CancellationConsentCatalog.VERSION), "correlation"))
+				new CancellationConfirmationRequest(UUID, CancellationReasonCode.THEFT, null,
+						false, CancellationConsentCatalog.VERSION), "correlation"))
 				.isInstanceOfSatisfying(CancellationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
-							CancellationConfirmationException.Reason.CONSENT_REQUIRED));
+								CancellationConfirmationException.Reason.CONSENT_REQUIRED));
 		assertThatThrownBy(() -> service.confirm(7L,
-				new CancellationConfirmationRequest(true, "OLD_VERSION"), "correlation"))
+				new CancellationConfirmationRequest(UUID, CancellationReasonCode.THEFT, null,
+						true, "OLD_VERSION"), "correlation"))
 				.isInstanceOfSatisfying(CancellationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
-							CancellationConfirmationException.Reason.CONSENT_CHANGED));
+								CancellationConfirmationException.Reason.CONSENT_CHANGED));
 		assertThat(request.getConfirmedAt()).isNull();
+		assertThat(certificate.isSelected()).isFalse();
 		verifyNoInteractions(auditEvents);
 	}
 
 	@Test
-	void rejectsASelectedCertificateFromAnotherRequest() {
-		CertificateCancellationRequestEntity foreign = new CertificateCancellationRequestEntity("00000002");
-		ReflectionTestUtils.setField(foreign, "id", 8L);
-		CancellationRequestCertificateEntity injected = new CancellationRequestCertificateEntity(foreign,
-				"FOREIGN", Instant.now().minusSeconds(30), "22222222-2222-4222-8222-222222222222",
-				Instant.now().minusSeconds(20));
-		injected.select(Instant.now().minusSeconds(10));
-		when(certificates.findByRequestIdForUpdate(7L)).thenReturn(List.of(injected));
-
-		assertThatThrownBy(() -> service.confirm(7L,
-				new CancellationConfirmationRequest(true, CancellationConsentCatalog.VERSION), "correlation"))
+	void rejectsInvalidDraftsWithoutChangingTheRequest() {
+		assertThatThrownBy(() -> service.preview(7L,
+				new CancellationReviewRequest("22222222-2222-4222-8222-222222222222",
+						CancellationReasonCode.THEFT, null)))
 				.isInstanceOfSatisfying(CancellationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
-							CancellationConfirmationException.Reason.INVALID_SELECTION));
-		assertThat(request.getConfirmedAt()).isNull();
+								CancellationConfirmationException.Reason.INVALID_SELECTION));
+
+		assertThatThrownBy(() -> service.preview(7L,
+				new CancellationReviewRequest(UUID, CancellationReasonCode.OTHER, "corto")))
+				.isInstanceOfSatisfying(CancellationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								CancellationConfirmationException.Reason.INVALID_REASON));
+		assertThat(request.getReasonCode()).isNull();
+		assertThat(certificate.isSelected()).isFalse();
 	}
 
-	@Test
-	void rejectsAReviewWithZeroOrMultipleSelectedCertificates() {
-		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
-				.thenReturn(List.of());
-		assertThatThrownBy(() -> service.review(7L))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.INVALID_SELECTION));
-
-		CancellationRequestCertificateEntity second = new CancellationRequestCertificateEntity(request,
-				"0000123457", Instant.parse("2026-07-16T15:24:00Z"),
-				"22222222-2222-4222-8222-222222222222", Instant.now().minusSeconds(9));
-		second.select(Instant.now().minusSeconds(4));
-		when(certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(7L))
-				.thenReturn(List.of(certificate, second));
-		assertThatThrownBy(() -> service.review(7L))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.INVALID_SELECTION));
-	}
-
-	@Test
-	void rejectsConfirmationWithMultiplePersistedSelections() {
-		CancellationRequestCertificateEntity second = new CancellationRequestCertificateEntity(request,
-				"0000123457", Instant.parse("2026-07-16T15:24:00Z"),
-				"22222222-2222-4222-8222-222222222222", Instant.now().minusSeconds(9));
-		second.select(Instant.now().minusSeconds(4));
-		when(certificates.findByRequestIdForUpdate(7L)).thenReturn(List.of(certificate, second));
-
-		assertThatThrownBy(() -> service.confirm(7L,
-				new CancellationConfirmationRequest(true, CancellationConsentCatalog.VERSION), "correlation"))
-				.isInstanceOfSatisfying(CancellationConfirmationException.class,
-						error -> assertThat(error.reason()).isEqualTo(
-								CancellationConfirmationException.Reason.INVALID_SELECTION));
-		assertThat(request.getConfirmedAt()).isNull();
+	private static CancellationConfirmationRequest command(String uuid,
+			CancellationReasonCode reason, String otherReason) {
+		return new CancellationConfirmationRequest(uuid, reason, otherReason, true,
+				CancellationConsentCatalog.VERSION);
 	}
 
 	@SuppressWarnings("unchecked")

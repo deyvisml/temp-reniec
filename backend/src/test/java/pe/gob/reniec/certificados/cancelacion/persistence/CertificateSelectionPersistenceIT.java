@@ -6,9 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -47,6 +44,7 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.Revocatio
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationOperationStatus;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.RevocationResult;
 import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationRequest;
+import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationReviewRequest;
 import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConfirmationService;
 import pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.CancellationConsentCatalog;
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CancellationAuditEventRepository;
@@ -99,17 +97,22 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		assertThat(certificateRepository.countByRequest_Id(request.getId())).isEqualTo(3);
 		String selectedUuid = listed.certificates().get(1).certificateUuid();
 
-		CertificateListResponse selected = certificateListingService.select(
-				request.getId(), selectedUuid, "selection-correlation");
+		confirmationService.preview(request.getId(),
+				new CancellationReviewRequest(selectedUuid, CancellationReasonCode.LOSS, null));
+		assertThat(certificateRepository.countByRequest_IdAndSelectedTrue(request.getId())).isZero();
+		assertThat(requestRepository.findById(request.getId())).get()
+				.extracting(CertificateCancellationRequestEntity::getReasonCode).isNull();
 
-		assertThat(selected.requestStatus()).isEqualTo("CERTIFICATES_SELECTED");
-		assertThat(selected.canContinue()).isTrue();
+		confirmationService.confirm(request.getId(),
+				new CancellationConfirmationRequest(selectedUuid, CancellationReasonCode.LOSS, null,
+						true, CancellationConsentCatalog.VERSION),
+				"confirmation-correlation");
 		assertThat(certificateRepository.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(
 				request.getId())).extracting(CancellationRequestCertificateEntity::getCertificateUuid)
 				.containsExactly(selectedUuid);
 		assertThat(requestRepository.findById(request.getId())).get()
 				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
-				.isEqualTo(CancellationRequestStatus.CERTIFICATES_SELECTED);
+				.isEqualTo(CancellationRequestStatus.CONFIRMED);
 	}
 
 	@Test
@@ -138,63 +141,6 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		assertThat(requestRepository.findById(request.getId())).get()
 				.extracting(CertificateCancellationRequestEntity::getRequestStatus)
 				.isEqualTo(CancellationRequestStatus.AUTHENTICATED_PENDING_CERTIFICATE_LIST);
-	}
-
-	@Test
-	void rejectsUnknownSelectionAndAllowsIdempotentReplacementBeforeConfirmation() {
-		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000022");
-		CertificateListResponse listed = certificateListingService.list(request.getId(), "selection-rules");
-		String uuid = listed.certificates().getFirst().certificateUuid();
-		String replacementUuid = listed.certificates().get(1).certificateUuid();
-
-		assertThatThrownBy(() -> certificateListingService.select(request.getId(),
-				"00000000-0000-4000-8000-000000000099", "unknown"))
-				.isInstanceOf(CertificateListingException.class);
-
-		certificateListingService.select(request.getId(), uuid, "selected");
-		Instant selectedAt = certificateRepository.findByRequest_IdAndCertificateUuid(request.getId(), uuid)
-				.orElseThrow().getSelectedAt();
-		assertThat(certificateListingService.select(request.getId(), uuid, "idempotent").canContinue()).isTrue();
-		assertThat(certificateRepository.findByRequest_IdAndCertificateUuid(request.getId(), uuid))
-				.get().extracting(CancellationRequestCertificateEntity::getSelectedAt).isEqualTo(selectedAt);
-		CertificateListResponse replaced = certificateListingService.select(
-				request.getId(), replacementUuid, "replacement");
-		assertThat(replaced.canContinue()).isTrue();
-		assertThat(replaced.certificates()).filteredOn(CertificateListResponse.CertificateItem::selected)
-				.extracting(CertificateListResponse.CertificateItem::certificateUuid)
-				.containsExactly(replacementUuid);
-		assertThatThrownBy(() -> certificateListingService.select(request.getId(),
-				"00000000-0000-4000-8000-000000000099", "changed"))
-				.isInstanceOf(CertificateListingException.class);
-	}
-
-	@Test
-	void serializesConcurrentSelectionReplacementsAndKeepsExactlyOneCertificate() throws Exception {
-		CertificateCancellationRequestEntity request = identityVerifiedRequest("00000022");
-		CertificateListResponse listed = certificateListingService.list(request.getId(), "concurrent-list");
-		String firstUuid = listed.certificates().getFirst().certificateUuid();
-		String secondUuid = listed.certificates().get(1).certificateUuid();
-		CountDownLatch start = new CountDownLatch(1);
-
-		try (var executor = Executors.newFixedThreadPool(2)) {
-			var first = executor.submit(() -> {
-				start.await();
-				return certificateListingService.select(request.getId(), firstUuid, "concurrent-first");
-			});
-			var second = executor.submit(() -> {
-				start.await();
-				return certificateListingService.select(request.getId(), secondUuid, "concurrent-second");
-			});
-			start.countDown();
-			assertThat(first.get().canContinue()).isTrue();
-			assertThat(second.get().canContinue()).isTrue();
-		}
-
-		List<CancellationRequestCertificateEntity> selected = certificateRepository
-				.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(request.getId());
-		assertThat(selected).singleElement()
-				.extracting(CancellationRequestCertificateEntity::getCertificateUuid)
-				.isIn(Set.of(firstUuid, secondUuid));
 	}
 
 	@Test
@@ -295,10 +241,10 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 				fixture.request(), "idem-unknown-1", 1, NOW, "corr-unknown");
 		operation.markSubmitted(NOW.plusSeconds(1), "external-unknown");
 		assertThatThrownBy(() -> operation.complete(RevocationOperationStatus.SUCCEEDED,
-				RevocationResult.FAILED, NOW.plusSeconds(2), NOW.plusSeconds(2), null))
+				RevocationResult.FAILED, NOW.plusSeconds(2), NOW.plusSeconds(2), null, null))
 				.isInstanceOf(IllegalArgumentException.class).hasMessageContaining("must match");
 		operation.complete(RevocationOperationStatus.OUTCOME_UNKNOWN, RevocationResult.OUTCOME_UNKNOWN,
-				NOW.plusSeconds(2), NOW.plusSeconds(2), "UNCONFIRMED");
+				NOW.plusSeconds(2), NOW.plusSeconds(2), null, "UNCONFIRMED");
 		operationRepository.saveAndFlush(operation);
 
 		assertThat(operationRepository.findById(operation.getId())).get()
@@ -342,8 +288,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	void confirmsOnceWithoutCreatingRevocationOrReceipt() {
 		RequestFixture fixture = request("70000001", 1);
 		fixture.request().recordAvailability(CurrentAvailabilityResult.AVAILABLE,
-				CancellationRequestStatus.CERTIFICATES_SELECTED);
-		fixture.request().registerReason(CancellationReasonCode.LOSS, null);
+				CancellationRequestStatus.CERTIFICATES_AVAILABLE);
 		requestRepository.saveAndFlush(fixture.request());
 		IdentityVerificationEntity verification = new IdentityVerificationEntity(
 				fixture.request(), 1, "ID_PERU", NOW.minusSeconds(20), "identity-confirmation-it");
@@ -352,16 +297,10 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 		identityRepository.saveAndFlush(verification);
 		CancellationRequestCertificateEntity selected = certificate(fixture, "ORD-CONFIRM",
 				"a785da78-df44-44ea-a711-2eeceef114ad", 1);
-		selected.select(NOW.plusSeconds(2));
 		certificateRepository.saveAndFlush(selected);
 
-		CertificateListResponse reasonSnapshot = certificateListingService.list(
-				fixture.request().getId(), "confirmation-back-navigation");
-		assertThat(reasonSnapshot.requestStatus()).isEqualTo("REASON_REGISTERED");
-		assertThat(reasonSnapshot.certificates()).singleElement()
-				.extracting(CertificateListResponse.CertificateItem::selected).isEqualTo(true);
-
 		CancellationConfirmationRequest command = new CancellationConfirmationRequest(
+				selected.getCertificateUuid(), CancellationReasonCode.LOSS, null,
 				true, CancellationConsentCatalog.VERSION);
 		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it");
 		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it-retry");
@@ -390,7 +329,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 				historical.request(), "idem-history-1", 1, NOW.plusSeconds(4), "corr-history");
 		operation.markSubmitted(NOW.plusSeconds(5), "external-history");
 		operation.complete(RevocationOperationStatus.SUCCEEDED, RevocationResult.SUCCEEDED,
-				NOW.plusSeconds(6), NOW.plusSeconds(6), null);
+				NOW.plusSeconds(6), NOW.plusSeconds(6), null, null);
 		operationRepository.saveAndFlush(operation);
 		selected.applyAtomicOutcome(RevocationResult.SUCCEEDED);
 		certificateRepository.saveAndFlush(selected);
@@ -427,7 +366,7 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 				fixture.request(), "idem-" + dni, 1, NOW.plusSeconds(5), "corr-" + dni);
 		operation.markSubmitted(NOW.plusSeconds(6), "external-" + dni);
 		operation.complete(operationStatus, result, NOW.plusSeconds(7), NOW.plusSeconds(7),
-				result == RevocationResult.FAILED ? "REJECTED" : null);
+				null, result == RevocationResult.FAILED ? "REJECTED" : null);
 		operationRepository.saveAndFlush(operation);
 		first.applyAtomicOutcome(result);
 		certificateRepository.saveAndFlush(first);
@@ -445,8 +384,8 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 	}
 
 	private void confirm(CertificateCancellationRequestEntity request) {
-		request.registerReason(CancellationReasonCode.THEFT, null);
-		request.confirm(Instant.now().plusSeconds(1), "CANCELACION_CERTIFICADOS_V1");
+		request.confirmDecision(CancellationReasonCode.THEFT, null,
+				Instant.now().plusSeconds(1), "CANCELACION_CERTIFICADOS_V1");
 		requestRepository.saveAndFlush(request);
 	}
 
@@ -461,7 +400,13 @@ class CertificateSelectionPersistenceIT extends MySqlContainerSupport {
 				new CertificateCancellationRequestEntity(dni));
 		request.recordAvailability(pe.gob.reniec.certificados.cancelacion.cancellation.persistence.CurrentAvailabilityResult.AVAILABLE,
 				CancellationRequestStatus.IDENTITY_VERIFIED);
-		return requestRepository.saveAndFlush(request);
+		request = requestRepository.saveAndFlush(request);
+		IdentityVerificationEntity verification = new IdentityVerificationEntity(
+				request, 1, "ID_PERU", NOW.minusSeconds(20), "identity-listing-it-" + dni);
+		verification.finish(IdentityVerificationStatus.VERIFIED, IdentityMatchResult.MATCH,
+				NOW.minusSeconds(10), "identity-external-" + dni, null);
+		identityRepository.saveAndFlush(verification);
+		return request;
 	}
 
 	private CancellationRequestCertificateEntity certificate(RequestFixture fixture, String order,

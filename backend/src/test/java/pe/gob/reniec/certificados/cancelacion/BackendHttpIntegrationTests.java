@@ -177,10 +177,12 @@ class BackendHttpIntegrationTests {
 		assertThat(applicationPaths).containsExactlyInAnyOrder(
 				"/api/v1/system/status", "/api/v1/cancellation-requests",
 				"/api/v1/cancellation-requests/current/certificates",
-				"/api/v1/cancellation-requests/current/certificate-selection",
-				"/api/v1/cancellation-requests/current/reason",
 				"/api/v1/cancellation-requests/current/review",
 				"/api/v1/cancellation-requests/current/confirmation",
+				"/api/v1/cancellation-requests/current/outcome",
+				"/api/v1/cancellation-requests/current/execution",
+				"/api/v1/cancellation-requests/current/receipt/retry",
+				"/api/v1/cancellation-requests/current/receipt",
 				"/api/v1/identity-verifications", "/api/v1/idperu/callback",
 				"/api/v1/identity-verifications/current", "/api/v1/session/current",
 				"/api/v1/session/refresh", "/api/v1/session/logout",
@@ -191,11 +193,10 @@ class BackendHttpIntegrationTests {
 
 		assertThat(document)
 				.contains("\"/actuator/health\"", "getSystemStatus", "initiateCancellationRequest",
-						"getCurrentRequestCertificates", "replaceCurrentCertificateSelection",
-						"getCurrentCancellationReview", "confirmCurrentCancellation",
-						"getCurrentCancellationReason", "replaceCurrentCancellationReason",
-						"CancellationReviewResponse", "CancellationConfirmationRequest",
-						"CertificateListResponse", "CertificateSelectionRequest",
+						"getCurrentRequestCertificates", "previewCurrentCancellation",
+						"getConfirmedCancellationReview", "confirmCurrentCancellation",
+						"CancellationReviewRequest", "CancellationReviewResponse",
+						"CancellationConfirmationRequest", "CertificateListResponse",
 						"getActuatorHealth", "Solicitudes de cancelación", "Estado técnico",
 						"StartCancellationRequest", "CancellationRequestResponse", "SystemStatusResponse",
 						"ActuatorHealthResponse", "ApiError", "X-Correlation-ID",
@@ -210,6 +211,9 @@ class BackendHttpIntegrationTests {
 						"\"502\"", "\"503\"", "\"504\"")
 				.doesNotContain("/__test/", "/actuator/info", "/actuator/env",
 						"/api/v1/identity-verifications/mock/authorize",
+						"/api/v1/cancellation-requests/current/certificate-selection",
+						"/api/v1/cancellation-requests/current/reason",
+						"maskedUuid",
 						"reused", "publicReference", "recupera una solicitud", "inicio o recuperación",
 						"eligibilityResult", "certificateCount",
 						"00000001", "test-recaptcha-valid", "RECAPTCHA_SECRET_KEY", "jdbc:mysql", "DB_PASSWORD", "MYSQL_ROOT_PASSWORD");

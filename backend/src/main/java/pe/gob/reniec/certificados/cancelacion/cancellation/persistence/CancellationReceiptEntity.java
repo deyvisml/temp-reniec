@@ -67,14 +67,14 @@ public class CancellationReceiptEntity {
 		this.revocationOperation = Objects.requireNonNull(operation, "operation");
 		if (!operation.isSucceeded()) throw new IllegalArgumentException("Receipt requires a successful revocation");
 		if (!sameRequest(request, operation.getRequest())) throw new IllegalArgumentException("Receipt and revocation must belong to the same request");
-		this.receiptCode = requireText(receiptCode, "receiptCode");
+		this.receiptCode = requireBoundedText(receiptCode, "receiptCode", 64);
 		generationStatus = ReceiptGenerationStatus.PENDING;
 	}
 
 	public void markGenerating() { generationStatus = ReceiptGenerationStatus.GENERATING; }
 
 	public void markAvailable(String storageReference, Instant generatedAt, Instant availableAt) {
-		this.storageReference = requireText(storageReference, "storageReference");
+		this.storageReference = requireBoundedText(storageReference, "storageReference", 256);
 		this.generatedAt = Objects.requireNonNull(generatedAt, "generatedAt");
 		this.availableAt = Objects.requireNonNull(availableAt, "availableAt");
 		errorCode = null;
@@ -82,7 +82,7 @@ public class CancellationReceiptEntity {
 	}
 
 	public void markFailed(String errorCode) {
-		this.errorCode = requireText(errorCode, "errorCode");
+		this.errorCode = requireBoundedText(errorCode, "errorCode", 64);
 		generationStatus = ReceiptGenerationStatus.FAILED;
 	}
 
@@ -112,6 +112,12 @@ public class CancellationReceiptEntity {
 	private static String requireText(String value, String name) {
 		if (value == null || value.isBlank()) throw new IllegalArgumentException(name + " must not be blank");
 		return value;
+	}
+
+	private static String requireBoundedText(String value, String name, int maxLength) {
+		String text = requireText(value, name).trim();
+		if (text.length() > maxLength) throw new IllegalArgumentException(name + " is too long");
+		return text;
 	}
 
 	public Long getId() { return id; }

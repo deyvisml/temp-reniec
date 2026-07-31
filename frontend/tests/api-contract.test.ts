@@ -79,4 +79,38 @@ describe("generated API aliases", () => {
       ]),
     );
   });
+
+  it("persists the editable decision only through confirmation", () => {
+    const openApi = JSON.parse(
+      readFileSync(join(process.cwd(), "openapi", "backend-api.json"), "utf8"),
+    );
+
+    expect(openApi.paths["/api/v1/cancellation-requests/current/certificate-selection"]).toBeUndefined();
+    expect(openApi.paths["/api/v1/cancellation-requests/current/reason"]).toBeUndefined();
+    expect(openApi.paths["/api/v1/cancellation-requests/current/review"].post).toBeDefined();
+
+    const preview = openApi.components.schemas.CancellationReviewRequest;
+    const confirmation = openApi.components.schemas.CancellationConfirmationRequest;
+    for (const schema of [preview, confirmation]) {
+      expect(schema.required).toEqual(expect.arrayContaining(["certificateUuid", "reasonCode"]));
+    }
+    expect(confirmation.required).toEqual(
+      expect.arrayContaining(["consentAccepted", "consentVersion"]),
+    );
+
+    const selected = openApi.components.schemas.SelectedCertificate;
+    expect(selected.properties).not.toHaveProperty("maskedUuid");
+    expect(selected.properties).not.toHaveProperty("certificateUuid");
+
+    const execution = openApi.components.schemas.CancellationExecutionResponse;
+    expect(execution.required).toEqual(expect.arrayContaining([
+      "state", "requestStatus", "maskedDni", "certificate", "reasonLabel",
+    ]));
+    expect(execution.properties.state.enum).toEqual([
+      "PROCESSING", "SUCCEEDED", "FAILED", "OUTCOME_UNKNOWN", "RECEIPT_FAILED",
+    ]);
+    expect(execution.properties.requestStatus.enum).toContain("RECEIPT_AVAILABLE");
+    expect(openApi.paths["/api/v1/cancellation-requests/current/confirmation"]
+      .post.responses["503"]).toBeDefined();
+  });
 });

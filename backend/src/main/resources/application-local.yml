@@ -46,6 +46,12 @@ app:
     mock-scenario: ${ID_PERU_MOCK_SCENARIO:MATCH}
   certificate-listing:
     mode: ${CERTIFICATE_LISTING_MODE:mock}
+  revocation:
+    mode: ${REVOCATION_MODE:mock}
+    mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
+  receipt:
+    mode: ${RECEIPT_MODE:filesystem}
+    storage-root: ${RECEIPT_STORAGE_ROOT:tmp/receipts}
   session:
     signing-secret: ${SESSION_SIGNING_SECRET:Y2FuY2VsYWNpb24tbG9jYWwtc2Vzc2lvbi1rZXktMzJiIQ==}
     cookie-secure: ${SESSION_COOKIE_SECURE:false}

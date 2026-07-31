@@ -52,6 +52,58 @@ export async function requestJson<T>(
   init: RequestInit = {},
   options: RequestJsonOptions = {},
 ): Promise<HttpResult<T>> {
+  const { response, correlationId } = await requestResponse(path, init, options);
+  const body = await response.text();
+  if (!body.trim()) {
+    if (response.ok) return { data: undefined, correlationId };
+    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    if (response.ok) {
+      throw clientError(
+        "INVALID_RESPONSE",
+        "El servicio devolvió una respuesta no válida.",
+        response.status,
+        correlationId,
+      );
+    }
+    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
+  }
+
+  if (!response.ok) {
+    throw backendResponseError(payload, response.status, correlationId);
+  }
+
+  return { data: payload as T, correlationId };
+}
+
+export async function requestBlob(
+  path: string,
+  init: RequestInit = {},
+  options: RequestJsonOptions = {},
+): Promise<HttpResult<Blob>> {
+  const { response, correlationId } = await requestResponse(path, init, options);
+  if (!response.ok) {
+    let payload: unknown;
+    try {
+      payload = JSON.parse(await response.text());
+    } catch {
+      throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
+    }
+    throw backendResponseError(payload, response.status, correlationId);
+  }
+  return { data: await response.blob(), correlationId };
+}
+
+async function requestResponse(
+  path: string,
+  init: RequestInit,
+  options: RequestJsonOptions,
+): Promise<{ response: Response; correlationId?: string }> {
   const baseUrl = resolveBackendUrl();
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   const headers = new Headers(init.headers);
@@ -101,43 +153,12 @@ export async function requestJson<T>(
     try {
       refreshInFlight ??= refreshSession().finally(() => { refreshInFlight = undefined; });
       await refreshInFlight;
-      return requestJson<T>(path, init, { ...options, skipSessionRefresh: true });
+      return requestResponse(path, init, { ...options, skipSessionRefresh: true });
     } catch {
       // The original standardized 401 is returned below.
     }
   }
-  const body = await response.text();
-  if (!body.trim()) {
-    if (response.ok) return { data: undefined, correlationId };
-    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
-  }
-
-  let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    if (response.ok) {
-      throw clientError(
-        "INVALID_RESPONSE",
-        "El servicio devolvió una respuesta no válida.",
-        response.status,
-        correlationId,
-      );
-    }
-    throw clientError("HTTP_ERROR", "No fue posible completar la solicitud.", response.status, correlationId);
-  }
-
-  if (!response.ok) {
-    const backendError = asBackendError(payload);
-    throw clientError(
-      stringValue(backendError?.code) ?? "HTTP_ERROR",
-      stringValue(backendError?.message) ?? "No fue posible completar la solicitud.",
-      response.status,
-      correlationId ?? stringValue(backendError?.correlationId),
-    );
-  }
-
-  return { data: payload as T, correlationId };
+  return { response, correlationId };
 }
 
 async function refreshSession(): Promise<void> {
@@ -154,6 +175,16 @@ async function refreshSession(): Promise<void> {
 
 function clientError(code: string, message: string, status?: number, correlationId?: string) {
   return new HttpClientError(message, { code, status, correlationId });
+}
+
+function backendResponseError(payload: unknown, status: number, correlationId?: string) {
+  const backendError = asBackendError(payload);
+  return clientError(
+    stringValue(backendError?.code) ?? "HTTP_ERROR",
+    stringValue(backendError?.message) ?? "No fue posible completar la solicitud.",
+    status,
+    correlationId ?? stringValue(backendError?.correlationId),
+  );
 }
 
 function asBackendError(value: unknown): BackendErrorPayload | undefined {

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CORRELATION_HEADER, HttpClientError, requestJson, resolveBackendUrl } from "@/lib/http-client";
+import {
+  CORRELATION_HEADER,
+  HttpClientError,
+  requestBlob,
+  requestJson,
+  resolveBackendUrl,
+} from "@/lib/http-client";
 import { getCurrentFlowSession } from "@/lib/api/flow-session";
 
 describe("requestJson", () => {
@@ -102,6 +108,28 @@ describe("requestJson", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(String(fetchMock.mock.calls[1][0])).toContain("/api/v1/session/refresh");
     expect(fetchMock.mock.calls[1][1]?.credentials).toBe("include");
+  });
+
+  it("downloads a PDF through the same singular session refresh", async () => {
+    const pdf = new Uint8Array([37, 80, 68, 70]);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ code: "SESSION_EXPIRED" }, 401))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(pdf, {
+        status: 200,
+        headers: { "Content-Type": "application/pdf" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await requestBlob("/api/v1/cancellation-requests/current/receipt", {
+      headers: { Accept: "application/pdf" },
+    });
+
+    expect(await result.data?.arrayBuffer()).toEqual(pdf.buffer);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/api/v1/session/refresh");
+    expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get("Accept"))
+      .toBe("application/pdf");
   });
 
   it("rejects a malformed current-session contract", async () => {

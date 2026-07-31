@@ -137,7 +137,7 @@ public class CancellationRequestCertificateEntity {
 
 	@PreUpdate
 	void update() {
-		if (request.getConfirmedAt() != null && persistedSelected != null
+		if (request.wasConfirmedBeforeCurrentUnitOfWork() && persistedSelected != null
 				&& (persistedSelected != selected || !Objects.equals(persistedSelectedAt, selectedAt))) {
 			throw new IllegalStateException("A confirmed certificate selection cannot be changed");
 		}

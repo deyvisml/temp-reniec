@@ -98,7 +98,7 @@ export function IdentityVerificationPanel({
           ) : (
             <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
               <FaceScanIcon />
-              {view === "starting" ? "Conectando con ID Perú…" : "Iniciar verificación facial con ID Perú"}
+              {view === "starting" ? "Preparando verificación…" : "Verificar identidad"}
             </button>
           )}
         </div>

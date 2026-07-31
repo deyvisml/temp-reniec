@@ -40,6 +40,14 @@ app:
   certificate-listing:
     mode: ${CERTIFICATE_LISTING_MODE:disabled}
     stale-reservation-threshold: ${CERTIFICATE_LISTING_STALE_THRESHOLD:30s}
+  revocation:
+    mode: ${REVOCATION_MODE:disabled}
+    mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
+    stale-submission-threshold: ${REVOCATION_STALE_SUBMISSION_THRESHOLD:30s}
+  receipt:
+    mode: ${RECEIPT_MODE:disabled}
+    storage-root: ${RECEIPT_STORAGE_ROOT:tmp/receipts}
+    stale-generation-threshold: ${RECEIPT_STALE_GENERATION_THRESHOLD:1m}
   session:
     issuer: cancelacion-certificados-backend
     audience: cancelacion-certificados-flow

@@ -18,6 +18,7 @@ public final class CancellationConfirmationException extends RuntimeException {
 		INVALID_SELECTION,
 		CONSENT_REQUIRED,
 		CONSENT_CHANGED,
-		CONFLICT
+		CONFLICT,
+		DEPENDENCY_UNAVAILABLE
 	}
 }

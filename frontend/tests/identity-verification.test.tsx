@@ -23,7 +23,8 @@ describe("paso de verificación de identidad", () => {
 
     expect(markup).toContain("PASO 1 DE 5");
     expect(markup).toContain("Verifica tu identidad");
-    expect(markup).toContain("Iniciar verificación facial con ID Perú");
+    expect(markup).toContain("Verificar identidad");
+    expect(markup).not.toContain("Iniciar verificación facial con ID Perú");
     expect(markup).toContain("Seguro");
     expect(markup).toContain("Rápido");
     expect(markup).toContain("Oficial");
@@ -49,7 +50,7 @@ describe("paso de verificación de identidad", () => {
     );
 
     expect(markup).toContain("Continuar a selección de certificados");
-    expect(markup).not.toContain("Iniciar verificación facial con ID Perú");
+    expect(markup).not.toContain("Verificar identidad");
     expect(markup).toContain("Paso pendiente 2: Selección");
   });
 
@@ -76,7 +77,13 @@ describe("paso de verificación de identidad", () => {
   });
 
   it("inicia el paso 2 consultando los certificados sin inventar datos locales", () => {
-    const markup = renderToStaticMarkup(<CertificateSelectionTransition onBack={() => undefined} />);
+    const markup = renderToStaticMarkup(
+      <CertificateSelectionTransition
+        selected={null}
+        onSelect={() => undefined}
+        onBack={() => undefined}
+      />,
+    );
 
     expect(markup).toContain("Paso actual 2: Selección");
     expect(markup).toContain("Consultando tus certificados vigentes");

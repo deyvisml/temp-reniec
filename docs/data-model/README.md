@@ -26,7 +26,7 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 | --- | --- | --- |
 | `certificate_cancellation_request` | Estado y progreso actual del trámite ciudadano. | Es la raíz conceptual y fuente directa del progreso. |
 | `certificate_availability_check` | Cada consulta inicial que determina únicamente si existen certificados disponibles. | Una consulta puede fallar o repetirse y no contiene datos individuales. |
-| `cancellation_request_certificate` | Cada emisión vigente que obtendrá el futuro segundo servicio después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
+| `cancellation_request_certificate` | Cada emisión vigente obtenida del proveedor después de autenticar al ciudadano. | Conserva la lista detallada y la selección sin mezclarla con la consulta inicial. |
 | `identity_verification` | Cada intento de autenticación con ID Perú, su state hasheado y PKCE protegido. | La verificación puede cancelarse, fallar o repetirse sin guardar códigos ni tokens. |
 | `cancellation_flow_session` | Sesión transaccional única de la solicitud activa, estado, familia y hashes de refresh. | Permite recargas y renovación segura sin recuperar trámites históricos ni guardar tokens en texto plano. |
 | `revocation_operation` | Cada ejecución técnica idempotente de revocación. | Conserva el resultado técnico del certificado confirmado. |
@@ -35,7 +35,7 @@ Las claves primarias son internas, numéricas y no constituyen autorización. La
 
 ## Solicitud principal
 
-`certificate_cancellation_request` conserva el DNI, `request_status`, `availability_result`, motivo, descripción de `OTHER`, `confirmed_at`, `consent_version`, resultado final y fechas técnicas. `availability_result` solo indica si la existencia fue confirmada; no significa que la lista detallada ya se obtuvo. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
+`certificate_cancellation_request` conserva el DNI, `request_status`, `availability_result`, motivo, descripción de `OTHER`, `confirmed_at`, `consent_version`, resultado final y fechas técnicas. El motivo permanece nulo mientras el ciudadano edita los pasos 2 y 3 y se guarda únicamente dentro de la transacción de confirmación. `availability_result` solo indica si la existencia fue confirmada; no significa que la lista detallada ya se obtuvo. El DNI sigue siendo legible dentro de MySQL para el MVP, pero no se expone en logs, URLs, errores ni endpoints técnicos.
 
 `consent_version` identifica el texto estable aceptado por el ciudadano; el texto completo se mantiene en el catálogo del backend y no se repite en cada fila. La combinación de `confirmed_at`, esa versión y el evento `CONSENT_CONFIRMED` constituye la evidencia técnica. Los registros históricos pueden conservar el campo nulo.
 
@@ -49,9 +49,9 @@ La solicitud no contiene colecciones JPA automáticas. Los intentos, certificado
 
 Una solicitud puede tener cero, uno o varios certificados. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, certificate_uuid)` es único. No existe `eligibility_check_id` ni otra relación con la consulta inicial porque ese servicio nunca obtiene certificados.
 
-`selected` y `selected_at` siempre son coherentes. Antes de confirmar debe seleccionarse exactamente un certificado disponible y elegir otro reemplaza la selección anterior. El índice funcional único `uq_request_certificate_single_selected` impide que dos filas de una solicitud queden seleccionadas. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación.
+`selected` y `selected_at` siempre son coherentes. Todos los certificados permanecen sin seleccionar mientras el ciudadano edita el borrador en memoria. Al confirmar, exactamente un certificado disponible se marca como seleccionado en la misma transacción que registra motivo, consentimiento y `confirmed_at`. El índice funcional único `uq_request_certificate_single_selected` impide que dos filas de una solicitud queden seleccionadas. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Los no seleccionados permanecen fuera de la operación.
 
-La fila seleccionada constituye el objetivo de la operación: su UUID se enviará bajo una única clave de idempotencia. No se crea una tabla snapshot porque esa misma fila queda inmutable tras la confirmación.
+La fila seleccionada constituye el objetivo de la operación: su UUID se envía bajo una única clave de idempotencia. No se crea una tabla snapshot porque esa misma fila queda inmutable tras la confirmación.
 
 ## Operación de revocación atómica
 
@@ -174,4 +174,4 @@ JOIN revocation_operation r ON r.id = c.revocation_operation_id
 WHERE c.request_id = 1;
 ```
 
-Los valores son ficticios. La integración real del segundo servicio, la revocación y la generación de la constancia pertenecen a incrementos posteriores; la persistencia y pantalla de selección ya utilizan este modelo.
+Los valores son ficticios. El perfil local utiliza adaptadores simulados y almacenamiento en filesystem; las integraciones institucionales de otros perfiles permanecen deshabilitadas hasta disponer de contratos oficiales.

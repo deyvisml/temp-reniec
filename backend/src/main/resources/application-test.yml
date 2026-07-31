@@ -32,6 +32,14 @@ app:
   certificate-listing:
     mode: mock
     stale-reservation-threshold: 100ms
+  revocation:
+    mode: mock
+    mock-outcome: SUCCEEDED
+    stale-submission-threshold: 100ms
+  receipt:
+    mode: filesystem
+    storage-root: target/test-receipts
+    stale-generation-threshold: 100ms
 
 server:
   port: 0

@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CancellationReceiptRepository extends JpaRepository<CancellationReceiptEntity, Long> {
 
+	Optional<CancellationReceiptEntity> findFirstByRequest_IdOrderByCreatedAtDesc(Long requestId);
+
 	Optional<CancellationReceiptEntity> findFirstByRequest_IdAndGenerationStatusOrderByAvailableAtDesc(
 			Long requestId, ReceiptGenerationStatus status);
 }

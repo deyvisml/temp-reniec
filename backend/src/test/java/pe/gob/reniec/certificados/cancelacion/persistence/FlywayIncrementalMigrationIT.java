@@ -25,6 +25,10 @@ class FlywayIncrementalMigrationIT {
 	static final MySQLContainer CONFLICT_MYSQL = new MySQLContainer("mysql:8.4.0")
 			.withDatabaseName("cancelacion_conflict_test");
 
+	@Container
+	static final MySQLContainer DRAFT_MYSQL = new MySQLContainer("mysql:8.4.0")
+			.withDatabaseName("cancelacion_draft_test");
+
 	@Test
 	void upgradesV4ToLatestPreservingDataAndAddingCurrentSchemaChanges() throws Exception {
 		Flyway v4 = Flyway.configure()
@@ -39,7 +43,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(5);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(6);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
@@ -128,6 +132,65 @@ class FlywayIncrementalMigrationIT {
 				SELECT COUNT(*) FROM cancellation_request_certificate
 				WHERE request_id = 1 AND selected = TRUE
 				""")).isEqualTo(2);
+	}
+
+	@Test
+	void clearsOnlyUnconfirmedDraftEvidenceWhenUpgradingV9() throws Exception {
+		Flyway v9 = Flyway.configure()
+				.dataSource(DRAFT_MYSQL.getJdbcUrl(), DRAFT_MYSQL.getUsername(), DRAFT_MYSQL.getPassword())
+				.target(MigrationVersion.fromVersion("9"))
+				.load();
+		v9.migrate();
+		try (var connection = DriverManager.getConnection(
+				DRAFT_MYSQL.getJdbcUrl(), DRAFT_MYSQL.getUsername(), DRAFT_MYSQL.getPassword());
+				var statement = connection.createStatement()) {
+			statement.executeUpdate("""
+					INSERT INTO certificate_cancellation_request
+					(id, dni, request_status, availability_result, reason_code, other_reason,
+					 confirmed_at, consent_version, created_at, updated_at)
+					VALUES
+					(1, '87654321', 'REASON_REGISTERED', 'AVAILABLE', 'OTHER', 'Borrador no confirmado',
+					 NULL, NULL, '2026-07-20 12:00:00', '2026-07-20 12:05:00'),
+					(2, '12345678', 'CONFIRMED', 'AVAILABLE', 'LOSS', NULL,
+					 '2026-07-20 12:06:00', 'CANCELACION_CERTIFICADOS_V1',
+					 '2026-07-20 12:00:00', '2026-07-20 12:06:00')
+					""");
+			statement.executeUpdate("""
+					INSERT INTO cancellation_request_certificate
+					(id, request_id, order_number, emission_created_at, certificate_uuid,
+					 availability_status, consulted_at, selected, selected_at, version, created_at, updated_at)
+					VALUES
+					(1, 1, 'ORD-DRAFT', '2026-07-19 10:00:00',
+					 '3ff0c799-5845-4c30-bb3d-f5ea260dad61', 'AVAILABLE',
+					 '2026-07-20 12:00:01', TRUE, '2026-07-20 12:04:00', 1,
+					 '2026-07-20 12:00:01', '2026-07-20 12:04:00'),
+					(2, 2, 'ORD-CONFIRMED', '2026-07-19 11:00:00',
+					 '31ab4d38-e7ef-47af-af8c-f7fedc05a1d2', 'AVAILABLE',
+					 '2026-07-20 12:00:01', TRUE, '2026-07-20 12:06:00', 1,
+					 '2026-07-20 12:00:01', '2026-07-20 12:06:00')
+					""");
+		}
+
+		Flyway latest = Flyway.configure()
+				.dataSource(DRAFT_MYSQL.getJdbcUrl(), DRAFT_MYSQL.getUsername(), DRAFT_MYSQL.getPassword())
+				.load();
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+		assertThat(singleInt(DRAFT_MYSQL, """
+				SELECT COUNT(*) FROM certificate_cancellation_request
+				WHERE id = 1 AND request_status = 'CERTIFICATES_AVAILABLE'
+				  AND reason_code IS NULL AND other_reason IS NULL
+				""")).isEqualTo(1);
+		assertThat(singleInt(DRAFT_MYSQL, """
+				SELECT COUNT(*) FROM cancellation_request_certificate
+				WHERE id = 1 AND selected = FALSE AND selected_at IS NULL
+				""")).isEqualTo(1);
+		assertThat(singleInt(DRAFT_MYSQL, """
+				SELECT COUNT(*) FROM certificate_cancellation_request request
+				JOIN cancellation_request_certificate certificate ON certificate.request_id = request.id
+				WHERE request.id = 2 AND request.request_status = 'CONFIRMED'
+				  AND request.reason_code = 'LOSS' AND request.confirmed_at IS NOT NULL
+				  AND certificate.selected = TRUE AND certificate.selected_at IS NOT NULL
+				""")).isEqualTo(1);
 	}
 
 	private void insertRepresentativeV4Data() throws Exception {

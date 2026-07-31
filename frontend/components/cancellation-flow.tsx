@@ -5,12 +5,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { CertificateSelectionTransition } from "@/components/certificate-selection-transition";
 import { CancellationReviewTransition } from "@/components/cancellation-review-transition";
+import { CancellationReceiptTransition } from "@/components/cancellation-receipt-transition";
 import { CancellationReasonTransition } from "@/components/cancellation-reason-transition";
 import { IdentityVerificationPanel } from "@/components/identity-verification-panel";
 import type { IdentityCallbackOutcome } from "@/components/identity-callback-alert";
 import { getCurrentIdentityVerification } from "@/lib/api/identity-verifications";
 import { getCurrentFlowSession } from "@/lib/api/flow-session";
 import { HttpClientError } from "@/lib/http-client";
+import type {
+    CancellationDraft,
+    CancellationExecution,
+    CancellationReasonCode,
+} from "@/lib/api/cancellation-confirmation";
 
 type FlowView =
     | { kind: "checking" }
@@ -21,12 +27,21 @@ type FlowView =
       }
     | { kind: "selection" }
     | { kind: "reason" }
-    | { kind: "confirmation" };
+    | { kind: "confirmation"; confirmed: boolean }
+    | { kind: "receipt"; data?: CancellationExecution };
+
+const emptyDraft: CancellationDraft = {
+    certificateUuid: null,
+    reasonCode: null,
+    otherReason: "",
+};
 
 export function CancellationFlow() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [view, setView] = useState<FlowView>({ kind: "checking" });
+    const [draft, setDraft] = useState<CancellationDraft>(emptyDraft);
+    const [sessionDni, setSessionDni] = useState<string>();
     const redirectOutcome = asIdentityCallbackOutcome(
         searchParams.get("identityOutcome"),
     );
@@ -36,12 +51,13 @@ export function CancellationFlow() {
             try {
                 const session = await getCurrentFlowSession(signal);
                 if (!session.data) throw new Error("Missing flow session");
-                if (session.data.nextStep === "CONFIRMATION") {
-                    setView({ kind: "confirmation" });
+                setSessionDni(session.data.dni);
+                if (session.data.nextStep === "RECEIPT") {
+                    setView({ kind: "receipt" });
                     return;
                 }
-                if (session.data.nextStep === "REASON") {
-                    setView({ kind: "reason" });
+                if (session.data.nextStep === "CONFIRMATION") {
+                    setView({ kind: "confirmation", confirmed: true });
                     return;
                 }
                 if (session.data.nextStep === "CERTIFICATE_SELECTION") {
@@ -114,6 +130,10 @@ export function CancellationFlow() {
         return (
             <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
                 <CertificateSelectionTransition
+                    selected={draft.certificateUuid}
+                    onSelect={(certificateUuid) =>
+                        setDraft((current) => ({ ...current, certificateUuid }))
+                    }
                     onContinue={() => setView({ kind: "reason" })}
                 />
             </div>
@@ -124,18 +144,45 @@ export function CancellationFlow() {
         return (
             <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
                 <CancellationReasonTransition
+                    reason={draft.reasonCode}
+                    otherReason={draft.otherReason}
+                    onReasonChange={(reasonCode: CancellationReasonCode) =>
+                        setDraft((current) => ({ ...current, reasonCode }))
+                    }
+                    onOtherReasonChange={(otherReason) =>
+                        setDraft((current) => ({ ...current, otherReason }))
+                    }
                     onBack={() => setView({ kind: "selection" })}
-                    onContinue={() => setView({ kind: "confirmation" })}
+                    onContinue={() =>
+                        setView({ kind: "confirmation", confirmed: false })
+                    }
                 />
             </div>
         );
     }
 
     if (view.kind === "confirmation") {
+        if (!sessionDni) return <FlowLoading />;
         return (
             <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
                 <CancellationReviewTransition
+                    dni={sessionDni}
+                    draft={draft}
+                    recoverConfirmed={view.confirmed}
                     onBack={() => setView({ kind: "reason" })}
+                    onCompleted={(data) => setView({ kind: "receipt", data })}
+                />
+            </div>
+        );
+    }
+
+    if (view.kind === "receipt") {
+        if (!sessionDni) return <FlowLoading />;
+        return (
+            <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
+                <CancellationReceiptTransition
+                    dni={sessionDni}
+                    initialData={view.data}
                 />
             </div>
         );

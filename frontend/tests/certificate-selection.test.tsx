@@ -33,7 +33,7 @@ describe("selección de certificados", () => {
         onSubmit={() => undefined} onBack={() => undefined} />,
     );
 
-    expect(markup).toContain("PASO 2 DE 5");
+    expect(markup).not.toContain("PASO 2 DE 5");
     expect(markup).toContain("Selecciona un certificado");
     expect(markup).toContain("Elige cuál deseas cancelar para continuar.");
     expect(markup).not.toContain("asociado a tu DNI para incluirlo en esta solicitud");
@@ -66,6 +66,14 @@ describe("selección de certificados", () => {
     expect(markup).toContain("checked");
     expect(markup).toContain('data-selected="true"');
     expect(markup).toContain('data-selected="false"');
+    expect(markup).toContain("border-[#1768f2] bg-[#f5f8ff]");
+    expect(markup).toContain("hover:border-[#8eafe9]");
+    expect(markup).toContain("font-semibold leading-6 text-[#061a50]");
+    expect(markup).toContain("grid-cols-[64px_minmax(0,1fr)_160px_96px]");
+    expect(markup.match(/md:whitespace-nowrap/g)?.length).toBe(4);
+    expect(markup).toContain("font-medium text-[#173568]");
+    expect(markup).not.toContain("font-semibold text-[#0a2259]");
+    expect(markup).not.toContain("border-[#c93b72]");
     expect(markup).not.toContain('disabled=""');
   });
 
@@ -92,7 +100,7 @@ describe("selección de certificados", () => {
     );
 
     expect(markup).toContain("1 certificado seleccionado");
-    expect(markup).toContain("Guardando selección…");
+    expect(markup).toContain("Continuando…");
     expect(markup).toContain("disabled");
   });
 
@@ -123,7 +131,6 @@ describe("selección de certificados", () => {
   it("no persiste UUID ni selección en almacenamiento o URL del navegador", () => {
     const source = readFileSync(resolve(process.cwd(), "components/certificate-selection-transition.tsx"), "utf8");
     expect(source).not.toMatch(/localStorage|sessionStorage|URLSearchParams/);
-    expect(source).toContain("submissionInFlight.current");
     expect(source).toContain("disabled={selected === null || submitting}");
     expect(source).toContain("CERTIFICATE_LIST_TIMEOUT");
     expect(source).toContain("CERTIFICATE_LIST_UNAVAILABLE");
@@ -131,6 +138,7 @@ describe("selección de certificados", () => {
     expect(source).toContain("CERTIFICATE_LIST_IN_PROGRESS");
     expect(source).toContain("getCurrentCertificates()");
     expect(source).not.toContain("MAX_LISTING_IN_PROGRESS_RETRIES");
-    expect(source).toContain("CERTIFICATE_SELECTION_CONFLICT");
+    expect(source).not.toContain("replaceCertificateSelection");
+    expect(source).not.toContain("Guardando selección");
   });
 });

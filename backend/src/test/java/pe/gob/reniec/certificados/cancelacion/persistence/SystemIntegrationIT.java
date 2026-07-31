@@ -97,17 +97,17 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
 				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "X-Correlation-ID")
 				.method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build());
-		HttpResponse<String> selection = send(HttpRequest.newBuilder(
-				uri("/api/v1/cancellation-requests/current/certificate-selection"))
+		HttpResponse<String> preview = send(HttpRequest.newBuilder(
+				uri("/api/v1/cancellation-requests/current/review"))
 				.header(HttpHeaders.ORIGIN, LOCAL_ORIGIN)
 				.header(HttpHeaders.CONTENT_TYPE, "application/json")
-				.PUT(HttpRequest.BodyPublishers.ofString(
-						"{\"certificateUuid\":\"11111111-1111-4111-8111-111111111111\"}"))
+				.POST(HttpRequest.BodyPublishers.ofString(
+						"{\"certificateUuid\":\"11111111-1111-4111-8111-111111111111\",\"reasonCode\":\"LOSS\"}"))
 				.build());
 		HttpResponse<String> preflight = send(HttpRequest.newBuilder(
-				uri("/api/v1/cancellation-requests/current/certificate-selection"))
+				uri("/api/v1/cancellation-requests/current/review"))
 				.header(HttpHeaders.ORIGIN, LOCAL_ORIGIN)
-				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT")
+				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
 				.header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, HttpHeaders.CONTENT_TYPE)
 				.method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build());
 
@@ -117,14 +117,14 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 				.contains(LOCAL_ORIGIN);
 		assertThat(listingPreflight.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS))
 				.hasValueSatisfying(value -> assertThat(value).containsIgnoringCase("X-Correlation-ID"));
-		assertThat(selection.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
-		assertThat(listing.body() + selection.body()).contains("SESSION_REQUIRED")
+		assertThat(preview.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+		assertThat(listing.body() + preview.body()).contains("SESSION_REQUIRED")
 				.doesNotContain("11111111-1111-4111-8111-111111111111");
 		assertThat(preflight.statusCode()).isEqualTo(HttpStatus.OK.value());
 		assertThat(preflight.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN))
 				.contains(LOCAL_ORIGIN);
 		assertThat(preflight.headers().firstValue(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS))
-				.hasValueSatisfying(value -> assertThat(value).containsIgnoringCase("PUT"));
+				.hasValueSatisfying(value -> assertThat(value).containsIgnoringCase("POST"));
 	}
 
 	@Test
@@ -138,10 +138,11 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 						"AVAILABLE", "NOT_AVAILABLE", "503", "X-Correlation-ID",
 						"/api/v1/identity-verifications", "FlowSessionCookie", "FlowRefreshCookie", "securitySchemes",
 						"/api/v1/cancellation-requests/current/certificates",
-						"/api/v1/cancellation-requests/current/certificate-selection",
+						"/api/v1/cancellation-requests/current/review",
 						"certificateUuid", "orderNumber", "emissionCreatedAt")
 				.doesNotContain("/actuator/info", "/__test/", "bearerFormat", "eligibilityResult",
-						"certificateCount");
+						"certificateCount", "/api/v1/cancellation-requests/current/certificate-selection",
+						"/api/v1/cancellation-requests/current/reason");
 	}
 
 	private URI uri(String path) {

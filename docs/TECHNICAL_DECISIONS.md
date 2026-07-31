@@ -9,8 +9,8 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - Después de autenticar al ciudadano, un segundo servicio obtiene las emisiones vigentes con número de orden, fecha de creación y UUID para su persistencia y selección en el paso 2.
 - Un resultado positivo inicial seguido de una lista vacía bloquea el avance y se comunica como ausencia actual de certificados, no como error de autenticación.
 - El flujo exige seleccionar exactamente un certificado disponible por solicitud. Elegir otro antes de confirmar reemplaza la selección; los demás permanecen fuera de la operación.
-- La integración futura de revocación enviará un solo UUID bajo una clave de idempotencia y aceptará un resultado exitoso, fallido o incierto. No existirá resultado parcial dentro de una solicitud.
-- `revocation_operation.normalized_result` será la fuente técnica del resultado y la constancia identificará el único certificado seleccionado.
+- La integración de revocación envía un solo UUID bajo una clave de idempotencia estable y acepta un resultado exitoso, fallido o incierto. No existe resultado parcial dentro de una solicitud.
+- `revocation_operation.normalized_result` es la fuente técnica del resultado y la constancia identifica el único certificado seleccionado.
 - Las adaptaciones de contratos, persistencia y vistas se realizarán mediante cambios funcionales posteriores, sin anticipar contratos institucionales externos aún no confirmados.
 
 ## Tecnologías y estructura
@@ -45,9 +45,9 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - Las integraciones externas se definirán mediante interfaces y usarán mocks reemplazables mientras no existan contratos oficiales.
 - El segundo servicio de certificados utiliza un puerto propio y un mock determinista en desarrollo. Como no existe un contrato institucional verificado, el adaptador real no inventa endpoints ni payloads y el modo `real` falla de forma cerrada hasta incorporarlo mediante un incremento específico.
 - La consulta detallada se reserva en una transacción breve, ejecuta la llamada externa fuera de la transacción y persiste la colección completa atómicamente. Una recarga reutiliza la instantánea persistida y no vuelve a consumir el proveedor.
-- La selección se guarda en `cancellation_request_certificate`; no existe una tabla adicional. El backend reemplaza de forma transaccional el certificado elegido, valida pertenencia y disponibilidad, acepta la repetición del mismo UUID y permite cambiarlo mientras no exista confirmación ciudadana. Un índice único condicionado impide más de una fila seleccionada por solicitud.
-- El paso 4 obtiene del backend el resumen autoritativo persistido. La aceptación expresa registra `confirmed_at`, la versión estable `CANCELACION_CERTIFICADOS_V1` y un único evento `CONSENT_CONFIRMED`.
-- La confirmación es el punto de no retorno para modificar selección o motivo. Deja la solicitud en `CONFIRMED`, preparada para el siguiente incremento, pero no ejecuta la revocación ni crea una constancia.
+- La selección y el motivo permanecen únicamente en memoria durante los pasos 2 y 3. Una recarga descarta ese borrador y vuelve a la selección de certificado; no se usa almacenamiento del navegador.
+- El paso 4 valida el borrador mediante una revisión backend de solo lectura. La aceptación expresa guarda exactamente un certificado en `cancellation_request_certificate`, el motivo, `confirmed_at`, la versión estable `CANCELACION_CERTIFICADOS_V1` y un único evento `CONSENT_CONFIRMED` dentro de una misma transacción.
+- La confirmación es el punto de no retorno para modificar selección o motivo. Después de esa transacción corta, el backend ejecuta la revocación fuera de la transacción usando la misma clave de idempotencia, persiste el resultado y genera la constancia únicamente ante un resultado exitoso.
 - El texto completo de consentimiento permanece versionado en el backend; MySQL conserva solo su identificador de versión para evitar duplicación y permitir demostrar qué texto fue aceptado.
 - La integración ID Perú se rige por el PDF aprobado v1.2 conservado en `docs/integrations/id-peru/`; toda modificación de autenticación, PKCE, tokens, datos del ciudadano, JWKS o logout debe revisarlo previamente.
 - ID Perú utilizará OAuth 2.0/OpenID Connect Authorization Code con PKCE S256. El backend controlará `state`, PKCE, códigos, tokens, validación criptográfica y comparación del DNI.

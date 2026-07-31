@@ -4,11 +4,12 @@ import static pe.gob.reniec.certificados.cancelacion.cancellation.confirmation.C
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.UUID;
 
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.*;
@@ -16,18 +17,8 @@ import pe.gob.reniec.certificados.cancelacion.cancellation.persistence.*;
 @Service
 public class CancellationConfirmationService {
 
-	private static final Set<CancellationRequestStatus> REVIEWABLE = Set.of(
-			CancellationRequestStatus.REASON_REGISTERED,
-			CancellationRequestStatus.PENDING_CONFIRMATION,
-			CancellationRequestStatus.CONFIRMED);
-
-	private static final Map<CancellationReasonCode, String> REASON_LABELS = Map.of(
-			CancellationReasonCode.THEFT, "Robo",
-			CancellationReasonCode.LOSS, "Pérdida",
-			CancellationReasonCode.DEVICE_OR_NUMBER_CHANGE, "Cambio de equipo o número",
-			CancellationReasonCode.SUSPECTED_UNAUTHORIZED_USE, "Sospecha de uso no autorizado",
-			CancellationReasonCode.OTHER, "Otro motivo");
-
+	private static final int OTHER_MIN_LENGTH = 10;
+	private static final int OTHER_MAX_LENGTH = 300;
 	private final CertificateCancellationRequestRepository requests;
 	private final CancellationRequestCertificateRepository certificates;
 	private final IdentityVerificationRepository verifications;
@@ -47,14 +38,34 @@ public class CancellationConfirmationService {
 	}
 
 	@Transactional(readOnly = true)
-	public CancellationReviewResponse review(Long requestId) {
+	public CancellationReviewResponse preview(Long requestId, CancellationReviewRequest command) {
 		ensurePersistence();
 		CertificateCancellationRequestEntity request = requests.findById(requestId)
 				.orElseThrow(() -> failure(NOT_ALLOWED, "Request not found"));
 		validateIdentity(requestId);
-		validateReviewable(request);
-		CancellationRequestCertificateEntity selected = selectedCertificate(requestId);
-		return response(request, selected);
+		if (request.getRequestStatus() != CancellationRequestStatus.CERTIFICATES_AVAILABLE) {
+			throw failure(NOT_ALLOWED, "Request is not ready for review");
+		}
+		ValidatedDraft draft = validateDraft(command == null ? null : command.certificateUuid(),
+				command == null ? null : command.reasonCode(),
+				command == null ? null : command.otherReason(),
+				certificates.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(requestId), requestId, false);
+		return response(request, draft.certificate(), draft.reason(), draft.otherReason(), false);
+	}
+
+	@Transactional(readOnly = true)
+	public CancellationReviewResponse confirmed(Long requestId) {
+		ensurePersistence();
+		CertificateCancellationRequestEntity request = requests.findById(requestId)
+				.orElseThrow(() -> failure(NOT_ALLOWED, "Request not found"));
+		validateIdentity(requestId);
+		if (request.getConfirmedAt() == null || request.getReasonCode() == null) {
+			throw failure(NOT_ALLOWED, "Only a confirmed request can be recovered");
+		}
+		CancellationRequestCertificateEntity selected = selectedCertificate(
+				certificates.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(requestId),
+				requestId);
+		return response(request, selected, request.getReasonCode(), request.getOtherReason(), true);
 	}
 
 	@Transactional
@@ -66,23 +77,44 @@ public class CancellationConfirmationService {
 		validateIdentity(requestId);
 		validateConsent(command);
 
-		if (request.getRequestStatus() == CancellationRequestStatus.CONFIRMED) {
-			if (request.getConfirmedAt() != null && consent.version().equals(request.getConsentVersion())) {
-				return response(request, selectedCertificateForUpdate(requestId));
+		List<CancellationRequestCertificateEntity> current = certificates.findByRequestIdForUpdate(requestId);
+		ValidatedDraft draft = validateDraft(command.certificateUuid(), command.reasonCode(),
+				command.otherReason(), current, requestId, request.getConfirmedAt() != null);
+
+		if (request.getConfirmedAt() != null) {
+			CancellationRequestCertificateEntity selected = selectedCertificate(
+					current.stream().filter(CancellationRequestCertificateEntity::isSelected).toList(),
+					requestId);
+			if (sameDecision(request, selected, draft, command.consentVersion())) {
+				return response(request, selected, request.getReasonCode(), request.getOtherReason(), true);
 			}
-			throw failure(CONFLICT, "Confirmed request does not match current consent");
+			throw failure(CONFLICT, "Confirmed request does not match the submitted decision");
 		}
 
-		validateReviewable(request);
-		CancellationRequestCertificateEntity selected = selectedCertificateForUpdate(requestId);
-		CancellationRequestStatus previous = request.getRequestStatus();
+		if (request.getRequestStatus() != CancellationRequestStatus.CERTIFICATES_AVAILABLE) {
+			throw failure(NOT_ALLOWED, "Request is not ready for confirmation");
+		}
+		if (current.stream().anyMatch(CancellationRequestCertificateEntity::isSelected)
+				|| request.getReasonCode() != null || request.getOtherReason() != null) {
+			throw failure(CONFLICT, "Unconfirmed request contains persisted draft data");
+		}
+
 		Instant confirmedAt = Instant.now();
-		request.confirm(confirmedAt, consent.version());
+		draft.certificate().select(confirmedAt);
+		try {
+			request.confirmDecision(draft.reason(), draft.otherReason(), confirmedAt, consent.version());
+		}
+		catch (IllegalArgumentException | IllegalStateException exception) {
+			throw failure(CONFLICT, "Request could not be confirmed");
+		}
 		auditEvents.save(new CancellationAuditEventEntity(request,
-				CancellationAuditEventType.CONSENT_CONFIRMED, previous,
+				CancellationAuditEventType.CONSENT_CONFIRMED,
+				CancellationRequestStatus.CERTIFICATES_AVAILABLE,
 				CancellationRequestStatus.CONFIRMED, consent.version(), correlationId,
 				AuditEventOrigin.CITIZEN, confirmedAt));
-		return response(request, selected);
+		certificates.flush();
+		requests.flush();
+		return response(request, draft.certificate(), draft.reason(), draft.otherReason(), true);
 	}
 
 	private void validateIdentity(Long requestId) {
@@ -95,19 +127,6 @@ public class CancellationConfirmationService {
 		}
 	}
 
-	private static void validateReviewable(CertificateCancellationRequestEntity request) {
-		if (!REVIEWABLE.contains(request.getRequestStatus())) {
-			throw failure(NOT_ALLOWED, "Request is not ready for confirmation");
-		}
-		if (request.getReasonCode() == null || !REASON_LABELS.containsKey(request.getReasonCode())) {
-			throw failure(INVALID_REASON, "A valid reason is required");
-		}
-		if (request.getReasonCode() == CancellationReasonCode.OTHER
-				&& (request.getOtherReason() == null || request.getOtherReason().isBlank())) {
-			throw failure(INVALID_REASON, "OTHER requires a description");
-		}
-	}
-
 	private void validateConsent(CancellationConfirmationRequest command) {
 		if (command == null || !Boolean.TRUE.equals(command.consentAccepted())) {
 			throw failure(CONSENT_REQUIRED, "Consent must be accepted");
@@ -117,39 +136,87 @@ public class CancellationConfirmationService {
 		}
 	}
 
-	private CancellationRequestCertificateEntity selectedCertificate(Long requestId) {
-		return validateSelected(requestId, certificates
-				.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(requestId));
-	}
-
-	private CancellationRequestCertificateEntity selectedCertificateForUpdate(Long requestId) {
-		return validateSelected(requestId, certificates.findByRequestIdForUpdate(requestId).stream()
-				.filter(CancellationRequestCertificateEntity::isSelected).toList());
-	}
-
-	private static CancellationRequestCertificateEntity validateSelected(Long requestId,
-			List<CancellationRequestCertificateEntity> selected) {
-		if (selected.size() != 1 || selected.stream().anyMatch(certificate ->
-				certificate.getAvailabilityStatus() != CertificateAvailabilityStatus.AVAILABLE
-						|| certificate.getRequest().getId() == null
-						|| !requestId.equals(certificate.getRequest().getId()))) {
-			throw failure(INVALID_SELECTION, "Exactly one selected available certificate is required");
+	private static ValidatedDraft validateDraft(String submittedUuid, CancellationReasonCode reason,
+			String submittedOtherReason, List<CancellationRequestCertificateEntity> available,
+			Long requestId, boolean allowPersistedSelection) {
+		String uuid = canonicalUuid(submittedUuid);
+		CancellationRequestCertificateEntity certificate = available.stream()
+				.filter(item -> item.getAvailabilityStatus() == CertificateAvailabilityStatus.AVAILABLE
+						|| (allowPersistedSelection && item.isSelected()))
+				.filter(item -> item.getCertificateUuid().equals(uuid))
+				.filter(item -> item.getRequest().getId() != null
+						&& requestId.equals(item.getRequest().getId()))
+				.findFirst()
+				.orElseThrow(() -> failure(INVALID_SELECTION,
+						"Certificate does not belong to the request or is unavailable"));
+		if (reason == null || !CancellationReasonCatalog.supports(reason)) {
+			throw failure(INVALID_REASON, "A controlled reason is required");
 		}
-		return selected.getFirst();
+		String otherReason = normalizeOtherReason(reason, submittedOtherReason);
+		return new ValidatedDraft(certificate, reason, otherReason);
+	}
+
+	private static String normalizeOtherReason(CancellationReasonCode reason, String value) {
+		if (reason != CancellationReasonCode.OTHER) {
+			if (value != null && !value.isBlank()) {
+				throw failure(INVALID_REASON, "Description is only valid for OTHER");
+			}
+			return null;
+		}
+		String normalized = value == null ? "" : value.trim();
+		if (normalized.length() < OTHER_MIN_LENGTH || normalized.length() > OTHER_MAX_LENGTH) {
+			throw failure(INVALID_REASON,
+					"OTHER description must contain between 10 and 300 characters");
+		}
+		return normalized;
+	}
+
+	private static String canonicalUuid(String value) {
+		if (value == null) throw failure(INVALID_SELECTION, "Certificate UUID is required");
+		String normalized = value.toLowerCase(Locale.ROOT);
+		try {
+			UUID parsed = UUID.fromString(normalized);
+			if (!parsed.toString().equals(normalized)) throw new IllegalArgumentException();
+			return normalized;
+		}
+		catch (IllegalArgumentException exception) {
+			throw failure(INVALID_SELECTION, "Certificate UUID must use canonical format");
+		}
+	}
+
+	private static CancellationRequestCertificateEntity selectedCertificate(
+			List<CancellationRequestCertificateEntity> selected, Long requestId) {
+		if (selected.size() != 1) {
+			throw failure(INVALID_SELECTION, "Exactly one selected certificate is required");
+		}
+		CancellationRequestCertificateEntity certificate = selected.getFirst();
+		if (certificate.getRequest().getId() == null
+				|| !requestId.equals(certificate.getRequest().getId())) {
+			throw failure(INVALID_SELECTION, "Selected certificate does not belong to the request");
+		}
+		return certificate;
+	}
+
+	private static boolean sameDecision(CertificateCancellationRequestEntity request,
+			CancellationRequestCertificateEntity selected, ValidatedDraft submitted,
+			String consentVersion) {
+		return selected.getCertificateUuid().equals(submitted.certificate().getCertificateUuid())
+				&& request.getReasonCode() == submitted.reason()
+				&& Objects.equals(request.getOtherReason(), submitted.otherReason())
+				&& Objects.equals(request.getConsentVersion(), consentVersion);
 	}
 
 	private CancellationReviewResponse response(CertificateCancellationRequestEntity request,
-			CancellationRequestCertificateEntity selected) {
-		return new CancellationReviewResponse(request.getRequestStatus().name(), maskDni(request.getDni()),
+			CancellationRequestCertificateEntity selected, CancellationReasonCode reason,
+			String otherReason, boolean confirmed) {
+		return new CancellationReviewResponse(request.getRequestStatus(), maskDni(request.getDni()),
 				new CancellationReviewResponse.SelectedCertificate(selected.getOrderNumber(),
-						selected.getEmissionCreatedAt(), maskUuid(selected.getCertificateUuid())),
-				request.getReasonCode().name(), REASON_LABELS.get(request.getReasonCode()),
-				request.getOtherReason(), consent.consequences(), consent.text(), consent.version(),
-				request.getConfirmedAt(), request.getRequestStatus() == CancellationRequestStatus.CONFIRMED);
+						selected.getEmissionCreatedAt()),
+				reason, CancellationReasonCatalog.label(reason), otherReason, consent.consequences(),
+				consent.text(), consent.version(), request.getConfirmedAt(), confirmed);
 	}
 
 	private static String maskDni(String dni) { return "******" + dni.substring(dni.length() - 2); }
-	private static String maskUuid(String uuid) { return uuid.substring(0, 8) + "…" + uuid.substring(uuid.length() - 4); }
 	private static CancellationConfirmationException failure(
 			CancellationConfirmationException.Reason reason, String message) {
 		return new CancellationConfirmationException(reason, message);
@@ -160,4 +227,7 @@ public class CancellationConfirmationService {
 			throw failure(NOT_ALLOWED, "Confirmation persistence is unavailable");
 		}
 	}
+
+	private record ValidatedDraft(CancellationRequestCertificateEntity certificate,
+			CancellationReasonCode reason, String otherReason) { }
 }
