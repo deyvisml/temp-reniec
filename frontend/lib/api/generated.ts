@@ -561,8 +561,8 @@ export interface components {
         StartRevocationRequest: {
             /** @description Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo. */
             dni: string;
-            /** @description Evidencia efímera de Google reCAPTCHA v2 Checkbox. No se almacena ni se devuelve. */
-            recaptchaToken: string;
+            /** @description Evidencia efímera opcional. Solo se valida cuando el ambiente activa Google reCAPTCHA. */
+            recaptchaToken?: string;
         };
         /** @description Estado técnico del backend y su conexión con MySQL */
         SystemStatusResponse: {

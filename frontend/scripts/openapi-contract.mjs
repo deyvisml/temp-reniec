@@ -101,8 +101,8 @@ function assertRecaptchaRequestBoundary(document) {
   const properties = request?.properties ?? {};
   const required = new Set(request?.required ?? []);
   const token = properties.recaptchaToken;
-  if (!token || !required.has("recaptchaToken") || token.writeOnly !== true || token.maxLength !== 4096) {
-    throw new Error("El contrato inicial debe exigir recaptchaToken efímero, writeOnly y acotado.");
+  if (!token || required.has("recaptchaToken") || token.writeOnly !== true || token.maxLength !== 4096) {
+    throw new Error("El contrato inicial debe mantener recaptchaToken opcional, writeOnly y acotado.");
   }
   const serialized = JSON.stringify(document);
   for (const forbidden of ["RECAPTCHA_SECRET_KEY", "test-recaptcha-valid", "recaptchaSecret", "secretKey"]) {

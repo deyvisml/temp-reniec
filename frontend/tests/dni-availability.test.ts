@@ -81,12 +81,29 @@ describe("DNI eligibility entry", () => {
     expect(init.body).toBe('{"dni":"00000001","recaptchaToken":"ephemeral-test-token"}');
   });
 
+  it("omits anti-bot evidence when reCAPTCHA is disabled", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      requestId: 42,
+      maskedDni: "******01",
+      requestStatus: "PENDING_IDENTITY_VERIFICATION",
+      availabilityResult: "AVAILABLE",
+      canContinue: true,
+      nextStep: "IDENTITY_VERIFICATION",
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await startRevocationRequest("00000001");
+
+    const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(init.body).toBe('{"dni":"00000001"}');
+  });
+
   it("requires valid DNI, configured widget and current token before submission", () => {
-    expect(canSubmitInitialQuery("00000001", "token", false, true)).toBe(true);
-    expect(canSubmitInitialQuery("0000000", "token", false, true)).toBe(false);
-    expect(canSubmitInitialQuery("00000001", "", false, true)).toBe(false);
-    expect(canSubmitInitialQuery("00000001", "token", true, true)).toBe(false);
-    expect(canSubmitInitialQuery("00000001", "token", false, false)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "token", false, true, true)).toBe(true);
+    expect(canSubmitInitialQuery("0000000", "token", false, true, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "", false, true, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "token", true, true, true)).toBe(false);
+    expect(canSubmitInitialQuery("00000001", "token", false, false, true)).toBe(false);
     expect(canSubmitInitialQuery("00000001", "", false, false, false)).toBe(true);
   });
 

@@ -1,6 +1,16 @@
-# Integración local: MySQL → backend → frontend
+# Integración local: MySQL → proveedor local → backend → frontend
 
-Este recorrido levanta las tres capas sin contenerizar backend ni frontend. Usa MySQL 8.4 en Docker, publicado en `3307`, Spring Boot en `8080` y Next.js en `3000`.
+El proyecto ofrece dos modalidades locales. Para probar la aplicación completa sin instalar Java, Node.js ni MySQL, desde la raíz ejecuta:
+
+```powershell
+docker compose up --build -d --wait
+```
+
+Ese stack contiene frontend `3000`, backend `8080` y MySQL `3308`; no contiene la réplica del proveedor. Los pasos siguientes describen la modalidad de desarrollo en la que únicamente las dependencias se ejecutan en Docker y backend/frontend se levantan manualmente.
+
+El stack completo monta obligatoriamente `backend/.env` como archivo privado de solo lectura. Antes de iniciarlo completa allí `ID_PERU_CLIENT_ID` e `ID_PERU_CLIENT_SECRET`; el perfil local usa ID Perú real y no habilita el simulador.
+
+Ambas modalidades son alternativas porque publican los mismos puertos. Ejecuta `docker compose down` en la carpeta de la modalidad activa antes de cambiar, sin agregar `-v`.
 
 ## 1. MySQL
 
@@ -13,9 +23,23 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-El resultado debe mostrar `3307->3306` y estado saludable. Compose crea la base y usuario; no ejecutes SQL manual. El volumen `revocacion-credenciales-local_mysql-data` conserva los datos locales.
+El resultado debe mostrar `3308->3306` y estado saludable. Compose crea la base y usuario; no ejecutes SQL manual. El volumen `revocacion-credenciales-digitales-local_mysql-data` conserva los datos locales.
 
-## 2. Backend
+## 2. Réplica del proveedor oficial
+
+Desde `/credential-provider-mock`, crea el archivo privado y levanta el servicio separado:
+
+```powershell
+Copy-Item .env.example .env
+# Configura PERSONAL_TEST_DNI en .env únicamente si usarás ID Perú real.
+docker compose up --build -d --wait
+docker compose ps
+Invoke-RestMethod http://localhost:8081/health
+```
+
+La réplica persiste revocaciones en un volumen Docker y reproduce los tres endpoints oficiales. Su API key local es ficticia; no reemplaces ese valor por una clave productiva. Los fixtures y el endpoint protegido de restauración se documentan en [`credential-provider-mock/README.md`](../credential-provider-mock/README.md).
+
+## 3. Backend
 
 En otra terminal, desde `/backend`:
 
@@ -23,7 +47,7 @@ En otra terminal, desde `/backend`:
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-El perfil importa opcionalmente `backend/.env`; Flyway migra o valida el esquema al iniciar y el adaptador Google exige `RECAPTCHA_SECRET_KEY`. Comprueba ambas rutas:
+El perfil importa opcionalmente `backend/.env`; Flyway migra o valida el esquema al iniciar y reCAPTCHA permanece deshabilitado. Comprueba ambas rutas:
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/actuator/health
@@ -32,11 +56,11 @@ Invoke-WebRequest http://localhost:8080/api/v1/system/status -Headers @{ "X-Corr
 
 La segunda respuesta debe ser `200`, contener backend/MySQL `UP` y devolver `X-Correlation-ID`.
 
-Por defecto `CREDENTIAL_PROVIDER_MODE=mock`. Para comprobar el contrato oficial contra un servicio local, configura `real`, `CREDENTIAL_PROVIDER_BASE_URL=http://127.0.0.1:<puerto>` y una `CREDENTIAL_PROVIDER_API_KEY` de prueba. Fuera de los perfiles local/test la URL debe usar HTTPS; en producción el modo real y ambas credenciales son obligatorios. Nunca copies una clave real al repositorio ni a los logs.
+El perfil local usa por defecto `CREDENTIAL_PROVIDER_MODE=real`, `CREDENTIAL_PROVIDER_BASE_URL=http://localhost:8081` y la misma API key ficticia de la réplica. Dentro del stack completo usa `http://host.docker.internal:8081`, permitido únicamente por el perfil local. El backend conserva `http://localhost:8080`, incluido el callback de ID Perú. Fuera de desarrollo loopback o Docker local, la URL del proveedor debe usar HTTPS; en producción el modo real y ambas credenciales son obligatorios. Nunca copies una clave real al repositorio ni a los logs.
 
-La operación inicial `POST /api/v1/revocation-requests` valida reCAPTCHA antes de cualquier escritura y consulta únicamente la existencia de credenciales disponibles. Su respuesta no contiene token, lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del servicio de disponibilidad se documentan en [`backend/README.md`](../backend/README.md).
+La operación inicial `POST /api/v1/revocation-requests` no usa reCAPTCHA y consulta únicamente la existencia de credenciales disponibles. Su respuesta no contiene token, lista, cantidad, índice, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas se documentan en [`credential-provider-mock/README.md`](../credential-provider-mock/README.md).
 
-## 3. Contrato y frontend
+## 4. Contrato y frontend
 
 Desde `/frontend`:
 
@@ -51,15 +75,9 @@ npm run dev
 
 Abre `http://localhost:3000`. El formulario de inicio consume el contrato propio del backend y solo permite continuar cuando la existencia queda confirmada. El navegador también puede consultar `http://localhost:8080/api/v1/system/status`; CORS permite el origen local exacto y expone la correlación.
 
-## Prueba manual de reCAPTCHA v2 Checkbox
+## reCAPTCHA deshabilitado
 
-El proyecto institucional de referencia usa `@google-recaptcha/react` 2.4.2, verificación server-to-server con `siteverify` y el par oficial de pruebas publicado por Google. En este proyecto se adaptaron esos tres elementos a Next.js/Spring Boot, pero no se copiaron su estado global, React Query, circuit breaker ni modo de bypass frontend.
-
-Para probar manualmente, coloca la site key oficial de pruebas en `frontend/.env.local` como `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` y su secret correspondiente en `backend/.env` como `RECAPTCHA_SECRET_KEY`. Ambas rutas están ignoradas y los valores no deben agregarse a `.env.example`, código, capturas o commits. Configura localmente `RECAPTCHA_ALLOWED_HOSTNAMES=localhost,testkey.google.com`, reinicia ambas aplicaciones, completa la casilla y envía un DNI ficticio. Las claves oficiales de prueba reportan `testkey.google.com` como hostname de la verificación, aunque el formulario se ejecute en `localhost`; Google también muestra una advertencia visual indicando que la clave es de prueba.
-
-Verifica con teclado en anchos móvil y escritorio: foco visible en la casilla, botón bloqueado antes del desafío, un solo envío, y widget nuevo después de cada resultado o error. Las claves oficiales de prueba aceptan desafíos de desarrollo y están expresamente prohibidas en producción. `testkey.google.com` también debe limitarse al entorno local; producción requiere claves propias restringidas al dominio institucional y una allowlist externa que contenga únicamente los hostnames reales.
-
-Esta integración no agrega migraciones, tablas, columnas ni repositorios: la evidencia anti-bot es efímera y nunca llega a MySQL.
+Local y producción utilizan `RECAPTCHA_MODE=disabled` y `NEXT_PUBLIC_RECAPTCHA_ENABLED=false`. El frontend no renderiza el widget ni envía evidencia ficticia, y el backend permite continuar sin `recaptchaToken`. No se requieren claves de Google en ninguno de estos dos ambientes.
 
 ## Verificación completa
 
@@ -89,4 +107,10 @@ Detén Next.js y Spring Boot con `Ctrl+C`. Desde `/backend`, detén MySQL conser
 docker compose down
 ```
 
-No uses `docker compose down -v` salvo que hayas confirmado que todos los datos locales son desechables. No confirmes `backend/.env`, `frontend/.env.local`, credenciales ni logs.
+Desde `/credential-provider-mock`, detén la réplica conservando sus credenciales mutadas:
+
+```powershell
+docker compose down
+```
+
+No uses `docker compose down -v` salvo que hayas confirmado que todos los datos locales son desechables. No confirmes ninguno de los archivos `.env`, el DNI personal, credenciales ni logs.

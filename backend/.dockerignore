@@ -1,0 +1,10 @@
+target/
+storage/
+.env
+.idea/
+.vscode/
+*.iml
+*.log
+Dockerfile*
+compose*.yml
+compose*.yaml

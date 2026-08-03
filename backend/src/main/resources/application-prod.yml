@@ -4,6 +4,8 @@ spring:
       on-profile: prod
 
 app:
+  recaptcha:
+    mode: disabled
   credential-provider:
     mode: real
     base-url: ${CREDENTIAL_PROVIDER_BASE_URL}

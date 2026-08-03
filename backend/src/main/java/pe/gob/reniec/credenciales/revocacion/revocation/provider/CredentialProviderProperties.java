@@ -42,11 +42,16 @@ public class CredentialProviderProperties {
 		}
 		String scheme = baseUrl.getScheme();
 		if ("https".equalsIgnoreCase(scheme)) return;
-		if (!"http".equalsIgnoreCase(scheme)
-				|| !environment.acceptsProfiles(Profiles.of("local", "test"))
-				|| !isLoopback(baseUrl.getHost())) {
-			throw new IllegalStateException("app.credential-provider.base-url must use HTTPS outside loopback development");
+		if (!"http".equalsIgnoreCase(scheme) || !isPermittedLocalHttpHost(baseUrl.getHost())) {
+			throw new IllegalStateException("app.credential-provider.base-url must use HTTPS outside local development");
 		}
+	}
+
+	private boolean isPermittedLocalHttpHost(String host) {
+		boolean loopbackDevelopment = environment.acceptsProfiles(Profiles.of("local", "test")) && isLoopback(host);
+		boolean localDockerGateway = environment.acceptsProfiles(Profiles.of("local"))
+				&& "host.docker.internal".equalsIgnoreCase(host);
+		return loopbackDevelopment || localDockerGateway;
 	}
 
 	private static boolean isLoopback(String host) {

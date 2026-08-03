@@ -9,6 +9,7 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -36,6 +37,7 @@ public final class RealCredentialProviderAdapter implements DigitalCredentialAva
 	private final RestClient client;
 	private final Clock clock;
 
+	@Autowired
 	public RealCredentialProviderAdapter(CredentialProviderProperties properties) {
 		this(properties, Clock.systemUTC());
 	}

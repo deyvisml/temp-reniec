@@ -29,23 +29,24 @@ app:
     mock:
       simulated-timeout: ${AVAILABILITY_MOCK_SIMULATED_TIMEOUT:2s}
   recaptcha:
-    mode: ${RECAPTCHA_MODE:google}
+    mode: disabled
     google:
       secret-key: ${RECAPTCHA_SECRET_KEY}
       verify-uri: ${RECAPTCHA_VERIFY_URI:https://www.google.com/recaptcha/api/siteverify}
       timeout: ${RECAPTCHA_TIMEOUT:3s}
       allowed-hostnames: ${RECAPTCHA_ALLOWED_HOSTNAMES:localhost}
   id-peru:
-    mode: ${ID_PERU_MODE:mock}
+    mode: real
     version: v1
     frontend-return-path: /autorizacion
     client-id: ${ID_PERU_CLIENT_ID:}
     client-secret: ${ID_PERU_CLIENT_SECRET:}
     referer: ${ID_PERU_REFERER:http://localhost:3000/autorizacion}
     flow-secret: ${ID_PERU_FLOW_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
-    mock-scenario: ${ID_PERU_MOCK_SCENARIO:MATCH}
   credential-provider:
-    mode: ${CREDENTIAL_PROVIDER_MODE:mock}
+    mode: ${CREDENTIAL_PROVIDER_MODE:real}
+    base-url: ${CREDENTIAL_PROVIDER_BASE_URL:http://localhost:8081}
+    api-key: ${CREDENTIAL_PROVIDER_API_KEY:local-credential-provider-key}
   revocation:
     mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
     propagation-delay: ${REVOCATION_PROPAGATION_DELAY:60s}

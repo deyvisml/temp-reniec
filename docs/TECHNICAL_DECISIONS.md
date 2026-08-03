@@ -56,7 +56,7 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - La sesión nace únicamente después de una disponibilidad positiva y acompaña el mismo trámite durante ID Perú. La verificación exitosa eleva esa sesión existente; no crea una autorización paralela. Logout invalida la familia, elimina cookies y abandona solo una solicitud todavía reversible.
 - `/` permanece pública. `/revocacion` y la variante local `/autorizacion` son internas y se autorizan con el estado persistido, sin colocar DNI, solicitud, tokens o pasos en la URL.
 - El flujo ciudadano utiliza `/revocacion` como única URL canónica. Los pasos se resuelven mediante estado controlado y contexto temporal del backend, sin codificar el paso, DNI, identificador de solicitud, credenciales o resultados de autenticación en la URL.
-- La consulta pública inicial está protegida por Google reCAPTCHA v2 Checkbox. El frontend conserva el token solo en memoria y el backend lo valida mediante un puerto antes de persistir o consultar disponibilidad.
+- La consulta pública inicial no utiliza reCAPTCHA en local ni producción. El contrato conserva evidencia anti-bot opcional únicamente para pruebas técnicas y una posible reactivación futura.
 - La integración Google usa `RestClient`, timeout acotado y allowlist exacta de hostnames. No persiste CAPTCHA, IP ni payloads, y no incorpora reintentos, circuit breaker, fingerprinting o rate limiting en memoria.
 - No se inventarán contratos para la consulta de credenciales, la revocación o aspectos de ID Perú no definidos en el PDF y el convenio, como parámetros de logout remoto.
 - No se incluirán módulos administrativos ni funcionalidades fuera del flujo ciudadano.

@@ -22,9 +22,8 @@ Abre `http://localhost:3000`. La portada permanece visible si el backend está d
 | `BACKEND_URL` | Solo servidor y herramientas | `http://localhost:8080` | URL del backend para ejecución servidor, sincronización y pruebas reales. |
 | `NEXT_PUBLIC_BACKEND_URL` | Navegador y servidor | `http://localhost:8080` | Dirección pública utilizada por la consulta ciudadana. |
 | `NEXT_PUBLIC_APP_ENV` | Navegador y servidor | `local` | Etiqueta pública del ambiente. |
-| `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` | Navegador y servidor | Clave pública aprobada | Site key de Google reCAPTCHA v2 Checkbox, incorporada al bundle durante el build. |
 
-Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca deben contener secretos. La site key es pública; la secret permanece exclusivamente en el backend. `.env.local` está ignorado por Git. Si la site key falta, el build sigue funcionando pero el formulario queda bloqueado con un mensaje controlado.
+Las variables `NEXT_PUBLIC_*` quedan incorporadas al bundle al compilar y nunca deben contener secretos. reCAPTCHA permanece deshabilitado en la aplicación, no requiere variables ni site key y el formulario envía únicamente el DNI. `.env.local` está ignorado por Git.
 
 ## Contrato OpenAPI y tipos
 

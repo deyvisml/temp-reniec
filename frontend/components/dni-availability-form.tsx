@@ -12,8 +12,7 @@ import { HttpClientError } from "@/lib/http-client";
 import { RecaptchaCheckbox, RECAPTCHA_SITE_KEY } from "@/components/recaptcha-checkbox";
 
 export const DNI_PATTERN = /^[0-9]{8}$/;
-export const RECAPTCHA_ENABLED = process.env.NEXT_PUBLIC_RECAPTCHA_ENABLED?.trim().toLowerCase() !== "false";
-const LOCAL_ANTI_BOT_EVIDENCE = "local-development-bypass";
+export const RECAPTCHA_ENABLED = false;
 
 const iconStroke = "fill-none stroke-current stroke-[1.8] [stroke-linecap:round] [stroke-linejoin:round]";
 const primaryActionClasses = "flex min-h-[58px] w-full cursor-pointer items-center justify-center gap-3 rounded-lg border-0 bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white no-underline transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none max-[480px]:min-h-[55px] [&_svg]:w-[23px]";
@@ -108,7 +107,7 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
       return;
     }
 
-    const antiBotEvidence = RECAPTCHA_ENABLED ? recaptchaToken : LOCAL_ANTI_BOT_EVIDENCE;
+    const antiBotEvidence = RECAPTCHA_ENABLED ? recaptchaToken : undefined;
 
     setFieldError(undefined);
     submissionInFlightRef.current = true;

@@ -7,10 +7,10 @@ import { requestJson, type HttpResult } from "@/lib/http-client";
 
 export function startRevocationRequest(
   dni: string,
-  recaptchaToken: string,
+  recaptchaToken?: string,
   signal?: AbortSignal,
 ): Promise<HttpResult<RevocationRequestResponse>> {
-  const body: StartRevocationRequest = { dni, recaptchaToken };
+  const body: StartRevocationRequest = recaptchaToken ? { dni, recaptchaToken } : { dni };
   return requestJson<RevocationRequestResponse>(REVOCATION_REQUESTS_PATH, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

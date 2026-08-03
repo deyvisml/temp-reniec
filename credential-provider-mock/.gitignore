@@ -1,0 +1,6 @@
+.env
+data/*.json
+data/*.tmp
+dist/
+node_modules/
+coverage/

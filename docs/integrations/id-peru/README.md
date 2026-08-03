@@ -45,7 +45,7 @@ Esta regla corrige la restricción anterior que documentaba el callback únicame
 
 ## Contrato mínimo de configuración
 
-El perfil local permite elegir el adaptador con `ID_PERU_MODE=mock|real` y usa `mock` cuando la variable no está definida. Esto conserva la separación del proyecto de referencia entre ambiente y proveedor. El perfil productivo selecciona obligatoriamente la integración real.
+Los perfiles local y productivo seleccionan obligatoriamente la integración real. Local usa ID Perú v1 y obtiene sus credenciales desde el archivo privado `backend/.env`; producción usa ID Perú v2 y recibe sus secretos desde la plataforma de despliegue. El simulador queda reservado al perfil de pruebas y a escenarios técnicos aislados.
 
 Para modo real se requieren las siguientes bases y credenciales. Local aporta el referer registrado como valor predeterminado; producción debe suministrarlo externamente:
 

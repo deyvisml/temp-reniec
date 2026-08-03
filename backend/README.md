@@ -1,6 +1,6 @@
 # Backend de revocación de credenciales digitales
 
-Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano protegido por Google reCAPTCHA v2 Checkbox para iniciar una solicitud y consultar si existen credenciales disponibles mediante un mock local reemplazable.
+Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el flujo ciudadano para consultar y revocar credenciales digitales mediante el proveedor configurado.
 
 ## Requisitos previos
 
@@ -97,18 +97,17 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `AVAILABILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta de existencia interrumpida. |
 | `AVAILABILITY_TIMEOUT` | `1s` | Tiempo máximo del primer servicio de disponibilidad. |
 | `AVAILABILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
-| `RECAPTCHA_SECRET_KEY` | Obligatoria en `local` | Clave privada v2; solo backend y nunca una variable `NEXT_PUBLIC_*`. |
-| `RECAPTCHA_VERIFY_URI` | Endpoint oficial de Google | URI HTTPS de `siteverify`. |
-| `RECAPTCHA_TIMEOUT` | `3s` | Timeout positivo de conexión y lectura. |
-| `RECAPTCHA_ALLOWED_HOSTNAMES` | `localhost` | Lista exacta, separada por comas, de hostnames aceptados. |
-| `ID_PERU_MODE` | `mock` en local | Selecciona `mock` o `real` sin cambiar el perfil de desarrollo. Producción siempre usa `real`. |
-| `ID_PERU_MOCK_SCENARIO` | `MATCH` | `MATCH`, `MISMATCH`, `CANCELLED`, `REJECTED`, `TIMEOUT`, `UNAVAILABLE` o `INVALID`. |
+| `RECAPTCHA_MODE` | `disabled` en local y producción | Desactiva la verificación anti-bot sin bloquear el inicio ciudadano. |
+| Modo de ID Perú | `real` en local y producción | Local usa v1 y producción v2. El simulador se conserva únicamente para pruebas automatizadas. |
 | `APP_FRONTEND_BASE_URL` | `http://localhost:3000` en local | Base del frontend; el retorno se deriva como `/revocacion`. |
 | `APP_BACKEND_BASE_URL` | `http://localhost:8080` en local | Base del backend; en local se deriva el callback registrado `/api/v1/idperu/callback`. |
 | Versión de ID Perú | `v1` en local y `v2` en producción | Se define por perfil: v1 usa `idaas.reniec.gob.pe`; v2 usa `idaas2.reniec.gob.pe` y PKCE. No requiere una variable manual. |
 | `ID_PERU_CLIENT_ID` / `ID_PERU_CLIENT_SECRET` | Obligatorias en modo `real` | Credenciales autorizadas exclusivas del backend. |
 | `ID_PERU_REFERER` | `/autorizacion` local por defecto; obligatoria en producción | Referer autorizado por RENIEC; HTTP solo se admite para localhost local. |
 | `ID_PERU_FLOW_SECRET` | Valor local de desarrollo; obligatorio externo en `prod` | Base64 de exactamente 32 bytes; deriva claves separadas para PKCE y continuidad. |
+| `CREDENTIAL_PROVIDER_MODE` | `real` en local y producción | Usa la réplica local en `8081`; `mock` permanece disponible para pruebas aisladas. |
+| `CREDENTIAL_PROVIDER_BASE_URL` | `http://localhost:8081` en local | Base común de los tres endpoints oficiales. Producción exige HTTPS. |
+| `CREDENTIAL_PROVIDER_API_KEY` | Clave ficticia local | Header privado `x-api-key`; producción exige un secreto externo. |
 | `SESSION_SIGNING_SECRET` | Valor conocido solo en local; obligatorio externo en `prod` | Base64 de al menos 32 bytes para firmar access y refresh JWT. |
 | `SESSION_ACCESS_TTL` | `15m` | Vigencia corta del access JWT, alineada con el proyecto de autorización de referencia. |
 | `SESSION_REFRESH_TTL` | `3d` | Ventana actualizable de la operación activa; cada rotación válida emite un refresh con esta vigencia. |
@@ -116,7 +115,7 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
 
-Cuando se utilicen las claves oficiales de prueba de Google, configura localmente `RECAPTCHA_ALLOWED_HOSTNAMES=localhost,testkey.google.com`: esas claves reportan `testkey.google.com` en la respuesta de verificación. No incluyas ese hostname ni credenciales de prueba en producción.
+El adaptador Google se conserva únicamente para pruebas técnicas aisladas. Los perfiles `local` y `prod` no necesitan site key, secret, URI ni allowlist de reCAPTCHA.
 
 No confirmes `.env` ni credenciales reales en el repositorio y no uses variables públicas del frontend para secretos. La configuración productiva permanece fuera de este entorno local.
 
@@ -147,9 +146,10 @@ Flyway es el único propietario del esquema y aplica el historial V1–V7 hasta 
 
 ## Perfiles
 
-- `local`: importa opcionalmente `.env`, conecta mediante `DB_*`, activa Google reCAPTCHA y usa ID Perú simulado por defecto. El modo `real` es opt-in y falla de forma cerrada si falta configuración.
+- `local`: importa opcionalmente `.env`, conecta mediante `DB_*`, deshabilita reCAPTCHA, consume la réplica real de credenciales en `8081` y usa ID Perú simulado por defecto.
 - `test`: puerto aleatorio y adaptador anti-bot determinista sin red; habilita OpenAPI para verificación automatizada, mantiene Swagger UI deshabilitada y entrega MySQL efímero mediante Testcontainers a las `*IT`.
-- Sin perfil: OpenAPI y Swagger UI permanecen deshabilitados y la consulta pública falla de forma cerrada, sin bypass.
+- `prod`: deshabilita reCAPTCHA y exige ID Perú y proveedor de credenciales reales.
+- Sin perfil: OpenAPI y Swagger UI permanecen deshabilitados.
 
 La configuración de producción permanece diferida.
 
@@ -183,32 +183,20 @@ El retorno siempre responde `303 See Other` hacia una URI frontend fija. Éxitos
 
 Los códigos y tokens de ID Perú no se devuelven al frontend ni se persisten. El verifier se cifra temporalmente con AES-GCM y se elimina al terminar. Una verificación correcta eleva la misma sesión a identidad verificada. Los refresh JWT rotan y solo sus hashes se guardan; logout invalida la familia, elimina ambas cookies y abandona una solicitud reversible. No existe recuperación multidispositivo ni reapertura de trámites finalizados.
 
-El ambiente y el adaptador son decisiones separadas. El perfil `local` usa `ID_PERU_MODE=mock` de forma predeterminada, pero permite `ID_PERU_MODE=real` con credenciales autorizadas de desarrollo; `prod` permanece obligatoriamente en `real`. El perfil `test` conserva el simulador controlado.
-
-### Probar ID Perú simulado en local
-
-En `backend/.env` conserva:
-
-```env
-ID_PERU_MODE=mock
-ID_PERU_MOCK_SCENARIO=MATCH
-```
-
-Inicia normalmente el backend con el perfil `local`. El navegador usará el proveedor simulado interno y completará el mismo caso de uso y estados persistentes.
+Los perfiles `local` y `prod` usan obligatoriamente ID Perú real. El perfil `test` conserva el simulador controlado para pruebas automatizadas.
 
 ### Probar ID Perú real en local
 
 Completa en `backend/.env` exclusivamente las credenciales autorizadas para desarrollo:
 
 ```env
-ID_PERU_MODE=real
 ID_PERU_CLIENT_ID=valor-autorizado
 ID_PERU_CLIENT_SECRET=valor-autorizado
 APP_FRONTEND_BASE_URL=http://localhost:3000
 APP_BACKEND_BASE_URL=http://localhost:8080
 ```
 
-En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/revocacion`. Reinicia el backend después de cambiar el perfil o el modo; no es necesario modificar YAML ni Java.
+En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/revocacion`. Reinicia el backend después de cambiar las credenciales.
 
 Para la integración real local, ejecuta el backend con **JDK 21** (también es la versión de compilación del proyecto). Se comprobó que el endpoint institucional de ID Perú valida su cadena TLS con el almacén de credenciales de JDK 21, mientras que la instalación local de JDK 22 puede rechazarla con `PKIX path building failed`. En IntelliJ selecciona `C:\Program Files\Java\jdk-21.0.11` como JRE de la configuración de ejecución. No se debe desactivar la validación TLS ni agregar un trust manager permisivo para sortear este error.
 
@@ -227,11 +215,11 @@ La referencia obligatoria es [`docs/integrations/id-peru/IDAAS-V2-Especificacion
 
 ## Inicio ciudadano y mock de disponibilidad
 
-`POST /api/v1/revocation-requests` recibe JSON con un DNI de ocho dígitos y `recaptchaToken`. El backend valida primero la evidencia con Google; solo después crea una solicitud, registra el intento y determina si existe al menos una credencial disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni persiste el token, ni crea credenciales individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; DNI, token y secret no aparecen en URLs, errores ni logs.
+`POST /api/v1/revocation-requests` recibe el DNI de ocho dígitos, crea una solicitud y determina si existe al menos una credencial disponible. La evidencia anti-bot es opcional en el contrato y no se envía desde local o producción mientras reCAPTCHA esté deshabilitado. La respuesta incluye `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado, sin exponer credenciales individuales, cantidad, índice, fecha o UUID.
 
-Los errores anti-bot son `RECAPTCHA_REQUIRED`, `RECAPTCHA_REJECTED`, `RECAPTCHA_EXPIRED_OR_DUPLICATE`, `RECAPTCHA_UNAVAILABLE`, `RECAPTCHA_TIMEOUT` y `RECAPTCHA_INVALID_RESPONSE`. Ninguno se interpreta como ausencia de credenciales. El adaptador usa `RestClient`, formulario `secret`/`response`, timeout acotado y comparación exacta de hostname; no envía la IP del ciudadano, no reintenta y no incorpora circuit breaker.
+Los errores anti-bot permanecen definidos exclusivamente para las pruebas del adaptador Google y una eventual reactivación explícita; no forman parte del recorrido local o productivo actual.
 
-El adaptador de perfiles `local` y `test` es determinista y no representa el contrato institucional:
+El adaptador interno usado por pruebas aisladas es determinista y no representa el contrato institucional:
 
 | DNI ficticio | Resultado |
 | --- | --- |
@@ -247,7 +235,7 @@ Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que e
 
 Después de una identidad verificada, `GET /api/v1/revocation-requests/current/digital-credentials` obtiene una sola vez el listado detallado de credenciales vigentes y revocadas y devuelve en recargas la instantánea persistida. Cada elemento expone `status: ACTIVE | REVOKED` y `revokedAt`; la fecha es obligatoria exclusivamente para `REVOKED`. La selección permanece en memoria durante los pasos 2 y 3 y solo admite credenciales `ACTIVE`.
 
-El perfil `local` usa `CREDENTIAL_PROVIDER_MODE=mock`. Los tres servicios oficiales comparten `CREDENTIAL_PROVIDER_BASE_URL`, `CREDENTIAL_PROVIDER_API_KEY`, `CREDENTIAL_PROVIDER_CONNECT_TIMEOUT` y `CREDENTIAL_PROVIDER_READ_TIMEOUT`. Para una prueba real local se admite HTTP solo contra loopback; producción obliga `real`, HTTPS y credenciales completas. Los escenarios deterministas del mock son:
+El perfil `local` usa por defecto `CREDENTIAL_PROVIDER_MODE=real` contra la réplica independiente en `http://localhost:8081`; el backend y el callback de ID Perú permanecen en `http://localhost:8080`. Los tres servicios oficiales comparten `CREDENTIAL_PROVIDER_BASE_URL`, `CREDENTIAL_PROVIDER_API_KEY`, `CREDENTIAL_PROVIDER_CONNECT_TIMEOUT` y `CREDENTIAL_PROVIDER_READ_TIMEOUT`. En local se admite HTTP solo contra loopback; producción obliga HTTPS y credenciales externas completas. El mock interno se conserva para pruebas unitarias y ofrece estos escenarios deterministas:
 
 | DNI ficticio | Listado detallado |
 | --- | --- |

@@ -2,7 +2,6 @@ package pe.gob.reniec.credenciales.revocacion.revocation.initiation;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
@@ -14,9 +13,8 @@ public record StartRevocationRequest(
 		@Size(min = 8, max = 8, message = "El DNI debe contener 8 dígitos.")
 		@Pattern(regexp = DniRule.REGEX, message = "El DNI debe contener solo dígitos.")
 		String dni,
-		@Schema(description = "Evidencia efímera de Google reCAPTCHA v2 Checkbox. No se almacena ni se devuelve.",
+		@Schema(description = "Evidencia efímera opcional. Solo se valida cuando el ambiente activa Google reCAPTCHA.",
 				minLength = 1, maxLength = 4096, writeOnly = true)
-		@NotBlank(message = "La verificación de seguridad es obligatoria.")
 		@Size(max = 4096, message = "La verificación de seguridad no tiene un formato válido.")
 		String recaptchaToken) {
 }

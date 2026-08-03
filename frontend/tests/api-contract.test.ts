@@ -40,7 +40,7 @@ describe("generated API aliases", () => {
     );
     const schema = openApi.components.schemas.StartRevocationRequest;
 
-    expect(schema.required).toContain("recaptchaToken");
+    expect(schema.required).not.toContain("recaptchaToken");
     expect(schema.properties.recaptchaToken).toMatchObject({ writeOnly: true, maxLength: 4096 });
     expect(JSON.stringify(openApi)).not.toMatch(/test-recaptcha-valid|RECAPTCHA_SECRET_KEY|secretKey/);
   });

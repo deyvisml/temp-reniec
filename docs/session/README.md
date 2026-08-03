@@ -1,6 +1,6 @@
 # Sesión transaccional del flujo ciudadano
 
-La portada `/` es pública. Después de que reCAPTCHA y la consulta inicial confirman `AVAILABLE`, el backend crea una única `revocation_flow_session` vinculada a la solicitud y entrega dos cookies `HttpOnly`:
+La portada `/` es pública. Después de que la consulta inicial confirma `AVAILABLE`, el backend crea una única `revocation_flow_session` vinculada a la solicitud y entrega dos cookies `HttpOnly`:
 
 - `revocacion_access`: JWT corto, usado para autorizar APIs internas.
 - `revocacion_refresh`: JWT rotatorio, usado únicamente en `POST /api/v1/session/refresh`.

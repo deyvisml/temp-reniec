@@ -209,10 +209,10 @@
         "required": [
           "digitalCredentialUuid",
           "emissionCreatedAt",
-          "statusListIndex",
           "revokedAt",
           "selected",
-          "status"
+          "status",
+          "statusListIndex"
         ],
         "type": "object"
       },
@@ -676,7 +676,7 @@
             "type": "string"
           },
           "recaptchaToken": {
-            "description": "Evidencia efímera de Google reCAPTCHA v2 Checkbox. No se almacena ni se devuelve.",
+            "description": "Evidencia efímera opcional. Solo se valida cuando el ambiente activa Google reCAPTCHA.",
             "maxLength": 4096,
             "minLength": 0,
             "type": "string",
@@ -684,8 +684,7 @@
           }
         },
         "required": [
-          "dni",
-          "recaptchaToken"
+          "dni"
         ],
         "type": "object"
       },
