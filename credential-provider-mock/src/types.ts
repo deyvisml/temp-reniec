@@ -21,4 +21,5 @@ export interface AppConfig {
   seedFile: string;
   dataFile: string;
   personalTestDni?: string;
+  additionalTestDni?: string;
 }

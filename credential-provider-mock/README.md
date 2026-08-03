@@ -11,7 +11,7 @@ docker compose up --build -d --wait
 docker compose ps
 ```
 
-`PERSONAL_TEST_DNI` es opcional, debe contener ocho dígitos y nunca debe confirmarse en Git. Al configurarlo se generan dos credenciales vigentes y una revocada. Los cambios se conservan en el volumen `credential-provider-mock-local_credential-provider-data`.
+`PERSONAL_TEST_DNI` y `ADDITIONAL_TEST_DNI` son opcionales, deben contener ocho dígitos distintos y nunca deben confirmarse en Git. Para el primero se generan dos credenciales vigentes y una revocada; para el segundo, cuatro vigentes y una revocada. Los cambios se conservan en el volumen `credential-provider-mock-local_credential-provider-data`.
 
 El healthcheck público está disponible en:
 

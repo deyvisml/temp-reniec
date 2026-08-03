@@ -142,6 +142,20 @@ describe("credential provider HTTP contracts", () => {
     expect(restored.json()[0]).toMatchObject({ credentialStatus: 0, revocateDate: null });
   });
 
+  it("provisions four active credentials and one revoked credential for the additional DNI", async () => {
+    await app.close();
+    app = await buildApp(config(dataFile, undefined, "87654322"));
+
+    const response = await post("/api/v1/list-credentials", { dni: "87654322" });
+    const credentials = response.json<Array<{ credentialStatus: number; statusListIndex: number }>>();
+
+    expect(credentials).toHaveLength(5);
+    expect(credentials.filter((credential) => credential.credentialStatus === 0)).toHaveLength(4);
+    expect(credentials.filter((credential) => credential.credentialStatus === 1)).toHaveLength(1);
+    expect(credentials.map((credential) => credential.statusListIndex)).toEqual([51, 52, 53, 54, 55]);
+    expect(response.body).not.toContain("87654322");
+  });
+
   function post(url: string, payload: unknown) {
     return app.inject({
       method: "POST",
@@ -152,7 +166,7 @@ describe("credential provider HTTP contracts", () => {
   }
 });
 
-function config(dataFile: string, personalTestDni?: string): AppConfig {
+function config(dataFile: string, personalTestDni?: string, additionalTestDni?: string): AppConfig {
   return {
     host: "127.0.0.1",
     port: 8081,
@@ -160,5 +174,6 @@ function config(dataFile: string, personalTestDni?: string): AppConfig {
     seedFile: SEED_FILE,
     dataFile,
     ...(personalTestDni ? { personalTestDni } : {}),
+    ...(additionalTestDni ? { additionalTestDni } : {}),
   };
 }

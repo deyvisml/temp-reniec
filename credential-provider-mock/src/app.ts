@@ -35,7 +35,12 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
     logger: false,
     ajv: { customOptions: { removeAdditional: false } },
   });
-  const store = new CredentialStore(config.seedFile, config.dataFile, config.personalTestDni);
+  const store = new CredentialStore(
+    config.seedFile,
+    config.dataFile,
+    config.personalTestDni,
+    config.additionalTestDni,
+  );
   await store.initialize();
 
   app.addHook("onRequest", async (request, reply) => {
