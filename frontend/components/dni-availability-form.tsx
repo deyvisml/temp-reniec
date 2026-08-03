@@ -6,8 +6,8 @@ import {
   AvailabilityOutcomeAlert,
   type AvailabilityOutcomeView,
 } from "@/components/availability-outcome-alert";
-import type { CancellationRequestResponse } from "@/lib/api/contracts";
-import { startCancellationRequest } from "@/lib/api/cancellation-requests";
+import type { RevocationRequestResponse } from "@/lib/api/contracts";
+import { startRevocationRequest } from "@/lib/api/revocation-requests";
 import { HttpClientError } from "@/lib/http-client";
 import { RecaptchaCheckbox, RECAPTCHA_SITE_KEY } from "@/components/recaptcha-checkbox";
 
@@ -35,7 +35,7 @@ export function canSubmitInitialQuery(
   return !pending && !validateDni(dni) && antiBotReady;
 }
 
-export function isConsistentInitialResponse(response: CancellationRequestResponse): boolean {
+export function isConsistentInitialResponse(response: RevocationRequestResponse): boolean {
   if (!Number.isSafeInteger(response.requestId) || response.requestId <= 0) return false;
   if (!/^\*{6}[0-9]{2}$/.test(response.maskedDni)) return false;
 
@@ -48,7 +48,7 @@ export function isConsistentInitialResponse(response: CancellationRequestRespons
   if (response.availabilityResult === "NOT_AVAILABLE") {
     return !response.canContinue
       && response.nextStep === null
-      && response.requestStatus === "NO_CERTIFICATES_AVAILABLE";
+      && response.requestStatus === "NO_DIGITAL_CREDENTIALS_AVAILABLE";
   }
 
   if (response.availabilityResult === "INCONCLUSIVE") {
@@ -118,7 +118,7 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
     controllerRef.current = controller;
 
     try {
-      const result = await startCancellationRequest(dni, antiBotEvidence, controller.signal);
+      const result = await startRevocationRequest(dni, antiBotEvidence, controller.signal);
       const response = result.data;
       if (!response) throw new HttpClientError("Respuesta vacía.", { code: "INVALID_RESPONSE" });
       if (!isConsistentInitialResponse(response)) {
@@ -179,7 +179,7 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
       </div>
       <div>
         <h2 className="m-0 text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]">Ingresa tu DNI para comenzar</h2>
-        <p className="mt-2 mb-[25px] text-sm text-[#61729a]">Solo necesitas tu número de DNI para consultar si puedes iniciar la cancelación.</p>
+        <p className="mt-2 mb-[25px] text-sm text-[#61729a]">Solo necesitas tu número de DNI para consultar si puedes iniciar la revocación.</p>
       </div>
 
       <div className="text-left">
@@ -239,12 +239,12 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
       ) : null}
 
       <button className={primaryActionClasses} type="submit" disabled={!canSubmitInitialQuery(dni, recaptchaToken, pending)}>
-        <span>{pending ? "Consultando disponibilidad…" : "Iniciar cancelación"}</span>
+        <span>{pending ? "Consultando disponibilidad…" : "Iniciar revocación"}</span>
         {pending ? <span className="size-5 animate-spin rounded-full border-2 border-white/35 border-t-white motion-reduce:animate-none" aria-hidden="true" /> : <ArrowIcon />}
       </button>
       <p className="mt-5 flex items-center justify-center gap-2 border-t border-[#e3e8f1] pt-5 text-xs text-[#607199] max-[480px]:items-start max-[480px]:text-left [&_svg]:w-5 [&_svg]:text-[#1749a8]"><ShieldIcon /> Tu información se utiliza únicamente para iniciar esta consulta.</p>
       <span className="sr-only" aria-live="polite">
-        {pending ? "Consultando la disponibilidad de certificados digitales." : ""}
+        {pending ? "Consultando la disponibilidad de credenciales digitales." : ""}
       </span>
       </form>
       {view.kind !== "form" ? (
@@ -266,11 +266,11 @@ export function buildAvailabilityErrorView(error: unknown): Extract<ViewState, {
     TIMEOUT: ["La consulta está tardando demasiado", "Verifica tu conexión e inténtalo nuevamente."],
     AVAILABILITY_TIMEOUT: ["La consulta está tardando demasiado", "El servicio no respondió a tiempo. Inténtalo nuevamente."],
     NETWORK_ERROR: ["No pudimos conectarnos", "Verifica tu conexión a internet e inténtalo nuevamente."],
-    AVAILABILITY_UNAVAILABLE: ["Servicio temporalmente no disponible", "No podemos consultar los certificados en este momento."],
+    AVAILABILITY_UNAVAILABLE: ["Servicio temporalmente no disponible", "No podemos consultar las credenciales en este momento."],
     AVAILABILITY_PROVIDER_ERROR: ["No pudimos completar la consulta", "El servicio presentó un inconveniente temporal."],
     AVAILABILITY_CHECK_IN_PROGRESS: ["La consulta ya está en proceso", "Espera unos segundos antes de intentarlo nuevamente."],
     CONCURRENT_REQUEST: ["No pudimos iniciar la solicitud", "Inténtalo nuevamente en unos momentos."],
-    CANCELLATION_REQUEST_IN_PROGRESS: ["No es posible iniciar otra solicitud", "Existe una operación que todavía debe finalizar. Inténtalo nuevamente más adelante."],
+    REVOCATION_REQUEST_IN_PROGRESS: ["No es posible iniciar otra solicitud", "Existe una operación que todavía debe finalizar. Inténtalo nuevamente más adelante."],
   };
   const [title, message] = messages[error.code] ?? ["No pudimos completar la consulta", "Inténtalo nuevamente en unos momentos."];
   return {
@@ -278,7 +278,7 @@ export function buildAvailabilityErrorView(error: unknown): Extract<ViewState, {
     title,
     message,
     correlationId: error.correlationId,
-    retryable: error.code !== "CANCELLATION_REQUEST_IN_PROGRESS",
+    retryable: error.code !== "REVOCATION_REQUEST_IN_PROGRESS",
   };
 }
 

@@ -4,7 +4,7 @@ spring:
       on-profile: local
     import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3308}/${DB_NAME:cancelacion_certificados}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3308}/${DB_NAME:revocacion_credenciales_digitales}?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
@@ -44,18 +44,21 @@ app:
     referer: ${ID_PERU_REFERER:http://localhost:3000/autorizacion}
     flow-secret: ${ID_PERU_FLOW_SECRET:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
     mock-scenario: ${ID_PERU_MOCK_SCENARIO:MATCH}
-  certificate-listing:
-    mode: ${CERTIFICATE_LISTING_MODE:mock}
+  credential-provider:
+    mode: ${CREDENTIAL_PROVIDER_MODE:mock}
   revocation:
-    mode: ${REVOCATION_MODE:mock}
     mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
+    propagation-delay: ${REVOCATION_PROPAGATION_DELAY:60s}
   receipt:
     mode: ${RECEIPT_MODE:filesystem}
-    storage-root: ${RECEIPT_STORAGE_ROOT:tmp/receipts}
+    storage-root: ${RECEIPT_STORAGE_ROOT:storage/receipts}
+    processing-enabled: ${RECEIPT_PROCESSING_ENABLED:true}
+    processing-interval: ${RECEIPT_PROCESSING_INTERVAL:5s}
+    require-absolute-storage-root: false
   session:
-    signing-secret: ${SESSION_SIGNING_SECRET:Y2FuY2VsYWNpb24tbG9jYWwtc2Vzc2lvbi1rZXktMzJiIQ==}
+    signing-secret: ${SESSION_SIGNING_SECRET:cmV2b2NhY2lvbi1sb2NhbC1zZXNzaW9uLWtleS0zMmJ5dGVzIQ==}
     cookie-secure: ${SESSION_COOKIE_SECURE:false}
 
 logging:
   level:
-    pe.gob.reniec.certificados.cancelacion: ${LOG_LEVEL_APP:DEBUG}
+    pe.gob.reniec.credenciales.revocacion: ${LOG_LEVEL_APP:DEBUG}

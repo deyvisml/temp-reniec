@@ -9,10 +9,10 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>pe.gob.reniec</groupId>
-	<artifactId>cancelacion-certificados-backend</artifactId>
+	<artifactId>revocacion-credenciales-digitales-backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<packaging>jar</packaging>
-	<name>cancelacion-certificados-backend</name>
+	<name>revocacion-credenciales-digitales-backend</name>
 	<description>Base técnica del backend</description>
 	<properties>
 		<java.version>21</java.version>

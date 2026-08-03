@@ -52,7 +52,7 @@ describe("Tailwind-first styling convention", () => {
   });
 
   it("keeps the citizen home presentation colocated as Tailwind utilities", () => {
-    const homeSource = readFileSync(join(frontendRoot, "components", "cancellation-entry.tsx"), "utf8");
+    const homeSource = readFileSync(join(frontendRoot, "components", "revocation-entry.tsx"), "utf8");
     const formSource = readFileSync(join(frontendRoot, "components", "dni-availability-form.tsx"), "utf8");
     const outcomeAlertSource = readFileSync(
       join(frontendRoot, "components", "availability-outcome-alert.tsx"),

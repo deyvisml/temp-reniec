@@ -1,13 +1,10 @@
-import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { CancellationFlow } from "@/components/cancellation-flow";
-import { CANCELLATION_FLOW_ROUTE, usesLocalIdentityRoute } from "@/lib/routes";
-
-export const metadata: Metadata = { title: "Verificación de identidad" };
+import { RevocationFlow } from "@/components/revocation-flow";
+import { REVOCATION_FLOW_ROUTE, usesLocalIdentityRoute } from "@/lib/routes";
 
 export default function IdPeruLocalReturnPage() {
-  if (!usesLocalIdentityRoute()) redirect(CANCELLATION_FLOW_ROUTE);
+  if (!usesLocalIdentityRoute()) redirect(REVOCATION_FLOW_ROUTE);
 
-  return <CancellationFlow />;
+  return <RevocationFlow />;
 }

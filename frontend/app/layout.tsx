@@ -8,11 +8,8 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: {
-    default: "Cancelación de certificados digitales",
-    template: "%s | Cancelación de certificados digitales",
-  },
-  description: "Consulta e inicia la cancelación de certificados digitales asociados a tu DNI.",
+  title: "Revocación de credenciales digitales",
+  description: "Consulta e inicia la revocación de credenciales digitales asociados a tu DNI.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

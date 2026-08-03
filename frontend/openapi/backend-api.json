@@ -35,7 +35,7 @@
           },
           "path": {
             "description": "Ruta de la solicitud que produjo el error.",
-            "example": "/api/v1/cancellation-requests",
+            "example": "/api/v1/revocation-requests",
             "type": "string"
           },
           "timestamp": {
@@ -54,15 +54,266 @@
         ],
         "type": "object"
       },
-      "CancellationConfirmationRequest": {
-        "description": "Decisión completa y consentimiento explícito presentados en el paso 4.",
+      "CurrentIdentityResponse": {
         "properties": {
-          "certificateUuid": {
-            "format": "uuid",
-            "minLength": 1,
-            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+          "callbackOutcome": {
+            "description": "Resultado efímero del último callback, consumido una sola vez para presentación.",
+            "enum": [
+              "CANCELLED",
+              "REJECTED",
+              "IDENTITY_MISMATCH",
+              "EXPIRED",
+              "TIMEOUT",
+              "UNAVAILABLE",
+              "ERROR"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "canContinue": {
+            "description": "Indica si la autorización temporal permite continuar.",
+            "type": "boolean"
+          },
+          "nextStep": {
+            "description": "Siguiente paso autorizado.",
+            "enum": [
+              "IDENTITY_VERIFICATION",
+              "DIGITAL_CREDENTIAL_SELECTION"
+            ],
             "type": "string"
           },
+          "status": {
+            "description": "Estado normalizado del intento de identidad.",
+            "enum": [
+              "STARTED",
+              "VERIFIED",
+              "REJECTED",
+              "CANCELLED",
+              "EXPIRED",
+              "IDENTITY_MISMATCH",
+              "ERROR"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "canContinue",
+          "nextStep",
+          "status"
+        ],
+        "type": "object"
+      },
+      "CurrentSession": {
+        "description": "Contexto seguro de la operación activa y el siguiente paso autorizado.",
+        "properties": {
+          "dni": {
+            "description": "DNI completo mostrado únicamente dentro de la sesión autenticada.",
+            "pattern": "^[0-9]{8}$",
+            "type": "string"
+          },
+          "nextStep": {
+            "enum": [
+              "IDENTITY_VERIFICATION",
+              "DIGITAL_CREDENTIAL_SELECTION",
+              "CONFIRMATION",
+              "RECEIPT"
+            ],
+            "type": "string"
+          },
+          "requestId": {
+            "description": "Identificador técnico de solicitud.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "requestStatus": {
+            "description": "Estado controlado de la solicitud.",
+            "type": "string"
+          },
+          "sessionId": {
+            "description": "Identificador técnico de sesión.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "sessionStatus": {
+            "enum": [
+              "PENDING_IDENTITY",
+              "IDENTITY_VERIFIED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "dni",
+          "nextStep",
+          "requestId",
+          "requestStatus",
+          "sessionId",
+          "sessionStatus"
+        ],
+        "type": "object"
+      },
+      "DigitalCredential": {
+        "properties": {
+          "emissionCreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "statusListIndex": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "emissionCreatedAt",
+          "statusListIndex"
+        ],
+        "type": "object"
+      },
+      "DigitalCredentialItem": {
+        "description": "Credencial digital obtenida después de autenticar al ciudadano.",
+        "properties": {
+          "digitalCredentialUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "emissionCreatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ],
+            "type": "string"
+          },
+          "statusListIndex": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "digitalCredentialUuid",
+          "emissionCreatedAt",
+          "statusListIndex",
+          "revokedAt",
+          "selected",
+          "status"
+        ],
+        "type": "object"
+      },
+      "DigitalCredentialListResponse": {
+        "description": "Listado persistido de credenciales digitales de la solicitud autenticada.",
+        "properties": {
+          "canContinue": {
+            "type": "boolean"
+          },
+          "digitalCredentials": {
+            "items": {
+              "$ref": "#/components/schemas/DigitalCredentialItem"
+            },
+            "type": "array"
+          },
+          "requestStatus": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "canContinue",
+          "digitalCredentials",
+          "requestStatus"
+        ],
+        "type": "object"
+      },
+      "IdentityStartResponse": {
+        "properties": {
+          "authorizationUrl": {
+            "description": "URL de autorización construida por el backend.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorizationUrl"
+        ],
+        "type": "object"
+      },
+      "Processing": {
+        "properties": {
+          "phase": {
+            "enum": [
+              "SUBMITTING",
+              "PROPAGATING",
+              "GENERATING"
+            ],
+            "type": "string"
+          },
+          "readyAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serverTime": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phase",
+          "serverTime",
+          "startedAt"
+        ],
+        "type": "object"
+      },
+      "Receipt": {
+        "properties": {
+          "availableAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "downloadAvailable": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "GENERATING",
+              "AVAILABLE",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "downloadAvailable",
+          "status"
+        ],
+        "type": "object"
+      },
+      "RevocationConfirmationRequest": {
+        "description": "Decisión completa y consentimiento explícito presentados en el paso 4.",
+        "properties": {
           "consentAccepted": {
             "description": "Aceptación expresa del texto mostrado; debe enviarse con valor true.",
             "type": "boolean"
@@ -71,6 +322,12 @@
             "description": "Versión exacta del consentimiento mostrado por el backend.",
             "maxLength": 64,
             "minLength": 0,
+            "type": "string"
+          },
+          "digitalCredentialUuid": {
+            "format": "uuid",
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
             "type": "string"
           },
           "otherReason": {
@@ -91,25 +348,31 @@
           }
         },
         "required": [
-          "certificateUuid",
           "consentAccepted",
           "consentVersion",
+          "digitalCredentialUuid",
           "reasonCode"
         ],
         "type": "object"
       },
-      "CancellationExecutionResponse": {
-        "description": "Resultado ciudadano de la cancelacion sin exponer identificadores sensibles.",
+      "RevocationExecutionResponse": {
+        "description": "Resultado ciudadano de la revocacion sin exponer identificadores sensibles.",
         "properties": {
-          "certificate": {
-            "$ref": "#/components/schemas/Certificate"
-          },
           "completedAt": {
             "format": "date-time",
             "type": "string"
           },
           "confirmedAt": {
             "format": "date-time",
+            "type": "string"
+          },
+          "digitalCredential": {
+            "$ref": "#/components/schemas/DigitalCredential"
+          },
+          "firstName": {
+            "description": "Primer nombre verificado por ID Perú; ausente solo en evidencia histórica.",
+            "example": "ANA",
+            "maxLength": 100,
             "type": "string"
           },
           "maskedDni": {
@@ -119,6 +382,9 @@
           "otherReason": {
             "type": "string"
           },
+          "processing": {
+            "$ref": "#/components/schemas/Processing"
+          },
           "reasonLabel": {
             "type": "string"
           },
@@ -126,17 +392,17 @@
             "$ref": "#/components/schemas/Receipt"
           },
           "requestStatus": {
-            "description": "Estado actual de la solicitud ciudadana de cancelación.",
+            "description": "Estado actual de la solicitud ciudadana de revocación.",
             "enum": [
               "STARTED",
               "CHECKING_AVAILABILITY",
-              "NO_CERTIFICATES_AVAILABLE",
+              "NO_DIGITAL_CREDENTIALS_AVAILABLE",
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
-              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
-              "CHECKING_CERTIFICATE_LIST",
-              "CERTIFICATES_AVAILABLE",
-              "CERTIFICATES_SELECTED",
+              "AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST",
+              "CHECKING_DIGITAL_CREDENTIAL_LIST",
+              "DIGITAL_CREDENTIALS_AVAILABLE",
+              "DIGITAL_CREDENTIALS_SELECTED",
               "REASON_REGISTERED",
               "PENDING_CONFIRMATION",
               "CONFIRMED",
@@ -164,7 +430,7 @@
           }
         },
         "required": [
-          "certificate",
+          "digitalCredential",
           "maskedDni",
           "reasonLabel",
           "requestStatus",
@@ -172,8 +438,8 @@
         ],
         "type": "object"
       },
-      "CancellationRequestResponse": {
-        "description": "Resultado normalizado del inicio de una nueva solicitud de cancelación.",
+      "RevocationRequestResponse": {
+        "description": "Resultado normalizado del inicio de una nueva solicitud de revocación.",
         "properties": {
           "availabilityResult": {
             "description": "Resultado normalizado de la consulta inicial de existencia. No representa una lista detallada.",
@@ -219,13 +485,13 @@
             "enum": [
               "STARTED",
               "CHECKING_AVAILABILITY",
-              "NO_CERTIFICATES_AVAILABLE",
+              "NO_DIGITAL_CREDENTIALS_AVAILABLE",
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
-              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
-              "CHECKING_CERTIFICATE_LIST",
-              "CERTIFICATES_AVAILABLE",
-              "CERTIFICATES_SELECTED",
+              "AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST",
+              "CHECKING_DIGITAL_CREDENTIAL_LIST",
+              "DIGITAL_CREDENTIALS_AVAILABLE",
+              "DIGITAL_CREDENTIALS_SELECTED",
               "REASON_REGISTERED",
               "PENDING_CONFIRMATION",
               "CONFIRMED",
@@ -253,10 +519,10 @@
         ],
         "type": "object"
       },
-      "CancellationReviewRequest": {
+      "RevocationReviewRequest": {
         "description": "Borrador efímero que se valida para presentar el paso 4 sin persistirlo.",
         "properties": {
-          "certificateUuid": {
+          "digitalCredentialUuid": {
             "format": "uuid",
             "minLength": 1,
             "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -280,17 +546,14 @@
           }
         },
         "required": [
-          "certificateUuid",
+          "digitalCredentialUuid",
           "reasonCode"
         ],
         "type": "object"
       },
-      "CancellationReviewResponse": {
-        "description": "Resumen autoritativo y minimizado de la cancelación.",
+      "RevocationReviewResponse": {
+        "description": "Resumen autoritativo y minimizado de la revocación.",
         "properties": {
-          "certificate": {
-            "$ref": "#/components/schemas/SelectedCertificate"
-          },
           "confirmed": {
             "type": "boolean"
           },
@@ -311,6 +574,15 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "digitalCredential": {
+            "$ref": "#/components/schemas/SelectedDigitalCredential"
+          },
+          "firstName": {
+            "description": "Primer nombre verificado por ID Perú; ausente solo en evidencia histórica.",
+            "example": "ANA",
+            "maxLength": 100,
+            "type": "string"
           },
           "maskedDni": {
             "example": "******91",
@@ -334,17 +606,17 @@
             "type": "string"
           },
           "requestStatus": {
-            "description": "Estado actual de la solicitud ciudadana de cancelación.",
+            "description": "Estado actual de la solicitud ciudadana de revocación.",
             "enum": [
               "STARTED",
               "CHECKING_AVAILABILITY",
-              "NO_CERTIFICATES_AVAILABLE",
+              "NO_DIGITAL_CREDENTIALS_AVAILABLE",
               "PENDING_IDENTITY_VERIFICATION",
               "IDENTITY_VERIFIED",
-              "AUTHENTICATED_PENDING_CERTIFICATE_LIST",
-              "CHECKING_CERTIFICATE_LIST",
-              "CERTIFICATES_AVAILABLE",
-              "CERTIFICATES_SELECTED",
+              "AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST",
+              "CHECKING_DIGITAL_CREDENTIAL_LIST",
+              "DIGITAL_CREDENTIALS_AVAILABLE",
+              "DIGITAL_CREDENTIALS_SELECTED",
               "REASON_REGISTERED",
               "PENDING_CONFIRMATION",
               "CONFIRMED",
@@ -362,11 +634,11 @@
           }
         },
         "required": [
-          "certificate",
           "confirmed",
           "consentText",
           "consentVersion",
           "consequences",
+          "digitalCredential",
           "maskedDni",
           "reasonCode",
           "reasonLabel",
@@ -374,238 +646,27 @@
         ],
         "type": "object"
       },
-      "Certificate": {
+      "SelectedDigitalCredential": {
+        "description": "Credencial identificado por datos visibles, sin exponer su UUID.",
         "properties": {
           "emissionCreatedAt": {
             "format": "date-time",
             "type": "string"
           },
-          "orderNumber": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "emissionCreatedAt",
-          "orderNumber"
-        ],
-        "type": "object"
-      },
-      "CertificateItem": {
-        "description": "Certificado vigente obtenido después de autenticar al ciudadano.",
-        "properties": {
-          "availabilityStatus": {
-            "type": "string"
-          },
-          "certificateUuid": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "emissionCreatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "orderNumber": {
-            "maxLength": 64,
-            "type": "string"
-          },
-          "selected": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "availabilityStatus",
-          "certificateUuid",
-          "emissionCreatedAt",
-          "orderNumber",
-          "selected"
-        ],
-        "type": "object"
-      },
-      "CertificateListResponse": {
-        "description": "Listado persistido de certificados vigentes de la solicitud autenticada.",
-        "properties": {
-          "canContinue": {
-            "type": "boolean"
-          },
-          "certificates": {
-            "items": {
-              "$ref": "#/components/schemas/CertificateItem"
-            },
-            "type": "array"
-          },
-          "requestStatus": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "canContinue",
-          "certificates",
-          "requestStatus"
-        ],
-        "type": "object"
-      },
-      "CurrentIdentityResponse": {
-        "properties": {
-          "callbackOutcome": {
-            "description": "Resultado efímero del último callback, consumido una sola vez para presentación.",
-            "enum": [
-              "CANCELLED",
-              "REJECTED",
-              "IDENTITY_MISMATCH",
-              "EXPIRED",
-              "TIMEOUT",
-              "UNAVAILABLE",
-              "ERROR"
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "canContinue": {
-            "description": "Indica si la autorización temporal permite continuar.",
-            "type": "boolean"
-          },
-          "nextStep": {
-            "description": "Siguiente paso autorizado.",
-            "enum": [
-              "IDENTITY_VERIFICATION",
-              "CERTIFICATE_SELECTION"
-            ],
-            "type": "string"
-          },
-          "status": {
-            "description": "Estado normalizado del intento de identidad.",
-            "enum": [
-              "STARTED",
-              "VERIFIED",
-              "REJECTED",
-              "CANCELLED",
-              "EXPIRED",
-              "IDENTITY_MISMATCH",
-              "ERROR"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "canContinue",
-          "nextStep",
-          "status"
-        ],
-        "type": "object"
-      },
-      "CurrentSession": {
-        "description": "Contexto seguro de la operación activa y el siguiente paso autorizado.",
-        "properties": {
-          "dni": {
-            "description": "DNI completo mostrado únicamente dentro de la sesión autenticada.",
-            "pattern": "^[0-9]{8}$",
-            "type": "string"
-          },
-          "nextStep": {
-            "enum": [
-              "IDENTITY_VERIFICATION",
-              "CERTIFICATE_SELECTION",
-              "CONFIRMATION",
-              "RECEIPT"
-            ],
-            "type": "string"
-          },
-          "requestId": {
-            "description": "Identificador técnico de solicitud.",
-            "format": "int64",
+          "statusListIndex": {
+            "format": "int32",
+            "minimum": 0,
             "type": "integer"
-          },
-          "requestStatus": {
-            "description": "Estado controlado de la solicitud.",
-            "type": "string"
-          },
-          "sessionId": {
-            "description": "Identificador técnico de sesión.",
-            "format": "int64",
-            "type": "integer"
-          },
-          "sessionStatus": {
-            "enum": [
-              "PENDING_IDENTITY",
-              "IDENTITY_VERIFIED"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "dni",
-          "nextStep",
-          "requestId",
-          "requestStatus",
-          "sessionId",
-          "sessionStatus"
-        ],
-        "type": "object"
-      },
-      "IdentityStartResponse": {
-        "properties": {
-          "authorizationUrl": {
-            "description": "URL de autorización construida por el backend.",
-            "format": "uri",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authorizationUrl"
-        ],
-        "type": "object"
-      },
-      "Receipt": {
-        "properties": {
-          "availableAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "downloadAvailable": {
-            "type": "boolean"
-          },
-          "status": {
-            "enum": [
-              "PENDING",
-              "GENERATING",
-              "AVAILABLE",
-              "FAILED"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "downloadAvailable",
-          "status"
-        ],
-        "type": "object"
-      },
-      "SelectedCertificate": {
-        "description": "Certificado identificado por datos visibles, sin exponer su UUID.",
-        "properties": {
-          "emissionCreatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "orderNumber": {
-            "maxLength": 64,
-            "type": "string"
           }
         },
         "required": [
           "emissionCreatedAt",
-          "orderNumber"
+          "statusListIndex"
         ],
         "type": "object"
       },
-      "StartCancellationRequest": {
-        "description": "Datos requeridos para iniciar una nueva solicitud y consultar si existen certificados disponibles.",
+      "StartRevocationRequest": {
+        "description": "Datos requeridos para iniciar una nueva solicitud y consultar si existen credenciales disponibles.",
         "properties": {
           "dni": {
             "description": "Número de DNI del ciudadano. Debe contener exactamente ocho dígitos ASCII. Por privacidad, la documentación no incluye un DNI completo de ejemplo.",
@@ -660,13 +721,13 @@
       "FlowRefreshCookie": {
         "description": "Refresh JWT rotatorio, transportado exclusivamente mediante cookie HttpOnly.",
         "in": "cookie",
-        "name": "cancelacion_refresh",
+        "name": "revocacion_refresh",
         "type": "apiKey"
       },
       "FlowSessionCookie": {
         "description": "Access JWT de la sesión transaccional, transportado exclusivamente mediante cookie HttpOnly.",
         "in": "cookie",
-        "name": "cancelacion_access",
+        "name": "revocacion_access",
         "type": "apiKey"
       }
     }
@@ -676,7 +737,7 @@
       "name": "RENIEC"
     },
     "description": "API institucional para iniciar el flujo ciudadano. La consulta pública exige Google reCAPTCHA v2 Checkbox y la autenticación usa ID Perú con continuidad temporal HttpOnly.",
-    "title": "API de cancelación de certificados digitales",
+    "title": "API de revocación de credenciales digitales",
     "version": "v1"
   },
   "openapi": "3.1.0",
@@ -741,576 +802,6 @@
         "summary": "Comprueba la salud operativa agregada",
         "tags": [
           "Estado técnico"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests": {
-      "post": {
-        "description": "Valida el DNI y Google reCAPTCHA v2 Checkbox antes de crear una solicitud y consultar únicamente si existe al menos un certificado disponible para cancelar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo o la evidencia anti-bot.",
-        "operationId": "initiateCancellationRequest",
-        "parameters": [
-          {
-            "description": "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
-            "in": "header",
-            "name": "X-Correlation-ID",
-            "schema": {
-              "maxLength": 64,
-              "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,63}",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StartCancellationRequest"
-              }
-            }
-          },
-          "description": "DNI y evidencia efímera reCAPTCHA que se validan en el backend antes de crear una solicitud.",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationRequestResponse"
-                }
-              }
-            },
-            "description": "Resultado normalizado de existencia de certificados",
-            "headers": {
-              "X-Correlation-ID": {
-                "description": "Identificador de correlación",
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "DNI, JSON, cuerpo o evidencia reCAPTCHA inválida: VALIDATION_ERROR, RECAPTCHA_REQUIRED, RECAPTCHA_REJECTED o RECAPTCHA_EXPIRED_OR_DUPLICATE",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Conflicto controlado: AVAILABILITY_CHECK_IN_PROGRESS, CANCELLATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "415": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Tipo de contenido no admitido",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Error interno controlado",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "RECAPTCHA_INVALID_RESPONSE o error controlado del proveedor de disponibilidad",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "RECAPTCHA_UNAVAILABLE o servicio de disponibilidad no disponible",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "RECAPTCHA_TIMEOUT o tiempo de espera agotado en disponibilidad",
-            "headers": {
-              "X-Correlation-ID": {
-                "schema": {
-                  "type": "string"
-                },
-                "style": "simple"
-              }
-            }
-          }
-        },
-        "summary": "Inicia una solicitud y consulta si existen certificados disponibles",
-        "tags": [
-          "Solicitudes de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/certificates": {
-      "get": {
-        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.",
-        "operationId": "getCurrentRequestCertificates",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CertificateListResponse"
-                }
-              }
-            },
-            "description": "Listado persistido, incluido el escenario vacío"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Sesión ausente o expirada"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Identidad no verificada o paso no permitido"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Consulta concurrente"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Respuesta externa inválida"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Servicio de listado no disponible"
-          },
-          "504": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Timeout del servicio de listado"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Obtiene el listado de certificados de la solicitud autenticada",
-        "tags": [
-          "Certificados vigentes"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/confirmation": {
-      "post": {
-        "description": "Guarda la decisión, ejecuta una revocación idempotente y genera la constancia cuando el resultado es exitoso.",
-        "operationId": "confirmCurrentCancellation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CancellationConfirmationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationExecutionResponse"
-                }
-              }
-            },
-            "description": "Solicitud confirmada o repetición idempotente"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Consentimiento ausente o formato inválido"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Sesión ausente o expirada"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Identidad o paso no permitido"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Versión o decisión incompatible"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Motivo o selección inválida"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Integración de revocación no disponible; la decisión no se persiste"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Persiste la decisión completa y confirma la solicitud",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/execution": {
-      "post": {
-        "operationId": "resumeCurrentCancellationExecution",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationExecutionResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Reanuda idempotentemente una revocación ya confirmada",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/outcome": {
-      "get": {
-        "operationId": "getCurrentCancellationOutcome",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationExecutionResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Consulta el resultado y la constancia de la solicitud actual",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/receipt": {
-      "get": {
-        "operationId": "downloadCurrentCancellationReceipt",
-        "responses": {
-          "200": {
-            "content": {
-              "application/pdf": {
-                "schema": {
-                  "format": "byte",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Descarga la constancia de la sesión autenticada",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/receipt/retry": {
-      "post": {
-        "operationId": "retryCurrentCancellationReceipt",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationExecutionResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Reintenta únicamente la generación de la constancia",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      }
-    },
-    "/api/v1/cancellation-requests/current/review": {
-      "get": {
-        "description": "Disponible únicamente después de confirmar; no recupera borradores.",
-        "operationId": "getConfirmedCancellationReview",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationReviewResponse"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Recupera el resumen de una solicitud confirmada",
-        "tags": [
-          "Confirmación de cancelación"
-        ]
-      },
-      "post": {
-        "operationId": "previewCurrentCancellation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CancellationReviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancellationReviewResponse"
-                }
-              }
-            },
-            "description": "Resumen vigente sin persistencia del borrador"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Formato inválido"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Sesión ausente o expirada"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Identidad o paso no permitido"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Motivo o certificado inválido"
-          }
-        },
-        "security": [
-          {
-            "FlowSessionCookie": []
-          }
-        ],
-        "summary": "Valida el borrador y prepara el resumen sin persistirlo",
-        "tags": [
-          "Confirmación de cancelación"
         ]
       }
     },
@@ -1483,6 +974,576 @@
         ]
       }
     },
+    "/api/v1/revocation-requests": {
+      "post": {
+        "description": "Valida el DNI y Google reCAPTCHA v2 Checkbox antes de crear una solicitud y consultar únicamente si existe al menos una credencial disponible para revocar. No obtiene una lista, cantidad, número de orden, fecha de creación ni UUID; tampoco reabre solicitudes anteriores ni expone el DNI completo o la evidencia anti-bot.",
+        "operationId": "initiateRevocationRequest",
+        "parameters": [
+          {
+            "description": "Identificador opcional de correlación. Debe tener entre 1 y 64 caracteres ASCII válidos.",
+            "in": "header",
+            "name": "X-Correlation-ID",
+            "schema": {
+              "maxLength": 64,
+              "pattern": "[A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRevocationRequest"
+              }
+            }
+          },
+          "description": "DNI y evidencia efímera reCAPTCHA que se validan en el backend antes de crear una solicitud.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationRequestResponse"
+                }
+              }
+            },
+            "description": "Resultado normalizado de existencia de credenciales",
+            "headers": {
+              "X-Correlation-ID": {
+                "description": "Identificador de correlación",
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "DNI, JSON, cuerpo o evidencia reCAPTCHA inválida: VALIDATION_ERROR, RECAPTCHA_REQUIRED, RECAPTCHA_REJECTED o RECAPTCHA_EXPIRED_OR_DUPLICATE",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Conflicto controlado: AVAILABILITY_CHECK_IN_PROGRESS, REVOCATION_REQUEST_IN_PROGRESS o CONCURRENT_REQUEST",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Tipo de contenido no admitido",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Error interno controlado",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "RECAPTCHA_INVALID_RESPONSE o error controlado del proveedor de disponibilidad",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "RECAPTCHA_UNAVAILABLE o servicio de disponibilidad no disponible",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "RECAPTCHA_TIMEOUT o tiempo de espera agotado en disponibilidad",
+            "headers": {
+              "X-Correlation-ID": {
+                "schema": {
+                  "type": "string"
+                },
+                "style": "simple"
+              }
+            }
+          }
+        },
+        "summary": "Inicia una solicitud y consulta si existen credenciales disponibles",
+        "tags": [
+          "Solicitudes de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/confirmation": {
+      "post": {
+        "description": "Guarda la decisión, ejecuta una revocación idempotente y genera la constancia cuando el resultado es exitoso.",
+        "operationId": "confirmCurrentRevocation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevocationConfirmationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationExecutionResponse"
+                }
+              }
+            },
+            "description": "Solicitud confirmada o repetición idempotente"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Consentimiento ausente o formato inválido"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Versión o decisión incompatible"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Motivo o selección inválida"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Integración de revocación no disponible; la decisión no se persiste"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Persiste la decisión completa y confirma la solicitud",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/digital-credentials": {
+      "get": {
+        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.",
+        "operationId": "getCurrentRequestDigitalCredentials",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DigitalCredentialListResponse"
+                }
+              }
+            },
+            "description": "Listado persistido, incluido el escenario vacío"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad no verificada o paso no permitido"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Consulta concurrente"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Respuesta externa inválida"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Servicio de listado no disponible"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Timeout del servicio de listado"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Obtiene el listado de credenciales de la solicitud autenticada",
+        "tags": [
+          "Credenciales vigentes"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/execution": {
+      "post": {
+        "operationId": "resumeCurrentRevocationExecution",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationExecutionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Reanuda idempotentemente una revocación ya confirmada",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/outcome": {
+      "get": {
+        "operationId": "getCurrentRevocationOutcome",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationExecutionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Consulta el resultado y la constancia de la solicitud actual",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/receipt": {
+      "get": {
+        "operationId": "downloadCurrentRevocationReceipt",
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "format": "byte",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Descarga la constancia de la sesión autenticada",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/receipt/retry": {
+      "post": {
+        "operationId": "retryCurrentRevocationReceipt",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationExecutionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Reintenta únicamente la generación de la constancia",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
+    "/api/v1/revocation-requests/current/review": {
+      "get": {
+        "description": "Disponible únicamente después de confirmar; no recupera borradores.",
+        "operationId": "getConfirmedRevocationReview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationReviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Recupera el resumen de una solicitud confirmada",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      },
+      "post": {
+        "operationId": "previewCurrentRevocation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevocationReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationReviewResponse"
+                }
+              }
+            },
+            "description": "Resumen vigente sin persistencia del borrador"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Formato inválido"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Sesión ausente o expirada"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Identidad o paso no permitido"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Motivo o credencial inválido"
+          }
+        },
+        "security": [
+          {
+            "FlowSessionCookie": []
+          }
+        ],
+        "summary": "Valida el borrador y prepara el resumen sin persistirlo",
+        "tags": [
+          "Confirmación de revocación"
+        ]
+      }
+    },
     "/api/v1/session/current": {
       "get": {
         "operationId": "getCurrentFlowSession",
@@ -1541,7 +1602,7 @@
             "FlowRefreshCookie": []
           }
         ],
-        "summary": "Rota el refresh token y renueva el access token",
+        "summary": "Rota el refresh token y actualiza el access token",
         "tags": [
           "Sesión del flujo"
         ]
@@ -1631,20 +1692,20 @@
   },
   "tags": [
     {
-      "description": "Inicio de solicitudes y consulta de disponibilidad de certificados.",
-      "name": "Solicitudes de cancelación"
+      "description": "Inicio de solicitudes y consulta de disponibilidad de credenciales.",
+      "name": "Solicitudes de revocación"
     },
     {
       "description": "Inicio, callback, estado e invalidación temporal de ID Perú.",
       "name": "Verificación de identidad"
     },
     {
-      "description": "Consulta, renovación y cierre de la operación ciudadana activa.",
+      "description": "Consulta, actualización y cierre de la operación ciudadana activa.",
       "name": "Sesión del flujo"
     },
     {
-      "description": "Listado autenticado y selección de certificados de la operación activa.",
-      "name": "Certificados vigentes"
+      "description": "Listado autenticado y selección de credenciales de la operación activa.",
+      "name": "Credenciales vigentes"
     },
     {
       "description": "Disponibilidad operativa del backend y sus dependencias.",

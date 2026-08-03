@@ -69,7 +69,7 @@ describe("requestJson", () => {
     await expect(requestJson("/slow", {}, { timeoutMs: 5 })).rejects.toMatchObject({ code: "TIMEOUT" });
   });
 
-  it("respects caller cancellation", async () => {
+  it("respects caller revocation", async () => {
     vi.stubGlobal("fetch", abortableFetch());
     const controller = new AbortController();
     const request = requestJson("/cancel", { signal: controller.signal });
@@ -121,7 +121,7 @@ describe("requestJson", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await requestBlob("/api/v1/cancellation-requests/current/receipt", {
+    const result = await requestBlob("/api/v1/revocation-requests/current/receipt", {
       headers: { Accept: "application/pdf" },
     });
 

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveBackendUrl } from "@/lib/http-client";
 
-const ACCESS_COOKIE = "cancelacion_access";
-const REFRESH_COOKIE = "cancelacion_refresh";
+const ACCESS_COOKIE = "revocacion_access";
+const REFRESH_COOKIE = "revocacion_refresh";
 
 export async function GET(request: NextRequest) {
-  const requestedReturn = request.nextUrl.searchParams.get("returnTo") ?? "/cancelacion";
+  const requestedReturn = request.nextUrl.searchParams.get("returnTo") ?? "/revocacion";
   const returnTo = requestedReturn.startsWith("/") && !requestedReturn.startsWith("//")
     ? requestedReturn
-    : "/cancelacion";
+    : "/revocacion";
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
 
   if (!refreshToken) return clearSessionAndRedirectHome(request);

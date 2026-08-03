@@ -1,4 +1,4 @@
-name: cancelacion-certificados-local
+name: revocacion-credenciales-digitales-local
 
 services:
   mysql:

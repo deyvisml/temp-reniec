@@ -111,7 +111,7 @@ async function requestResponse(
   if (!headers.has(CORRELATION_HEADER)) headers.set(CORRELATION_HEADER, crypto.randomUUID());
 
   if (init.signal?.aborted) {
-    throw clientError("REQUEST_ABORTED", "La solicitud fue cancelada.");
+    throw clientError("REQUEST_ABORTED", "La solicitud fue revocada.");
   }
 
   const controller = new AbortController();
@@ -139,7 +139,7 @@ async function requestResponse(
       throw clientError("TIMEOUT", "El servicio tardó demasiado en responder.");
     }
     if (init.signal?.aborted) {
-      throw clientError("REQUEST_ABORTED", "La solicitud fue cancelada.");
+      throw clientError("REQUEST_ABORTED", "La solicitud fue revocada.");
     }
     throw clientError("NETWORK_ERROR", "No fue posible conectar con el servicio.");
   } finally {

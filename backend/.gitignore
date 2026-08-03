@@ -1,5 +1,5 @@
 target/
-tmp/
+storage/receipts/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

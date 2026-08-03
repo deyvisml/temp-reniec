@@ -1,10 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import CancellationPage from "@/app/cancelacion/page";
+import RevocationPage from "@/app/revocacion/page";
 import RootLayout, { metadata } from "@/app/layout";
 import NotFound from "@/app/not-found";
-import { CancellationEntry } from "@/components/cancellation-entry";
+import { RevocationEntry } from "@/components/revocation-entry";
 import { InternalFlowHeaderActions } from "@/components/internal-flow-header";
 import { parseCurrentFlowSession } from "@/lib/api/flow-session";
 
@@ -20,11 +20,11 @@ afterEach(() => {
 
 describe("base application rendering", () => {
   it("renders the real citizen home and accessible DNI form", () => {
-    const html = renderToStaticMarkup(<CancellationEntry onContinue={() => undefined} />);
+    const html = renderToStaticMarkup(<RevocationEntry onContinue={() => undefined} />);
 
-    expect(html).toContain("Cancelación de <span>certificados digitales</span>");
+    expect(html).toContain("Revocación de <span>credenciales digitales</span>");
     expect(html).toContain("Ingresa tu DNI para comenzar");
-    expect(html).toContain('aria-label="Consulta de certificados digitales"');
+    expect(html).toContain('aria-label="Consulta de credenciales digitales"');
     expect(html).toContain("<form");
     expect(html).toContain('inputMode="numeric"');
     expect(html).toContain('maxLength="8"');
@@ -47,6 +47,7 @@ describe("base application rendering", () => {
     expect(html).toContain('href="#main-content"');
     expect(html).toContain('id="global-messages"');
     expect(html).toContain("Contenido de prueba");
+    expect(metadata.title).toBe("Revocación de credenciales digitales");
     expect(metadata.description).toContain("Consulta e inicia");
   });
 
@@ -54,12 +55,12 @@ describe("base application rendering", () => {
     const html = renderToStaticMarkup(<NotFound />);
 
     expect(html).toContain("Recurso no encontrado");
-    expect(html).toContain('href="/cancelacion"');
+    expect(html).toContain('href="/revocacion"');
     expect(html).toContain("Volver al inicio");
   });
 
   it("renders the canonical flow coordinator", () => {
-    const page = renderToStaticMarkup(<CancellationPage />);
+    const page = renderToStaticMarkup(<RevocationPage />);
     expect(page).toContain("Preparando el trámite");
     expect(page).toContain('aria-busy="true"');
   });

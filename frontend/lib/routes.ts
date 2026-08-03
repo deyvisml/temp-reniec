@@ -1,4 +1,4 @@
-export const CANCELLATION_FLOW_ROUTE = "/cancelacion";
+export const REVOCATION_FLOW_ROUTE = "/revocacion";
 export const LOCAL_IDENTITY_ROUTE = "/autorizacion";
 
 export function usesLocalIdentityRoute(
@@ -15,5 +15,5 @@ export function activeFlowRoute(
 ): string {
   return usesLocalIdentityRoute(appEnvironment, nodeEnvironment)
     ? LOCAL_IDENTITY_ROUTE
-    : CANCELLATION_FLOW_ROUTE;
+    : REVOCATION_FLOW_ROUTE;
 }

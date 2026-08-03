@@ -9,13 +9,13 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-import { CertificateSelectionTransition } from "@/components/certificate-selection-transition";
+import { DigitalCredentialSelectionTransition } from "@/components/digital-credential-selection-transition";
 import {
   getIdentityCallbackPresentation,
   type IdentityCallbackOutcome,
 } from "@/components/identity-callback-alert";
 import { IdentityVerificationPanel } from "@/components/identity-verification-panel";
-import { CancellationFlow, asIdentityCallbackOutcome } from "@/components/cancellation-flow";
+import { RevocationFlow, asIdentityCallbackOutcome } from "@/components/revocation-flow";
 
 describe("paso de verificación de identidad", () => {
   it("renderiza el paso uno de cinco con explicación y acciones accesibles", () => {
@@ -38,7 +38,7 @@ describe("paso de verificación de identidad", () => {
   });
 
   it("muestra un estado de procesamiento mientras resuelve el contexto vigente", () => {
-    const markup = renderToStaticMarkup(<CancellationFlow />);
+    const markup = renderToStaticMarkup(<RevocationFlow />);
 
     expect(markup).toContain("Preparando el trámite");
     expect(markup).toContain('aria-busy="true"');
@@ -49,7 +49,7 @@ describe("paso de verificación de identidad", () => {
       <IdentityVerificationPanel identityVerified onContinue={() => undefined} />,
     );
 
-    expect(markup).toContain("Continuar a selección de certificados");
+    expect(markup).toContain("Continuar a selección de credenciales");
     expect(markup).not.toContain("Verificar identidad");
     expect(markup).toContain("Paso pendiente 2: Selección");
   });
@@ -76,9 +76,9 @@ describe("paso de verificación de identidad", () => {
     expect(JSON.stringify(presentation)).not.toMatch(/state|code|token|session_state/i);
   });
 
-  it("inicia el paso 2 consultando los certificados sin inventar datos locales", () => {
+  it("inicia el paso 2 consultando las credenciales sin inventar datos locales", () => {
     const markup = renderToStaticMarkup(
-      <CertificateSelectionTransition
+      <DigitalCredentialSelectionTransition
         selected={null}
         onSelect={() => undefined}
         onBack={() => undefined}
@@ -86,14 +86,14 @@ describe("paso de verificación de identidad", () => {
     );
 
     expect(markup).toContain("Paso actual 2: Selección");
-    expect(markup).toContain("Consultando tus certificados vigentes");
-    expect(markup).not.toMatch(/UUID|número de orden|seleccionar certificado/i);
+    expect(markup).toContain("Consultando tus credenciales digitales");
+    expect(markup).not.toMatch(/UUID|número de orden|seleccionar credencial/i);
   });
 
   it("bloquea el doble inicio y usa el aviso compartido para errores", () => {
     const source = readFileSync(resolve(process.cwd(), "components/identity-verification-panel.tsx"), "utf8");
     const alertSource = readFileSync(resolve(process.cwd(), "components/identity-callback-alert.tsx"), "utf8");
-    const flowSource = readFileSync(resolve(process.cwd(), "components/cancellation-flow.tsx"), "utf8");
+    const flowSource = readFileSync(resolve(process.cwd(), "components/revocation-flow.tsx"), "utf8");
 
     expect(source).toContain("const inFlight = useRef(false)");
     expect(source).toContain("if (inFlight.current) return");

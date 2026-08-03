@@ -18,10 +18,10 @@ describe("ancho del contenido de los pasos", () => {
   });
 
   it.each([
-    "certificate-selection-transition.tsx",
-    "cancellation-reason-transition.tsx",
-    "cancellation-review-views.tsx",
-    "cancellation-receipt-transition.tsx",
+    "digital-credential-selection-transition.tsx",
+    "revocation-reason-transition.tsx",
+    "revocation-review-views.tsx",
+    "revocation-receipt-transition.tsx",
   ])("usa el contenedor compartido en %s", (fileName) => {
     const source = readFileSync(
       resolve(process.cwd(), "components", fileName),

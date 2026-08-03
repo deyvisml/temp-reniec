@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getSystemStatus } from "@/lib/api/system-status";
-import { startCancellationRequest } from "@/lib/api/cancellation-requests";
+import { startRevocationRequest } from "@/lib/api/revocation-requests";
 
 describe("live frontend to backend integration", () => {
   const recaptchaToken = process.env.RECAPTCHA_TEST_TOKEN ?? "test-recaptcha-valid";
@@ -14,7 +14,7 @@ describe("live frontend to backend integration", () => {
   });
 
 	it("initiates a real positive availability request through backend and MySQL", async () => {
-    const result = await startCancellationRequest("00000001", recaptchaToken);
+    const result = await startRevocationRequest("00000001", recaptchaToken);
     expect(result.data?.availabilityResult).toBe("AVAILABLE");
     expect(result.data?.requestStatus).toBe("PENDING_IDENTITY_VERIFICATION");
     expect(result.data?.canContinue).toBe(true);
@@ -24,14 +24,14 @@ describe("live frontend to backend integration", () => {
     expect(result.correlationId).toBeTruthy();
     expect(JSON.stringify(result.data)).not.toContain("00000001");
 		expect(JSON.stringify(result.data)).not.toMatch(
-			/certificateUuid|orderNumber|emissionCreatedAt|certificateCount|certificates/,
+			/digitalCredentialUuid|orderNumber|emissionCreatedAt|digitalCredentialCount|digitalCredentials/,
 		);
   });
 
 	it("keeps a confirmed negative availability result blocked", async () => {
-		const result = await startCancellationRequest("00000002", recaptchaToken);
+		const result = await startRevocationRequest("00000002", recaptchaToken);
 		expect(result.data?.availabilityResult).toBe("NOT_AVAILABLE");
-		expect(result.data?.requestStatus).toBe("NO_CERTIFICATES_AVAILABLE");
+		expect(result.data?.requestStatus).toBe("NO_DIGITAL_CREDENTIALS_AVAILABLE");
 		expect(result.data?.canContinue).toBe(false);
 		expect(result.data?.nextStep).toBeNull();
 		expect(JSON.stringify(result.data)).not.toContain("00000002");

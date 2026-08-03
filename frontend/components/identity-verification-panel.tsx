@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRef, useState } from "react";
 
-import { CancellationStepper } from "@/components/cancellation-stepper";
+import { RevocationStepper } from "@/components/revocation-stepper";
 import {
   IdentityCallbackAlert,
   type IdentityCallbackOutcome,
@@ -53,7 +53,7 @@ export function IdentityVerificationPanel({
         }} />
       ) : null}
       <div className="px-2 sm:px-8 lg:px-14">
-        <CancellationStepper
+        <RevocationStepper
           currentStep={1}
           navigableSteps={identityVerified ? [2] : []}
           onNavigate={identityVerified ? onContinue : undefined}
@@ -64,7 +64,7 @@ export function IdentityVerificationPanel({
           <p className="inline-flex rounded-full bg-[#fae9f0] px-4 py-1.5 text-xs font-black text-reniec-red">PASO 1 DE 5</p>
           <h1 id="identity-title" className="mt-4 text-3xl font-black tracking-[-0.025em] text-[#061a50] sm:text-4xl">Verifica tu identidad</h1>
           <p className="mx-auto mt-3 max-w-[620px] text-pretty text-base leading-7 text-[#52678f]">
-            Validamos tu identidad de forma segura mediante ID Perú. En este paso todavía no se cancelará ningún certificado.
+            Validamos tu identidad de forma segura mediante ID Perú. En este paso todavía no se revocará ninguna credencial.
           </p>
 
           <div className="mx-auto mt-7 grid max-w-[680px] gap-4 text-left sm:grid-cols-3 sm:gap-0" aria-label="Características de la verificación">
@@ -93,7 +93,7 @@ export function IdentityVerificationPanel({
 
           {identityVerified ? (
             <button type="button" onClick={onContinue} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
-              Continuar a selección de certificados <ForwardIcon />
+              Continuar a selección de credenciales <ForwardIcon />
             </button>
           ) : (
             <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">

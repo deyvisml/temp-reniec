@@ -1,5 +1,5 @@
 {
-  "name": "cancelacion-certificados-frontend",
+  "name": "revocacion-credenciales-digitales-frontend",
   "version": "0.1.0",
   "private": true,
   "engines": {

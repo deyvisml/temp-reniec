@@ -45,9 +45,9 @@ export function getAvailabilityOutcomePresentation(
     case "not-available":
       return {
         tone: "informative",
-        title: "No encontramos certificados para cancelar",
+        title: "No encontramos credenciales para revocar",
         description:
-          "No encontramos certificados digitales disponibles para cancelar con el DNI ingresado.",
+          "No encontramos credenciales digitales disponibles para revocar con el DNI ingresado.",
         primaryAction: { kind: "reset", label: "Aceptar" },
       };
 

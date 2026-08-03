@@ -6,11 +6,11 @@ product
 
 ## Users
 
-Ciudadanos peruanos que necesitan cancelar con rapidez los certificados digitales asociados a su DNI ante pérdida, robo, cambio de equipo o sospecha de uso no autorizado. Utilizan un canal institucional de autoservicio y deben comprender el resultado sin conocer detalles técnicos de certificación digital.
+Ciudadanos peruanos que necesitan revocar con rapidez las credenciales digitales asociadas a su DNI ante pérdida, robo, cambio de equipo o sospecha de uso no autorizado. Utilizan un canal institucional de autoservicio y deben comprender el resultado sin conocer detalles técnicos de la credencial digital.
 
 ## Product Purpose
 
-Ofrecer un flujo web institucional, comprensible y seguro para consultar la existencia de certificados cancelables, verificar la identidad del titular, confirmar la operación, ejecutar la revocación y entregar una constancia. El sistema debe impedir avances inválidos y comunicar con claridad los resultados negativos, temporales y definitivos.
+Ofrecer un flujo web institucional, comprensible y seguro para consultar la existencia de credenciales digitales revocables, verificar la identidad del titular, confirmar la operación, ejecutar la revocación y entregar una constancia. El sistema debe impedir avances inválidos y comunicar con claridad los resultados negativos, temporales y definitivos.
 
 ## Brand Personality
 
@@ -22,7 +22,7 @@ Institucional, clara y confiable. La experiencia debe transmitir serenidad y con
 - Tarjetas sobredimensionadas con demasiado espacio vacío para mensajes breves.
 - Alertas efímeras para resultados importantes que requieren comprensión o una acción.
 - Interfaces recargadas, decorativas o con patrones administrativos ajenos al flujo ciudadano.
-- Mensajes que sugieran la cancelación del DNI, la identidad civil o la cuenta de ID Perú.
+- Mensajes que sugieran la revocación del DNI o de la identidad civil.
 
 ## Design Principles
 

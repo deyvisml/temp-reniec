@@ -22,9 +22,10 @@ const contract = structuredClone(schema);
 delete contract.servers;
 assertInitialResponseBoundary(contract);
 assertRecaptchaRequestBoundary(contract);
-assertSingleCertificateBoundary(contract);
-const snapshot = `${JSON.stringify(sortRecursively(contract), null, 2)}\n`;
-const generated = astToString(await openapiTS(contract));
+assertSingleDigitalCredentialBoundary(contract);
+const normalizedContract = sortRecursively(contract);
+const snapshot = `${JSON.stringify(normalizedContract, null, 2)}\n`;
+const generated = astToString(await openapiTS(normalizedContract));
 
 if (mode === "sync") {
   await Promise.all([mkdir(dirname(snapshotPath), { recursive: true }), mkdir(dirname(typesPath), { recursive: true })]);
@@ -73,16 +74,16 @@ async function fetchSchema(url) {
 }
 
 function assertInitialResponseBoundary(document) {
-  const response = document.components?.schemas?.CancellationRequestResponse;
+  const response = document.components?.schemas?.RevocationRequestResponse;
   const properties = response?.properties ?? {};
   const required = new Set(response?.required ?? []);
   const forbidden = [
     "eligibilityResult",
-    "certificates",
-    "certificateCount",
-    "orderNumber",
+    "digitalCredentials",
+    "digitalCredentialCount",
+    "statusListIndex",
     "emissionCreatedAt",
-    "certificateUuid",
+    "digitalCredentialUuid",
     "uuid",
   ];
 
@@ -96,7 +97,7 @@ function assertInitialResponseBoundary(document) {
 }
 
 function assertRecaptchaRequestBoundary(document) {
-  const request = document.components?.schemas?.StartCancellationRequest;
+  const request = document.components?.schemas?.StartRevocationRequest;
   const properties = request?.properties ?? {};
   const required = new Set(request?.required ?? []);
   const token = properties.recaptchaToken;
@@ -111,22 +112,22 @@ function assertRecaptchaRequestBoundary(document) {
   }
 }
 
-function assertSingleCertificateBoundary(document) {
-  const selection = document.components?.schemas?.CancellationConfirmationRequest;
+function assertSingleDigitalCredentialBoundary(document) {
+  const selection = document.components?.schemas?.RevocationConfirmationRequest;
   const selectionProperties = selection?.properties ?? {};
   const selectionRequired = new Set(selection?.required ?? []);
-  if (!("certificateUuid" in selectionProperties) || !selectionRequired.has("certificateUuid")) {
-    throw new Error("El contrato de selección debe exigir un certificateUuid singular.");
+  if (!("digitalCredentialUuid" in selectionProperties) || !selectionRequired.has("digitalCredentialUuid")) {
+    throw new Error("El contrato de selección debe exigir un digitalCredentialUuid singular.");
   }
-  if ("certificateUuids" in selectionProperties || selectionProperties.certificateUuid?.type === "array") {
-    throw new Error("El contrato de selección no debe aceptar colecciones de certificados.");
+  if ("digitalCredentialUuids" in selectionProperties || selectionProperties.digitalCredentialUuid?.type === "array") {
+    throw new Error("El contrato de selección no debe aceptar colecciones de credenciales.");
   }
 
-  const review = document.components?.schemas?.CancellationReviewResponse;
+  const review = document.components?.schemas?.RevocationReviewResponse;
   const reviewProperties = review?.properties ?? {};
   const reviewRequired = new Set(review?.required ?? []);
-  if (!("certificate" in reviewProperties) || !reviewRequired.has("certificate")
-      || "certificates" in reviewProperties) {
-    throw new Error("El resumen de confirmación debe exponer un certificate singular.");
+  if (!("digitalCredential" in reviewProperties) || !reviewRequired.has("digitalCredential")
+      || "digitalCredentials" in reviewProperties) {
+    throw new Error("El resumen de confirmación debe exponer una credencial digital singular.");
   }
 }

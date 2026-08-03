@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const isInternalFlow = pathname === "/cancelacion" || pathname === "/autorizacion";
+  const isInternalFlow = pathname === "/revocacion" || pathname === "/autorizacion";
 
   return (
     <header className="relative z-5 bg-[linear-gradient(110deg,#001440,#002b79_52%,#003ba1)] text-white shadow-[0_8px_30px_#00143c1f]">
@@ -40,7 +40,7 @@ export function SiteHeader() {
             <HeaderItem
               icon={<ShieldIcon />}
               title="Servicio ciudadano"
-              text="Cancelación de certificados digitales"
+              text="Revocación de credenciales digitales"
             />
           </div>
         )}

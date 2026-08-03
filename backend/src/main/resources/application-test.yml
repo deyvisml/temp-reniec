@@ -29,17 +29,21 @@ app:
     mode: mock
     flow-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     mock-scenario: MATCH
-  certificate-listing:
+  credential-provider:
     mode: mock
+  digital-credential-listing:
     stale-reservation-threshold: 100ms
   revocation:
-    mode: mock
     mock-outcome: SUCCEEDED
     stale-submission-threshold: 100ms
+    propagation-delay: 0s
   receipt:
     mode: filesystem
     storage-root: target/test-receipts
     stale-generation-threshold: 100ms
+    processing-enabled: false
+    processing-interval: 100ms
+    require-absolute-storage-root: false
 
 server:
   port: 0
@@ -53,4 +57,4 @@ management:
 logging:
   level:
     root: ${LOG_LEVEL_ROOT:WARN}
-    pe.gob.reniec.certificados.cancelacion: ${LOG_LEVEL_APP:WARN}
+    pe.gob.reniec.credenciales.revocacion: ${LOG_LEVEL_APP:WARN}

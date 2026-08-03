@@ -14,7 +14,7 @@ export type IdentityCallbackOutcome =
 
 const presentations: Record<IdentityCallbackOutcome, { title: string; description: string }> = {
   CANCELLED: {
-    title: "Verificación cancelada",
+    title: "Verificación revocada",
     description: "No se completó la verificación con ID Perú. Puedes intentarlo nuevamente cuando estés listo.",
   },
   REJECTED: {

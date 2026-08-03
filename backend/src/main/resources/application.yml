@@ -1,6 +1,6 @@
 spring:
   application:
-    name: ${APP_NAME:cancelacion-certificados-backend}
+    name: ${APP_NAME:revocacion-credenciales-digitales-backend}
   flyway:
     clean-disabled: true
     enabled: true
@@ -37,20 +37,28 @@ app:
   id-peru:
     mode: disabled
     version: v1
-  certificate-listing:
-    mode: ${CERTIFICATE_LISTING_MODE:disabled}
-    stale-reservation-threshold: ${CERTIFICATE_LISTING_STALE_THRESHOLD:30s}
+  credential-provider:
+    mode: ${CREDENTIAL_PROVIDER_MODE:disabled}
+    base-url: ${CREDENTIAL_PROVIDER_BASE_URL:}
+    api-key: ${CREDENTIAL_PROVIDER_API_KEY:}
+    connect-timeout: ${CREDENTIAL_PROVIDER_CONNECT_TIMEOUT:3s}
+    read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:5s}
+  digital-credential-listing:
+    stale-reservation-threshold: ${DIGITAL_CREDENTIAL_LISTING_STALE_THRESHOLD:30s}
   revocation:
-    mode: ${REVOCATION_MODE:disabled}
     mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
     stale-submission-threshold: ${REVOCATION_STALE_SUBMISSION_THRESHOLD:30s}
+    propagation-delay: ${REVOCATION_PROPAGATION_DELAY:60s}
   receipt:
     mode: ${RECEIPT_MODE:disabled}
-    storage-root: ${RECEIPT_STORAGE_ROOT:tmp/receipts}
+    storage-root: ${RECEIPT_STORAGE_ROOT:storage/receipts}
     stale-generation-threshold: ${RECEIPT_STALE_GENERATION_THRESHOLD:1m}
+    processing-interval: ${RECEIPT_PROCESSING_INTERVAL:5s}
+    processing-enabled: ${RECEIPT_PROCESSING_ENABLED:false}
+    require-absolute-storage-root: ${RECEIPT_REQUIRE_ABSOLUTE_STORAGE_ROOT:true}
   session:
-    issuer: cancelacion-certificados-backend
-    audience: cancelacion-certificados-flow
+    issuer: revocacion-credenciales-digitales-backend
+    audience: revocacion-credenciales-digitales-flow
     signing-secret: ${SESSION_SIGNING_SECRET:}
     access-ttl: ${SESSION_ACCESS_TTL:15m}
     refresh-ttl: ${SESSION_REFRESH_TTL:3d}
@@ -82,4 +90,4 @@ logging:
     console: "%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [%X{correlationId:-no-correlation}] %logger{36} - %msg%n"
   level:
     root: ${LOG_LEVEL_ROOT:INFO}
-    pe.gob.reniec.certificados.cancelacion: ${LOG_LEVEL_APP:INFO}
+    pe.gob.reniec.credenciales.revocacion: ${LOG_LEVEL_APP:INFO}

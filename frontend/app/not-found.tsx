@@ -1,4 +1,4 @@
-import { CANCELLATION_FLOW_ROUTE } from "@/lib/routes";
+import { REVOCATION_FLOW_ROUTE } from "@/lib/routes";
 
 export default function NotFound() {
   return (
@@ -11,7 +11,7 @@ export default function NotFound() {
         La dirección solicitada no está disponible. Puedes volver al inicio del servicio.
       </p>
       <a
-        href={CANCELLATION_FLOW_ROUTE}
+        href={REVOCATION_FLOW_ROUTE}
         className="mt-6 inline-flex min-h-11 items-center rounded-lg bg-slate-950 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-slate-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400]"
       >
         Volver al inicio

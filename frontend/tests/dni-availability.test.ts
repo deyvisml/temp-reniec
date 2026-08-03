@@ -9,10 +9,10 @@ import {
   isConsistentInitialResponse,
   validateDni,
 } from "@/components/dni-availability-form";
-import type { CancellationRequestResponse } from "@/lib/api/contracts";
-import { startCancellationRequest } from "@/lib/api/cancellation-requests";
+import type { RevocationRequestResponse } from "@/lib/api/contracts";
+import { startRevocationRequest } from "@/lib/api/revocation-requests";
 import { HttpClientError } from "@/lib/http-client";
-import { CANCELLATION_FLOW_ROUTE } from "@/lib/routes";
+import { REVOCATION_FLOW_ROUTE } from "@/lib/routes";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -27,13 +27,13 @@ describe("DNI eligibility entry", () => {
   });
 
   it("uses one canonical route without exposing request identifiers", () => {
-    expect(CANCELLATION_FLOW_ROUTE).toBe("/cancelacion");
-    expect(CANCELLATION_FLOW_ROUTE).not.toContain("42");
-    expect(CANCELLATION_FLOW_ROUTE).not.toContain("12345678");
+    expect(REVOCATION_FLOW_ROUTE).toBe("/revocacion");
+    expect(REVOCATION_FLOW_ROUTE).not.toContain("42");
+    expect(REVOCATION_FLOW_ROUTE).not.toContain("12345678");
   });
 
   it("rejects inconsistent or privacy-unsafe initial responses", () => {
-    const valid: CancellationRequestResponse = {
+    const valid: RevocationRequestResponse = {
       requestId: 42,
       maskedDni: "******01",
       requestStatus: "PENDING_IDENTITY_VERIFICATION",
@@ -50,7 +50,7 @@ describe("DNI eligibility entry", () => {
     expect(isConsistentInitialResponse({
       ...valid,
       availabilityResult: "NOT_AVAILABLE",
-      requestStatus: "NO_CERTIFICATES_AVAILABLE",
+      requestStatus: "NO_DIGITAL_CREDENTIALS_AVAILABLE",
       canContinue: false,
       nextStep: null,
     })).toBe(true);
@@ -67,16 +67,16 @@ describe("DNI eligibility entry", () => {
     }), { status: 200, headers: { "Content-Type": "application/json", "X-Correlation-ID": "front-test" } }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await startCancellationRequest("00000001", "ephemeral-test-token");
+    const result = await startRevocationRequest("00000001", "ephemeral-test-token");
 
     expect(result.data?.canContinue).toBe(true);
     expect(result.correlationId).toBe("front-test");
 		expect(JSON.stringify(result.data)).not.toMatch(
-			/certificateUuid|orderNumber|emissionCreatedAt|certificateCount|00000001/,
+			/digitalCredentialUuid|orderNumber|emissionCreatedAt|digitalCredentialCount|00000001/,
 		);
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe("/api/v1/cancellation-requests");
+    expect(url.pathname).toBe("/api/v1/revocation-requests");
     expect(init.method).toBe("POST");
     expect(init.body).toBe('{"dni":"00000001","recaptchaToken":"ephemeral-test-token"}');
   });
@@ -90,7 +90,7 @@ describe("DNI eligibility entry", () => {
     expect(canSubmitInitialQuery("00000001", "", false, false, false)).toBe(true);
   });
 
-  it("maps CAPTCHA failures separately from certificate availability", () => {
+  it("maps CAPTCHA failures separately from digitalCredential availability", () => {
     expect(buildRecaptchaErrorMessage(new HttpClientError("Rejected", {
       code: "RECAPTCHA_REJECTED",
     }))).toContain("verificación");
@@ -104,7 +104,7 @@ describe("DNI eligibility entry", () => {
 
   it("maps a protected prior operation to a generic non-retryable result", () => {
     const view = buildAvailabilityErrorView(new HttpClientError("Conflict", {
-      code: "CANCELLATION_REQUEST_IN_PROGRESS",
+      code: "REVOCATION_REQUEST_IN_PROGRESS",
       correlationId: "protected-test",
     }));
 

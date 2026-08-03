@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 describe("OpenAPI drift check", () => {
   it("fails when committed snapshot or generated types are misaligned", async () => {
-    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "cancelacion-openapi-"));
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "revocacion-openapi-"));
     try {
       await mkdir(resolve(temporaryRoot, "openapi"), { recursive: true });
       await mkdir(resolve(temporaryRoot, "lib/api"), { recursive: true });

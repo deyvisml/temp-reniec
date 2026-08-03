@@ -4,8 +4,8 @@ import { resolveBackendUrl } from "@/lib/http-client";
 import { parseCurrentFlowSession, type CurrentFlowSession } from "@/lib/api/flow-session";
 
 const CURRENT = "/api/v1/session/current";
-const ACCESS_COOKIE = "cancelacion_access";
-const REFRESH_COOKIE = "cancelacion_refresh";
+const ACCESS_COOKIE = "revocacion_access";
+const REFRESH_COOKIE = "revocacion_refresh";
 
 export async function hasServerRefreshToken(): Promise<boolean> {
   return Boolean((await cookies()).get(REFRESH_COOKIE)?.value);

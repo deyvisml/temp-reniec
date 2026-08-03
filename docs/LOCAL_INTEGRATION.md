@@ -13,14 +13,14 @@ docker compose up -d --wait
 docker compose ps
 ```
 
-El resultado debe mostrar `3307->3306` y estado saludable. Compose crea la base y usuario; no ejecutes SQL manual. El volumen `cancelacion-certificados-local_mysql-data` conserva los datos locales.
+El resultado debe mostrar `3307->3306` y estado saludable. Compose crea la base y usuario; no ejecutes SQL manual. El volumen `revocacion-credenciales-local_mysql-data` conserva los datos locales.
 
 ## 2. Backend
 
 En otra terminal, desde `/backend`:
 
 ```powershell
-.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
 El perfil importa opcionalmente `backend/.env`; Flyway migra o valida el esquema al iniciar y el adaptador Google exige `RECAPTCHA_SECRET_KEY`. Comprueba ambas rutas:
@@ -32,7 +32,9 @@ Invoke-WebRequest http://localhost:8080/api/v1/system/status -Headers @{ "X-Corr
 
 La segunda respuesta debe ser `200`, contener backend/MySQL `UP` y devolver `X-Correlation-ID`.
 
-La operación inicial `POST /api/v1/cancellation-requests` valida reCAPTCHA antes de cualquier escritura y consulta únicamente la existencia de certificados disponibles. Su respuesta no contiene token, lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del servicio de disponibilidad se documentan en [`backend/README.md`](../backend/README.md).
+Por defecto `CREDENTIAL_PROVIDER_MODE=mock`. Para comprobar el contrato oficial contra un servicio local, configura `real`, `CREDENTIAL_PROVIDER_BASE_URL=http://127.0.0.1:<puerto>` y una `CREDENTIAL_PROVIDER_API_KEY` de prueba. Fuera de los perfiles local/test la URL debe usar HTTPS; en producción el modo real y ambas credenciales son obligatorios. Nunca copies una clave real al repositorio ni a los logs.
+
+La operación inicial `POST /api/v1/revocation-requests` valida reCAPTCHA antes de cualquier escritura y consulta únicamente la existencia de credenciales disponibles. Su respuesta no contiene token, lista, cantidad, número de orden, fecha de creación ni UUID. Los DNI ficticios y resultados deterministas del servicio de disponibilidad se documentan en [`backend/README.md`](../backend/README.md).
 
 ## 3. Contrato y frontend
 

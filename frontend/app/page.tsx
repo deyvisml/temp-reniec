@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { PublicCancellationEntry } from "@/components/public-cancellation-entry";
+import { PublicRevocationEntry } from "@/components/public-revocation-entry";
 import { activeFlowRoute } from "@/lib/routes";
 import { hasServerRefreshToken, readServerFlowSession } from "@/lib/server-flow-session";
 
@@ -9,5 +9,5 @@ export default async function HomePage() {
   if (await hasServerRefreshToken()) {
     redirect(`/api/session/refresh?returnTo=${encodeURIComponent(flowRoute)}`);
   }
-  return <PublicCancellationEntry />;
+  return <PublicRevocationEntry />;
 }

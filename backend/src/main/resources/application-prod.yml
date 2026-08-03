@@ -4,6 +4,12 @@ spring:
       on-profile: prod
 
 app:
+  credential-provider:
+    mode: real
+    base-url: ${CREDENTIAL_PROVIDER_BASE_URL}
+    api-key: ${CREDENTIAL_PROVIDER_API_KEY}
+    connect-timeout: ${CREDENTIAL_PROVIDER_CONNECT_TIMEOUT:3s}
+    read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:5s}
   session:
     signing-secret: ${SESSION_SIGNING_SECRET}
     cookie-secure: true

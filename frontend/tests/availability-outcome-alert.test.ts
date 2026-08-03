@@ -13,9 +13,9 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     const presentation = getAvailabilityOutcomePresentation({ kind: "not-available" });
 
     expect(presentation.tone).toBe("informative");
-    expect(presentation.title).toBe("No encontramos certificados para cancelar");
+    expect(presentation.title).toBe("No encontramos credenciales para revocar");
     expect(presentation.description).toBe(
-      "No encontramos certificados digitales disponibles para cancelar con el DNI ingresado.",
+      "No encontramos credenciales digitales disponibles para revocar con el DNI ingresado.",
     );
     expect(presentation.primaryAction).toEqual({
       kind: "reset",
@@ -29,7 +29,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     const error = getAvailabilityOutcomePresentation({
       kind: "error",
       title: "Servicio temporalmente no disponible",
-      message: "No podemos consultar los certificados en este momento.",
+      message: "No podemos consultar las credenciales en este momento.",
       correlationId: "correlation-test",
     });
 
@@ -52,7 +52,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
 
     expect(presentation.primaryAction).toEqual({ kind: "reset", label: "Aceptar" });
     expect(presentation.secondaryAction).toBeUndefined();
-    expect(presentation.description).not.toMatch(/recuper|constancia|certificado seleccionado/i);
+    expect(presentation.description).not.toMatch(/recuper|constancia|credencial seleccionada/i);
   });
 
   it("builds supported SweetAlert2 options without dynamic HTML", () => {

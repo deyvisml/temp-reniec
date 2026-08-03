@@ -18,7 +18,7 @@ export function InternalFlowHeader({ session }: { session: CurrentFlowSession })
 
   useEffect(() => {
     if (!("BroadcastChannel" in window)) return;
-    const channel = new BroadcastChannel("cancelacion-flow-session");
+    const channel = new BroadcastChannel("revocacion-flow-session");
     channel.onmessage = event => {
       if (event.data === "logout") router.replace("/");
     };
@@ -32,7 +32,7 @@ export function InternalFlowHeader({ session }: { session: CurrentFlowSession })
     try {
       await logoutFlowSession();
       if ("BroadcastChannel" in window) {
-        const channel = new BroadcastChannel("cancelacion-flow-session");
+        const channel = new BroadcastChannel("revocacion-flow-session");
         channel.postMessage("logout");
         channel.close();
       }

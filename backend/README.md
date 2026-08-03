@@ -1,6 +1,6 @@
-# Backend de cancelación de certificados digitales
+# Backend de revocación de credenciales digitales
 
-Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano protegido por Google reCAPTCHA v2 Checkbox para iniciar una solicitud y consultar si existen certificados disponibles mediante un mock local reemplazable.
+Backend construido con Java 21, Spring Boot 4.1.0, Maven y MySQL. Incluye persistencia, la API técnica y el primer caso de uso ciudadano protegido por Google reCAPTCHA v2 Checkbox para iniciar una solicitud y consultar si existen credenciales disponibles mediante un mock local reemplazable.
 
 ## Requisitos previos
 
@@ -53,7 +53,7 @@ Compose crea la base, el usuario local y un volumen persistente. No es necesario
 Inicia el backend:
 
 ```powershell
-.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=local
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
 Flyway aplica o valida automáticamente las migraciones antes de que la aplicación quede operativa. Comprueba la salud en otra terminal:
@@ -84,12 +84,12 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | --- | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | Sin perfil | Usa `local` al ejecutar manualmente; las pruebas activan `test`. |
 | `SERVER_PORT` | `8080` | Puerto HTTP. |
-| `APP_NAME` | `cancelacion-certificados-backend` | Nombre de aplicación. |
+| `APP_NAME` | `revocacion-credenciales-backend` | Nombre de aplicación. |
 | `LOG_LEVEL_ROOT` | `INFO` (`WARN` en test) | Log general. |
 | `LOG_LEVEL_APP` | `INFO` (`DEBUG` local) | Log institucional. |
 | `DB_HOST` | `localhost` | Host MySQL. |
 | `DB_PORT` | `3308` | Puerto MySQL publicado en el host; se mapea al `3306` interno del contenedor. |
-| `DB_NAME` | `cancelacion_certificados` | Base MySQL. |
+| `DB_NAME` | `revocacion_credenciales` | Base MySQL. |
 | `DB_USERNAME` | Obligatoria | Usuario MySQL; disponible en la plantilla local. |
 | `DB_PASSWORD` | Obligatoria | Contraseña MySQL; disponible en la plantilla local. |
 | `MYSQL_ROOT_PASSWORD` | Solo Compose | Contraseña root para inicialización y healthcheck local. |
@@ -103,7 +103,7 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `RECAPTCHA_ALLOWED_HOSTNAMES` | `localhost` | Lista exacta, separada por comas, de hostnames aceptados. |
 | `ID_PERU_MODE` | `mock` en local | Selecciona `mock` o `real` sin cambiar el perfil de desarrollo. Producción siempre usa `real`. |
 | `ID_PERU_MOCK_SCENARIO` | `MATCH` | `MATCH`, `MISMATCH`, `CANCELLED`, `REJECTED`, `TIMEOUT`, `UNAVAILABLE` o `INVALID`. |
-| `APP_FRONTEND_BASE_URL` | `http://localhost:3000` en local | Base del frontend; el retorno se deriva como `/cancelacion`. |
+| `APP_FRONTEND_BASE_URL` | `http://localhost:3000` en local | Base del frontend; el retorno se deriva como `/revocacion`. |
 | `APP_BACKEND_BASE_URL` | `http://localhost:8080` en local | Base del backend; en local se deriva el callback registrado `/api/v1/idperu/callback`. |
 | Versión de ID Perú | `v1` en local y `v2` en producción | Se define por perfil: v1 usa `idaas.reniec.gob.pe`; v2 usa `idaas2.reniec.gob.pe` y PKCE. No requiere una variable manual. |
 | `ID_PERU_CLIENT_ID` / `ID_PERU_CLIENT_SECRET` | Obligatorias en modo `real` | Credenciales autorizadas exclusivas del backend. |
@@ -111,7 +111,7 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `ID_PERU_FLOW_SECRET` | Valor local de desarrollo; obligatorio externo en `prod` | Base64 de exactamente 32 bytes; deriva claves separadas para PKCE y continuidad. |
 | `SESSION_SIGNING_SECRET` | Valor conocido solo en local; obligatorio externo en `prod` | Base64 de al menos 32 bytes para firmar access y refresh JWT. |
 | `SESSION_ACCESS_TTL` | `15m` | Vigencia corta del access JWT, alineada con el proyecto de autorización de referencia. |
-| `SESSION_REFRESH_TTL` | `3d` | Ventana renovable de la operación activa; cada rotación válida emite un refresh con esta vigencia. |
+| `SESSION_REFRESH_TTL` | `3d` | Ventana actualizable de la operación activa; cada rotación válida emite un refresh con esta vigencia. |
 | `SESSION_CONCURRENT_REFRESH_WINDOW` | `5s` | Ventana para reconocer una carrera legítima entre pestañas. |
 
 El perfil `local` importa opcionalmente `.env` desde el directorio de trabajo. Las variables definidas directamente en el proceso tienen mayor precedencia, por lo que pueden reemplazar cualquier valor del archivo. Si no deseas usar `.env`, proporciona al menos `DB_USERNAME` y `DB_PASSWORD` mediante el entorno del proceso.
@@ -133,14 +133,14 @@ Desde `/backend`, en Windows:
 - `test` ejecuta las pruebas técnicas rápidas sin MySQL ni Docker.
 - `clean verify` ejecuta además las pruebas `*IT`. Testcontainers inicia MySQL 8.4.0, Flyway construye una base vacía, Hibernate valida el esquema y el contenedor se elimina al finalizar.
 - `clean` evita conservar recursos compilados obsoletos en `target` después de sustituir una migración.
-- El artefacto queda en `target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar`.
+- El artefacto queda en `target/revocacion-credenciales-backend-0.0.1-SNAPSHOT.jar`.
 
 En Linux o macOS, usa `./mvnw`.
 
 Después de compilar también puedes ejecutar el backend desde `/backend`:
 
 ```powershell
-java -jar target/cancelacion-certificados-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -jar target/revocacion-credenciales-backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
 ```
 
 Flyway es el único propietario del esquema y aplica el historial V1–V7 hasta obtener el modelo vigente de ocho tablas. Hibernate aplica `ddl-auto=validate`: no crea ni modifica tablas. Si MySQL no está disponible o una migración no coincide, el backend no inicia.
@@ -177,7 +177,7 @@ Un endpoint no se considera terminado mientras la documentación generada difier
 
 ## Verificación de identidad con ID Perú
 
-Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/cancelacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
+Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/revocacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
 
 El retorno siempre responde `303 See Other` hacia una URI frontend fija. Éxitos y fallos no exponen un documento JSON en el navegador ni propagan `code`, `state`, `session_state`, tokens o DNI en la redirección. Solo una identidad verificada recibe la autorización temporal; los resultados controlados regresan al paso 1 mediante un aviso efímero.
 
@@ -208,11 +208,11 @@ APP_FRONTEND_BASE_URL=http://localhost:3000
 APP_BACKEND_BASE_URL=http://localhost:8080
 ```
 
-En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/cancelacion`. Reinicia el backend después de cambiar el perfil o el modo; no es necesario modificar YAML ni Java.
+En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/revocacion`. Reinicia el backend después de cambiar el perfil o el modo; no es necesario modificar YAML ni Java.
 
-Para la integración real local, ejecuta el backend con **JDK 21** (también es la versión de compilación del proyecto). Se comprobó que el endpoint institucional de ID Perú valida su cadena TLS con el almacén de certificados de JDK 21, mientras que la instalación local de JDK 22 puede rechazarla con `PKIX path building failed`. En IntelliJ selecciona `C:\Program Files\Java\jdk-21.0.11` como JRE de la configuración de ejecución. No se debe desactivar la validación TLS ni agregar un trust manager permisivo para sortear este error.
+Para la integración real local, ejecuta el backend con **JDK 21** (también es la versión de compilación del proyecto). Se comprobó que el endpoint institucional de ID Perú valida su cadena TLS con el almacén de credenciales de JDK 21, mientras que la instalación local de JDK 22 puede rechazarla con `PKIX path building failed`. En IntelliJ selecciona `C:\Program Files\Java\jdk-21.0.11` como JRE de la configuración de ejecución. No se debe desactivar la validación TLS ni agregar un trust manager permisivo para sortear este error.
 
-Tras iniciar una consulta con cualquier DNI válido que no sea un fixture especial, abre `/cancelacion`. El resultado positivo debe llevarte a `/autorizacion`; desde allí inicia la verificación. El navegador debe salir hacia la URL institucional, ID Perú debe retornar al callback local y la vista final debe permanecer en `/autorizacion`. Si el DNI autenticado no coincide con el ingresado, el rechazo es esperado y no debe deshabilitarse.
+Tras iniciar una consulta con cualquier DNI válido que no sea un fixture especial, abre `/revocacion`. El resultado positivo debe llevarte a `/autorizacion`; desde allí inicia la verificación. El navegador debe salir hacia la URL institucional, ID Perú debe retornar al callback local y la vista final debe permanecer en `/autorizacion`. Si el DNI autenticado no coincide con el ingresado, el rechazo es esperado y no debe deshabilitarse.
 
 La aplicación mantiene internamente las decisiones estables de ID Perú: conexión 3 s, lectura 5 s, `state` 5 min, caché JWKS 15 min y ACR `face_mobile`. La continuidad del trámite ya no depende de una cookie temporal de ID Perú: utiliza las cookies JWT de sesión documentadas en [`docs/session/README.md`](../docs/session/README.md). Modificar estos valores requiere una necesidad operativa comprobada y un cambio de código revisado.
 
@@ -227,9 +227,9 @@ La referencia obligatoria es [`docs/integrations/id-peru/IDAAS-V2-Especificacion
 
 ## Inicio ciudadano y mock de disponibilidad
 
-`POST /api/v1/cancellation-requests` recibe JSON con un DNI de ocho dígitos y `recaptchaToken`. El backend valida primero la evidencia con Google; solo después crea una solicitud, registra el intento y determina si existe al menos un certificado disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni persiste el token, ni crea certificados individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; DNI, token y secret no aparecen en URLs, errores ni logs.
+`POST /api/v1/revocation-requests` recibe JSON con un DNI de ocho dígitos y `recaptchaToken`. El backend valida primero la evidencia con Google; solo después crea una solicitud, registra el intento y determina si existe al menos una credencial disponible. Devuelve `requestId`, DNI enmascarado, estado, `availabilityResult` y siguiente paso autorizado. No devuelve ni persiste el token, ni crea credenciales individuales, cantidad, número de orden, fecha de creación o UUID. El identificador numérico no autentica ni autoriza; DNI, token y secret no aparecen en URLs, errores ni logs.
 
-Los errores anti-bot son `RECAPTCHA_REQUIRED`, `RECAPTCHA_REJECTED`, `RECAPTCHA_EXPIRED_OR_DUPLICATE`, `RECAPTCHA_UNAVAILABLE`, `RECAPTCHA_TIMEOUT` y `RECAPTCHA_INVALID_RESPONSE`. Ninguno se interpreta como ausencia de certificados. El adaptador usa `RestClient`, formulario `secret`/`response`, timeout acotado y comparación exacta de hostname; no envía la IP del ciudadano, no reintenta y no incorpora circuit breaker.
+Los errores anti-bot son `RECAPTCHA_REQUIRED`, `RECAPTCHA_REJECTED`, `RECAPTCHA_EXPIRED_OR_DUPLICATE`, `RECAPTCHA_UNAVAILABLE`, `RECAPTCHA_TIMEOUT` y `RECAPTCHA_INVALID_RESPONSE`. Ninguno se interpreta como ausencia de credenciales. El adaptador usa `RestClient`, formulario `secret`/`response`, timeout acotado y comparación exacta de hostname; no envía la IP del ciudadano, no reintenta y no incorpora circuit breaker.
 
 El adaptador de perfiles `local` y `test` es determinista y no representa el contrato institucional:
 
@@ -241,35 +241,37 @@ El adaptador de perfiles `local` y `test` es determinista y no representa el con
 | `00000005` | Error técnico controlado |
 | `00000006` | Timeout |
 
-Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que el flujo local normal pueda probarse con la misma identidad que autenticará ID Perú. Los fixtures especiales son sintéticos y ningún resultado inicial produce objetos de certificado. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada.
+Cualquier otro DNI válido, incluido `00000001`, devuelve `AVAILABLE` para que el flujo local normal pueda probarse con la misma identidad que autenticará ID Perú. Los fixtures especiales son sintéticos y ningún resultado inicial produce objetos de credencial. Los resultados inconclusos o técnicos nunca se convierten en ausencia confirmada.
 
 ## Paso 2: listado y selección local
 
-Después de una identidad verificada, `GET /api/v1/cancellation-requests/current/certificates` obtiene una sola vez el listado detallado y devuelve en recargas la instantánea persistida. `PUT /api/v1/cancellation-requests/current/certificate-selection` reemplaza el único certificado seleccionado. Ambos endpoints derivan la solicitud desde la cookie de sesión; no aceptan DNI ni `requestId` del navegador.
+Después de una identidad verificada, `GET /api/v1/revocation-requests/current/digital-credentials` obtiene una sola vez el listado detallado de credenciales vigentes y revocadas y devuelve en recargas la instantánea persistida. Cada elemento expone `status: ACTIVE | REVOKED` y `revokedAt`; la fecha es obligatoria exclusivamente para `REVOKED`. La selección permanece en memoria durante los pasos 2 y 3 y solo admite credenciales `ACTIVE`.
 
-El perfil `local` usa `CERTIFICATE_LISTING_MODE=mock`. El contrato institucional del segundo servicio aún no está disponible, por lo que el modo `real` falla al iniciar en vez de inventar URL, autenticación o payload. Los escenarios deterministas del mock son:
+El perfil `local` usa `CREDENTIAL_PROVIDER_MODE=mock`. Los tres servicios oficiales comparten `CREDENTIAL_PROVIDER_BASE_URL`, `CREDENTIAL_PROVIDER_API_KEY`, `CREDENTIAL_PROVIDER_CONNECT_TIMEOUT` y `CREDENTIAL_PROVIDER_READ_TIMEOUT`. Para una prueba real local se admite HTTP solo contra loopback; producción obliga `real`, HTTPS y credenciales completas. Los escenarios deterministas del mock son:
 
 | DNI ficticio | Listado detallado |
 | --- | --- |
 | `00000020` | Lista vacía |
-| `00000021` | Un certificado |
-| `00000022` | Tres certificados |
+| `00000021` | Una credencial |
+| `00000022` | Dos credenciales vigentes y una revocada |
 | `00000023` | UUID duplicado, respuesta rechazada |
 | `00000024` | UUID inválido, respuesta rechazada |
 | `00000025` | Timeout |
 | `00000026` | Servicio no disponible |
 | `00000027` | Respuesta malformada |
-| Cualquier otro DNI válido | Tres certificados ficticios |
+| Cualquier otro DNI válido | Dos credenciales vigentes y una revocada |
 
-La lista vacía no crea filas y bloquea el avance. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. La selección exige al menos un UUID, rechaza duplicados o certificados ajenos, y una repetición idéntica es idempotente.
+La lista vacía o sin credenciales vigentes finaliza en `NO_DIGITAL_CREDENTIALS_AVAILABLE`; en el segundo caso conserva la fotografía de credenciales revocadas. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. La confirmación exige un único UUID vigente, rechaza duplicados, credenciales ajenas o revocadas, y una repetición idéntica es idempotente.
 
 ## Paso 4: revisión y confirmación
 
-`GET /api/v1/cancellation-requests/current/review` devuelve el resumen autoritativo de la solicitud activa con DNI y UUID enmascarados, el certificado seleccionado, motivo, consecuencias y la versión vigente del consentimiento. El navegador no envía esos datos como fuente de verdad.
+`POST /api/v1/revocation-requests/current/review` valida el borrador sin persistirlo y devuelve el resumen con DNI enmascarado, credencial seleccionada, motivo, consecuencias y versión de consentimiento. `GET` recupera el resumen de una solicitud ya confirmada. Ninguna respuesta ciudadana muestra el UUID.
 
-`POST /api/v1/cancellation-requests/current/confirmation` recibe únicamente la aceptación expresa y la versión mostrada. El backend revalida sesión, identidad, estado, motivo y selección dentro de una transacción con bloqueo. Una confirmación repetida idéntica devuelve el mismo resultado y conserva una sola fecha y un solo evento de auditoría.
+`POST /api/v1/revocation-requests/current/confirmation` recibe el UUID interno, motivo, descripción opcional, aceptación expresa y versión mostrada. El backend revalida sesión, identidad, estado, motivo y selección dentro de una transacción con bloqueo. Una confirmación repetida idéntica reutiliza la misma operación idempotente.
 
-La versión inicial es `CANCELACION_CERTIFICADOS_V1`. La confirmación bloquea cambios posteriores y deja la solicitud en `CONFIRMED`; no consume todavía el proveedor de revocación ni genera una constancia.
+La versión inicial es `REVOCACION_CREDENCIALES_DIGITALES_V1`. La UI invoca la confirmación una sola vez, protege dobles envíos y avanza al paso 5 únicamente después de una revocación exitosa con constancia disponible. Tras una respuesta exitosa del proveedor, el backend respeta `REVOCATION_PROPAGATION_DELAY` (60 segundos por defecto), conserva una constancia `PENDING` y la genera mediante un procesador recuperable aunque el navegador se cierre.
+
+En local los PDF se escriben atómicamente y se conservan en `storage/receipts`, fuera del control de versiones. Esta ubicación persiste entre reinicios del backend. Al habilitar `RECEIPT_MODE=filesystem` fuera de local/test, `RECEIPT_STORAGE_ROOT` debe ser una ruta absoluta sobre un volumen persistente con respaldo; MySQL conserva únicamente la referencia segura del archivo.
 
 ## Detener y reiniciar MySQL local
 
@@ -296,7 +298,7 @@ Nunca ejecutes el reinicio destructivo contra una base compartida o con informac
 
 ## Antecedente de la V1 local
 
-La V1 consolidada eliminó estructuras anteriores de sobreingeniería. Desde entonces, V2–V5 evolucionan el esquema exclusivamente hacia adelante; V5 corrige la separación entre disponibilidad inicial y listado autenticado. Una base que ya estaba en V4 se actualiza sin recrearse ni perder certificados existentes.
+La V1 consolidada eliminó estructuras anteriores de sobreingeniería. Desde entonces, V2–V5 evolucionan el esquema exclusivamente hacia adelante; V5 corrige la separación entre disponibilidad inicial y listado autenticado. Una base que ya estaba en V4 se actualiza sin recrearse ni perder credenciales existentes.
 
 Si el volumen local solo contiene datos desechables:
 
@@ -310,7 +312,7 @@ Nunca limpies, repares o recrees automáticamente una base compartida o con dato
 
 ## Modelo y seguridad
 
-El esquema contiene ocho tablas para solicitud, consulta de disponibilidad, certificados detallados futuros, identidad, sesión transaccional, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
+El esquema contiene ocho tablas para solicitud, consulta de disponibilidad, credenciales detallados futuros, identidad, sesión transaccional, revocación, constancias y auditoría. La documentación completa y el diagrama ER están en [`docs/data-model/README.md`](../docs/data-model/README.md).
 
 La solicitud guarda el DNI directamente como ocho dígitos, el estado actual del progreso y el motivo libre como texto limitado para que el esquema sea legible. Estos valores nunca deben aparecer en logs, errores, URLs, endpoints técnicos, cuerpos registrados ni query strings. `requestId` identifica la solicitud pero no autentica al ciudadano. MySQL almacena el estado de la sesión y hashes de refresh; nunca almacena JWT completos, credenciales, biometría, payloads externos completos ni archivos PDF.
 

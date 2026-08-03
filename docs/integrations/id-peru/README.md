@@ -15,7 +15,7 @@ Toda tarea posterior relacionada con autenticación, OAuth 2.0, OpenID Connect, 
 
 ## Partes de la implementación dependientes
 
-El documento gobierna la construcción de `/auth`, `acr_values`, el cifrado de `vd`, PKCE `S256`, el callback, `/token`, `/userinfo`, `/jwks` y el tratamiento temporal de códigos y tokens. El contexto del proyecto prevalece para las reglas del trámite: autenticarse solo habilita la selección; no cancela certificados ni recupera solicitudes anteriores.
+El documento gobierna la construcción de `/auth`, `acr_values`, el cifrado de `vd`, PKCE `S256`, el callback, `/token`, `/userinfo`, `/jwks` y el tratamiento temporal de códigos y tokens. El contexto del proyecto prevalece para las reglas del trámite: autenticarse solo habilita la selección; no cancela credenciales ni recupera solicitudes anteriores.
 
 ## Configuración institucional pendiente
 
@@ -27,19 +27,19 @@ No se incorporan credenciales, secretos, tokens ni archivos `.env` en esta docum
 
 ## Decisiones tomadas del proyecto de referencia
 
-Se revisó en modo lectura `C:\FastFolder\sistema-autorizacion-certificados-reniec`.
+Se revisó en modo lectura `C:\FastFolder\sistema-autorizacion-credenciales-reniec`.
 
 Se reutilizan, adaptadas, la separación de proveedor real/simulado, propiedades tipadas, timeouts, `Referer`, hash de `state`, PKCE, cifrado de `vd`, JWKS y retorno controlado. Se descartan circuit breaker, reintentos generales, reconstrucción determinista del verifier y el modelo de sesiones de aquel dominio.
 
-Aquí el verifier es aleatorio, se protege temporalmente y se elimina al finalizar. El inicio exige la sesión transaccional activa y una verificación exitosa eleva esa misma sesión. `identity_verification` conserva el intento, no tokens ni una autorización paralela.
+Aquí el verifier es aleatorio, se protege temporalmente y se elimina al finalizar. El inicio exige la sesión transaccional activa y una verificación exitosa eleva esa misma sesión. `identity_verification` conserva el intento, no tokens ni una autorización paralela. También conserva el claim obligatorio `first_name`, que el contrato define como el primer nombre del ciudadano, exclusivamente en intentos `VERIFIED`. El dato se normaliza y se utiliza en la revisión autenticada del paso 4, el resultado autenticado del paso 5 y las nuevas constancias PDF; no se incluye en endpoints previos a la autenticación, logs, errores, auditoría o referencias técnicas.
 
-El callback OAuth/OIDC permanece en el backend y usa uniformemente `/api/v1/idperu/callback`. En local resulta en `http://localhost:8080/api/v1/idperu/callback`; en producción se combina con la base HTTPS productiva. En local, el paso 1 se presenta y el callback retorna a `http://localhost:3000/autorizacion`; no se redirige después a `/cancelacion`. Producción presenta el paso y retorna directamente a `/cancelacion`. El resultado se obtiene desde el contexto temporal validado por el backend; no se incluyen códigos, tokens, DNI, identificadores ni estados en la URL.
+El callback OAuth/OIDC permanece en el backend y usa uniformemente `/api/v1/idperu/callback`. En local resulta en `http://localhost:8080/api/v1/idperu/callback`; en producción se combina con la base HTTPS productiva. En local, el paso 1 se presenta y el callback retorna a `http://localhost:3000/autorizacion`; no se redirige después a `/revocacion`. Producción presenta el paso y retorna directamente a `/revocacion`. El resultado se obtiene desde el contexto temporal validado por el backend; no se incluyen códigos, tokens, DNI, identificadores ni estados en la URL.
 
 ### Transporte y redirección del callback
 
 La ruta de callback admite `GET` con parámetros de consulta —transporte utilizado por las credenciales locales v1— y mantiene `POST application/x-www-form-urlencoded` para compatibilidad con el proveedor. Ambos transportes delegan en el mismo caso de uso, por lo que conservan las mismas validaciones de `state`, vigencia, uso único y campos requeridos por versión.
 
-El navegador nunca queda mostrando la respuesta técnica del endpoint. Después de procesar un éxito, cancelación, rechazo o error controlado, el backend responde `303 See Other` hacia la URI frontend fija del ambiente. La respuesta no incorpora `code`, `state`, `session_state`, tokens, DNI ni diagnósticos del proveedor en `Location` o en el cuerpo. Un éxito emite únicamente la autorización temporal; un fallo conserva el paso 1 y entrega un resultado efímero normalizado para mostrar un solo aviso ciudadano.
+El navegador nunca queda mostrando la respuesta técnica del endpoint. Después de procesar un éxito, revocación, rechazo o error controlado, el backend responde `303 See Other` hacia la URI frontend fija del ambiente. La respuesta no incorpora `code`, `state`, `session_state`, tokens, DNI ni diagnósticos del proveedor en `Location` o en el cuerpo. Un éxito emite únicamente la autorización temporal; un fallo conserva el paso 1 y entrega un resultado efímero normalizado para mostrar un solo aviso ciudadano.
 
 Esta regla corrige la restricción anterior que documentaba el callback únicamente como `POST`: ID Perú v1 retorna mediante `GET`, mientras que v2 y futuras configuraciones pueden utilizar el transporte registrado sin crear controladores o flujos paralelos.
 
