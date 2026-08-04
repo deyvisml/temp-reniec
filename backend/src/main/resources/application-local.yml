@@ -35,7 +35,7 @@ app:
       timeout: ${RECAPTCHA_TIMEOUT:3s}
       allowed-hostnames: ${RECAPTCHA_ALLOWED_HOSTNAMES:localhost}
   id-peru:
-    mode: real
+    mode: ${ID_PERU_MODE:mock}
     version: v1
     frontend-return-path: /autorizacion
     client-id: ${ID_PERU_CLIENT_ID:}

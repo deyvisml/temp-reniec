@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -28,6 +30,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationRe
 public final class RealCredentialProviderAdapter implements DigitalCredentialAvailabilityPort,
 		DigitalCredentialListingPort, RevocationGateway {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(RealCredentialProviderAdapter.class);
 	private static final String HAS_CREDENTIALS_PATH = "/api/v1/has-credentials";
 	private static final String LIST_CREDENTIALS_PATH = "/api/v1/list-credentials";
 	private static final String REVOCATION_PATH = "/api/v1/revocation";
@@ -78,19 +81,36 @@ public final class RealCredentialProviderAdapter implements DigitalCredentialAva
 	public DigitalCredentialListingResult listDigitalCredentials(String dni, String correlationId) {
 		try {
 			ProviderCredential[] response = post(LIST_CREDENTIALS_PATH, new DniRequest(dni), ProviderCredential[].class);
-			if (response == null) return listingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
-					"PROVIDER_INVALID_RESPONSE");
+			if (response == null) {
+				logListingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
+						ListingDiagnostic.INVALID_JSON_OR_STRUCTURE, "None");
+				return listingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
+						"PROVIDER_INVALID_RESPONSE");
+			}
 			List<DigitalCredentialListingResult.ListedDigitalCredential> listed =
 					java.util.Arrays.stream(response).map(this::normalize).toList();
 			return new DigitalCredentialListingResult(DigitalCredentialListingResult.Outcome.SUCCESS,
 					listed, null, null);
 		}
 		catch (ResourceAccessException exception) {
-			return listingFailure(hasTimeoutCause(exception) ? DigitalCredentialListingResult.Outcome.TIMEOUT
-					: DigitalCredentialListingResult.Outcome.UNAVAILABLE,
-					hasTimeoutCause(exception) ? "PROVIDER_TIMEOUT" : "PROVIDER_UNAVAILABLE");
+			boolean timeout = hasTimeoutCause(exception);
+			DigitalCredentialListingResult.Outcome outcome = timeout
+					? DigitalCredentialListingResult.Outcome.TIMEOUT
+					: DigitalCredentialListingResult.Outcome.UNAVAILABLE;
+			ListingDiagnostic diagnostic = timeout ? ListingDiagnostic.PROVIDER_TIMEOUT
+					: ListingDiagnostic.PROVIDER_UNAVAILABLE;
+			logListingFailure(outcome, diagnostic, exception.getClass().getSimpleName());
+			return listingFailure(outcome, timeout ? "PROVIDER_TIMEOUT" : "PROVIDER_UNAVAILABLE");
+		}
+		catch (InvalidProviderCredentialException exception) {
+			logListingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
+					exception.diagnostic(), exception.getClass().getSimpleName());
+			return listingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
+					"PROVIDER_INVALID_RESPONSE");
 		}
 		catch (RuntimeException exception) {
+			logListingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
+					ListingDiagnostic.INVALID_JSON_OR_STRUCTURE, exception.getClass().getSimpleName());
 			return listingFailure(DigitalCredentialListingResult.Outcome.MALFORMED,
 					"PROVIDER_INVALID_RESPONSE");
 		}
@@ -125,18 +145,19 @@ public final class RealCredentialProviderAdapter implements DigitalCredentialAva
 	private DigitalCredentialListingResult.ListedDigitalCredential normalize(ProviderCredential item) {
 		if (item == null || item.statusListIndex() == null || item.statusListIndex() < 0
 				|| item.credentialStatus() == null || item.credentialType() == null
-				|| item.credentialType().isBlank()) throw new IllegalArgumentException("Invalid provider credential");
+				|| item.credentialType().isBlank()) throw invalid(ListingDiagnostic.MISSING_REQUIRED_DATA);
 		DigitalCredentialStatus status = switch (item.credentialStatus()) {
 			case 0 -> DigitalCredentialStatus.ACTIVE;
 			case 1 -> DigitalCredentialStatus.REVOKED;
-			default -> throw new IllegalArgumentException("Unknown provider status");
+			default -> throw invalid(ListingDiagnostic.UNKNOWN_CREDENTIAL_STATUS);
 		};
 		Instant issuedAt = providerInstant(item.issuanceDate());
-		Instant revokedAt = item.revocateDate() == null || item.revocateDate().isBlank()
-				? null : providerInstant(item.revocateDate());
-		if ((status == DigitalCredentialStatus.ACTIVE && revokedAt != null)
-				|| (status == DigitalCredentialStatus.REVOKED && revokedAt == null)) {
-			throw new IllegalArgumentException("Inconsistent provider revocation date");
+		Instant revokedAt = null;
+		if (status == DigitalCredentialStatus.REVOKED) {
+			if (item.revocateDate() == null || item.revocateDate().isBlank()) {
+				throw invalid(ListingDiagnostic.INCONSISTENT_REVOCATION_DATE);
+			}
+			revokedAt = providerInstant(item.revocateDate());
 		}
 		return new DigitalCredentialListingResult.ListedDigitalCredential(item.statusListIndex(),
 				item.credentialType().trim(), issuedAt, item.listCredential(), status, revokedAt,
@@ -144,8 +165,23 @@ public final class RealCredentialProviderAdapter implements DigitalCredentialAva
 	}
 
 	private Instant providerInstant(String value) {
-		if (value == null || value.isBlank()) throw new DateTimeParseException("Missing date", "", 0);
-		return LocalDateTime.parse(value).atZone(PROVIDER_ZONE).toInstant();
+		if (value == null || value.isBlank()) throw invalid(ListingDiagnostic.MISSING_REQUIRED_DATA);
+		try {
+			return LocalDateTime.parse(value).atZone(PROVIDER_ZONE).toInstant();
+		}
+		catch (DateTimeParseException exception) {
+			throw invalid(ListingDiagnostic.INVALID_PROVIDER_DATE);
+		}
+	}
+
+	private static InvalidProviderCredentialException invalid(ListingDiagnostic diagnostic) {
+		return new InvalidProviderCredentialException(diagnostic);
+	}
+
+	private static void logListingFailure(DigitalCredentialListingResult.Outcome outcome,
+			ListingDiagnostic diagnostic, String exceptionType) {
+		LOGGER.warn("Credential provider operation=list-credentials outcome={} diagnostic={} exceptionType={}",
+				outcome, diagnostic, exceptionType);
 	}
 
 	private <T> T post(String path, Object body, Class<T> responseType) {
@@ -174,4 +210,25 @@ public final class RealCredentialProviderAdapter implements DigitalCredentialAva
 	private record ProviderRevocationRequest(String listCredential, Integer statusListIndex,
 			@JsonProperty("cui_dni") String dni) { }
 	private record ProviderRevocationResponse(Integer credentialStatus) { }
+
+	private enum ListingDiagnostic {
+		INCONSISTENT_REVOCATION_DATE,
+		UNKNOWN_CREDENTIAL_STATUS,
+		INVALID_PROVIDER_DATE,
+		MISSING_REQUIRED_DATA,
+		INVALID_JSON_OR_STRUCTURE,
+		PROVIDER_TIMEOUT,
+		PROVIDER_UNAVAILABLE
+	}
+
+	private static final class InvalidProviderCredentialException extends RuntimeException {
+		private final ListingDiagnostic diagnostic;
+
+		private InvalidProviderCredentialException(ListingDiagnostic diagnostic) {
+			super(diagnostic.name());
+			this.diagnostic = diagnostic;
+		}
+
+		private ListingDiagnostic diagnostic() { return diagnostic; }
+	}
 }

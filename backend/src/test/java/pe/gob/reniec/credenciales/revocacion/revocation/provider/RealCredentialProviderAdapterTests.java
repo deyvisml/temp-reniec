@@ -18,6 +18,9 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 
 import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialStatus;
@@ -26,6 +29,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityP
 import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityOutcome;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationResult;
 
+@ExtendWith(OutputCaptureExtension.class)
 class RealCredentialProviderAdapterTests {
 
 	private HttpServer server;
@@ -67,15 +71,63 @@ class RealCredentialProviderAdapterTests {
 	}
 
 	@Test
-	void rejectsUnknownStatusesAndInvalidLimaDatesAsMalformedListings() {
+	void rejectsUnknownStatusesAndInvalidLimaDatesAsMalformedListings(CapturedOutput output) {
 		listingResponse = listingResponse.replace("\"credentialStatus\":0", "\"credentialStatus\":7");
 		assertThat(adapter().listDigitalCredentials("42992664", "correlation").outcome())
 				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
+		assertThat(output).contains("diagnostic=UNKNOWN_CREDENTIAL_STATUS");
 
-		listingResponse = listingResponse.replace("\"credentialStatus\":7", "\"credentialStatus\":0")
-				.replace("2026-07-31T23:08:16", "invalid-date");
+		listingResponse = listingResponse.replace("\"credentialStatus\":7", "\"credentialStatus\":1")
+				.replace("\"revocateDate\":null", "\"revocateDate\":\"invalid-date\"");
 		assertThat(adapter().listDigitalCredentials("42992664", "correlation").outcome())
 				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
+		assertThat(output).contains("diagnostic=INVALID_PROVIDER_DATE");
+	}
+
+	@Test
+	void acceptsActiveCredentialWithExternalRevocationDateAndDiscardsThatDate(CapturedOutput output) {
+		listingResponse = listingResponse.replace("\"revocateDate\":null",
+				"\"revocateDate\":\"2026-08-04T01:16:25\"");
+
+		var result = adapter().listDigitalCredentials("42983609", "correlation");
+
+		assertThat(result.outcome()).isEqualTo(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.SUCCESS);
+		assertThat(result.digitalCredentials()).singleElement().satisfies(credential -> {
+			assertThat(credential.status()).isEqualTo(DigitalCredentialStatus.ACTIVE);
+			assertThat(credential.revokedAt()).isNull();
+			assertThat(credential.providerCredentialStatus()).isZero();
+		});
+		assertThat(output)
+				.doesNotContain("diagnostic=INCONSISTENT_REVOCATION_DATE")
+				.doesNotContain("42983609", "e87a7813-880d-4a2d-92f7-4251c841d008",
+						"test-key", "2026-08-04T01:16:25", listingResponse);
+	}
+
+	@Test
+	void rejectsRevokedCredentialWithoutRevocationDate(CapturedOutput output) {
+		listingResponse = listingResponse.replace("\"credentialStatus\":0", "\"credentialStatus\":1");
+
+		var result = adapter().listDigitalCredentials("42983609", "correlation");
+
+		assertThat(result.outcome()).isEqualTo(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
+		assertThat(output)
+				.contains("diagnostic=INCONSISTENT_REVOCATION_DATE")
+				.doesNotContain("42983609", "e87a7813-880d-4a2d-92f7-4251c841d008", "test-key");
+	}
+
+	@Test
+	void logsInvalidJsonWithoutIncludingTheProviderBody(CapturedOutput output) {
+		listingResponse = "provider-body-that-must-not-be-logged";
+
+		var result = adapter().listDigitalCredentials("42983609", "correlation");
+
+		assertThat(result.outcome()).isEqualTo(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
+		assertThat(output)
+				.contains("diagnostic=INVALID_JSON_OR_STRUCTURE")
+				.doesNotContain("42983609", "test-key", listingResponse);
 	}
 
 	@Test

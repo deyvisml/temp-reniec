@@ -4,11 +4,11 @@
 
 Para ejecutar frontend, backend y MySQL solo se necesita Docker Desktop o Docker Engine con Compose. Desde la raíz del repositorio:
 
-Antes del primer arranque crea `backend/.env` desde el ejemplo y completa `ID_PERU_CLIENT_ID` e `ID_PERU_CLIENT_SECRET` con credenciales autorizadas. ID Perú real es obligatorio y el backend no iniciará si faltan.
+Antes del primer arranque crea `backend/.env` desde el ejemplo. El modo local usa ID Perú simulado por defecto y no requiere credenciales institucionales; para probar el servicio real configura `ID_PERU_MODE=real`, `ID_PERU_CLIENT_ID` e `ID_PERU_CLIENT_SECRET` con credenciales autorizadas.
 
 ```powershell
 Copy-Item backend/.env.example backend/.env
-# Edita backend/.env y completa las dos credenciales de ID Perú.
+# Opcional: edita backend/.env para seleccionar ID Perú real y completar sus credenciales.
 ```
 
 El archivo se monta en `/app/.env` como solo lectura. Sus valores no se incorporan a la imagen ni aparecen expandidos en `docker compose config`.

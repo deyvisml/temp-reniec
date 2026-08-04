@@ -45,7 +45,9 @@ Esta regla corrige la restricción anterior que documentaba el callback únicame
 
 ## Contrato mínimo de configuración
 
-Los perfiles local y productivo seleccionan obligatoriamente la integración real. Local usa ID Perú v1 y obtiene sus credenciales desde el archivo privado `backend/.env`; producción usa ID Perú v2 y recibe sus secretos desde la plataforma de despliegue. El simulador queda reservado al perfil de pruebas y a escenarios técnicos aislados.
+El perfil local usa por defecto la integración simulada y permite seleccionar ID Perú v1 real mediante `ID_PERU_MODE=real`; sus credenciales se obtienen del archivo privado `backend/.env`. Producción usa obligatoriamente ID Perú v2 real y recibe sus secretos desde la plataforma de despliegue. La validación de arranque impide activar el simulador bajo el perfil `prod`.
+
+En el escenario local exitoso, el simulador devuelve el mismo DNI válido de 8 dígitos que inició la solicitud y el primer nombre sintético `PRUEBA`. Así se conserva la comparación de identidad del caso de uso sin asociar el entorno de pruebas a un DNI particular.
 
 Para modo real se requieren las siguientes bases y credenciales. Local aporta el referer registrado como valor predeterminado; producción debe suministrarlo externamente:
 
@@ -70,6 +72,8 @@ Timeouts, vigencias, caché JWKS, ACR `face_mobile`, nombre de cookie y segurida
 4. Confirmar que el cliente de prueba tenga registrados exactamente el callback `http://localhost:8080/api/v1/idperu/callback` y el origen/retorno `http://localhost:3000/autorizacion`.
 5. Levantar MySQL y el backend con el perfil `local`, iniciar el frontend y completar la consulta con el mismo DNI que autenticará ID Perú.
 6. Verificar la redirección institucional, el callback de un solo uso y que el paso 1 y su resultado permanezcan en `/autorizacion` durante la ejecución local.
+
+Para volver al simulador cambia a `ID_PERU_MODE=mock`. Con el stack Docker iniciado, aplica cualquiera de los dos modos mediante `docker compose restart backend`; el archivo está montado en el contenedor y no requiere reconstruir la imagen.
 
 Un error de credenciales, callback, `Referer`, firma, audiencia, issuer o correspondencia de DNI detiene el flujo. Nunca debe resolverse cambiando código, desactivando PKCE/JWKS o eliminando la comparación de identidad.
 

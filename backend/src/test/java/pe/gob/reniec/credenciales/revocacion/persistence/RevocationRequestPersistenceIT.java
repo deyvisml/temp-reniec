@@ -186,6 +186,7 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
 		assertThat(verification.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.VERIFIED);
 		assertThat(verification.getDniMatchResult()).isEqualTo(IdentityMatchResult.MATCH);
+		assertThat(verification.getVerifiedFirstName()).isEqualTo("PRUEBA");
 		assertThat(verification.getPkceVerifierProtected()).isNull();
 		assertThatThrownBy(() -> identityService.callback("mock-code", state, "mock-session", null))
 				.isInstanceOf(IdentityIntegrationException.class);

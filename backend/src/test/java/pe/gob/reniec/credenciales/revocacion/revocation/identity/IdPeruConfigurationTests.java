@@ -189,16 +189,16 @@ class IdPeruConfigurationTests {
 	}
 
 	@Test
-	void localYamlRequiresRealAndIgnoresTheFormerModeVariable() throws Exception {
+	void localYamlUsesMockByDefaultAndAllowsSelectingRealMode() throws Exception {
 		StandardEnvironment environment = new StandardEnvironment();
 		new YamlPropertySourceLoader().load("local",
 				new FileSystemResource("src/main/resources/application-local.yml"))
 				.forEach(source -> environment.getPropertySources().addLast(source));
 
-		assertThat(environment.getProperty("app.id-peru.mode")).isEqualTo("real");
+		assertThat(environment.getProperty("app.id-peru.mode")).isEqualTo("mock");
 
 		environment.getPropertySources().addFirst(
-				new MapPropertySource("former-id-peru-mode", Map.of("ID_PERU_MODE", "mock")));
+				new MapPropertySource("id-peru-mode", Map.of("ID_PERU_MODE", "real")));
 
 		assertThat(environment.getProperty("app.id-peru.mode")).isEqualTo("real");
 	}
@@ -213,10 +213,11 @@ class IdPeruConfigurationTests {
 				+ Files.readString(Path.of(".env.example"));
 
 		assertThat(configuration).contains("APP_FRONTEND_BASE_URL", "APP_BACKEND_BASE_URL",
-				"ID_PERU_CLIENT_ID", "ID_PERU_CLIENT_SECRET", "ID_PERU_REFERER", "ID_PERU_FLOW_SECRET");
+				"ID_PERU_MODE", "ID_PERU_CLIENT_ID", "ID_PERU_CLIENT_SECRET", "ID_PERU_REFERER",
+				"ID_PERU_FLOW_SECRET");
 		assertThat(localConfiguration)
-				.contains("mode: real")
-				.doesNotContain("ID_PERU_MODE", "ID_PERU_MOCK_SCENARIO")
+				.contains("mode: ${ID_PERU_MODE:mock}")
+				.doesNotContain("ID_PERU_MOCK_SCENARIO")
 				.contains("frontend-return-path: /autorizacion")
 				.contains("referer: ${ID_PERU_REFERER:http://localhost:3000/autorizacion}")
 				.contains("frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}")

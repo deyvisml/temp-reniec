@@ -23,8 +23,8 @@ public class MockCitizenIdentityProviderAdapter implements CitizenIdentityProvid
 	@Override
 	public VerifiedCitizen authenticate(String code, String sessionState, String codeVerifier, String expectedDni) {
 		return switch (properties.getMockScenario().toUpperCase()) {
-			case "MATCH" -> new VerifiedCitizen("mock-subject", expectedDni, "ANA", "mock-reference");
-			case "MISMATCH" -> new VerifiedCitizen("mock-subject", "99999999", "ANA", "mock-reference");
+			case "MATCH" -> new VerifiedCitizen("mock-subject", expectedDni, "PRUEBA", "mock-reference");
+			case "MISMATCH" -> new VerifiedCitizen("mock-subject", "99999999", "PRUEBA", "mock-reference");
 			case "TIMEOUT" -> throw new IdentityIntegrationException(IdentityFailure.TIMEOUT, "Timeout simulado");
 			case "UNAVAILABLE" -> throw new IdentityIntegrationException(IdentityFailure.UNAVAILABLE, "Indisponibilidad simulada");
 			case "INVALID" -> throw new IdentityIntegrationException(IdentityFailure.INVALID_RESPONSE, "Respuesta inválida simulada");

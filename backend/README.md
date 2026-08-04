@@ -98,7 +98,7 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `AVAILABILITY_TIMEOUT` | `15s` | Presupuesto máximo de la consulta inicial de disponibilidad. |
 | `AVAILABILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
 | `RECAPTCHA_MODE` | `disabled` en local y producción | Desactiva la verificación anti-bot sin bloquear el inicio ciudadano. |
-| Modo de ID Perú | `real` en local y producción | Local usa v1 y producción v2. El simulador se conserva únicamente para pruebas automatizadas. |
+| `ID_PERU_MODE` | `mock` en local; `real` obligatorio en producción | Local permite alternar entre el simulador y el servicio v1. Producción conserva exclusivamente el servicio v2 real. |
 | `APP_FRONTEND_BASE_URL` | `http://localhost:3000` en local | Base del frontend; el retorno se deriva como `/revocacion`. |
 | `APP_BACKEND_BASE_URL` | `http://localhost:8080` en local | Base del backend; en local se deriva el callback registrado `/api/v1/idperu/callback`. |
 | Versión de ID Perú | `v1` en local y `v2` en producción | Se define por perfil: v1 usa `idaas.reniec.gob.pe`; v2 usa `idaas2.reniec.gob.pe` y PKCE. No requiere una variable manual. |
@@ -185,20 +185,21 @@ El retorno siempre responde `303 See Other` hacia una URI frontend fija. Éxitos
 
 Los códigos y tokens de ID Perú no se devuelven al frontend ni se persisten. El verifier se cifra temporalmente con AES-GCM y se elimina al terminar. Una verificación correcta eleva la misma sesión a identidad verificada. Los refresh JWT rotan y solo sus hashes se guardan; logout invalida la familia, elimina ambas cookies y abandona una solicitud reversible. No existe recuperación multidispositivo ni reapertura de trámites finalizados.
 
-Los perfiles `local` y `prod` usan obligatoriamente ID Perú real. El perfil `test` conserva el simulador controlado para pruebas automatizadas.
+El perfil `local` usa ID Perú simulado por defecto y permite seleccionar el servicio real con `ID_PERU_MODE=real`. El mock exitoso devuelve el mismo DNI válido que inició el flujo y el nombre sintético `PRUEBA`. El perfil `prod` exige siempre ID Perú real y `test` conserva escenarios simulados controlados.
 
 ### Probar ID Perú real en local
 
 Completa en `backend/.env` exclusivamente las credenciales autorizadas para desarrollo:
 
 ```env
+ID_PERU_MODE=real
 ID_PERU_CLIENT_ID=valor-autorizado
 ID_PERU_CLIENT_SECRET=valor-autorizado
 APP_FRONTEND_BASE_URL=http://localhost:3000
 APP_BACKEND_BASE_URL=http://localhost:8080
 ```
 
-En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local selecciona automáticamente ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/revocacion`. Reinicia el backend después de cambiar las credenciales.
+En el perfil `local`, `ID_PERU_REFERER` ya tiene como valor predeterminado `http://localhost:3000/autorizacion`; solo debe declararse si las credenciales autorizan un origen distinto. El perfil local usa ID Perú v1 y producción selecciona automáticamente v2. El callback usa uniformemente la ruta `/api/v1/idperu/callback`: en local resulta en `http://localhost:8080/api/v1/idperu/callback` y en producción se combina con la base HTTPS productiva. El paso 1 y su retorno local permanecen en `http://localhost:3000/autorizacion`; producción presenta el paso en `/revocacion`. Después de cambiar `ID_PERU_MODE` o las credenciales con Docker, ejecuta `docker compose restart backend`; no es necesario reconstruir la imagen.
 
 Para la integración real local, ejecuta el backend con **JDK 21** (también es la versión de compilación del proyecto). Se comprobó que el endpoint institucional de ID Perú valida su cadena TLS con el almacén de credenciales de JDK 21, mientras que la instalación local de JDK 22 puede rechazarla con `PKIX path building failed`. En IntelliJ selecciona `C:\Program Files\Java\jdk-21.0.11` como JRE de la configuración de ejecución. No se debe desactivar la validación TLS ni agregar un trust manager permisivo para sortear este error.
 

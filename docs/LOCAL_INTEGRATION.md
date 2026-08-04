@@ -8,7 +8,7 @@ docker compose up --build -d --wait
 
 Ese stack contiene frontend `3000`, backend `8080` y MySQL `3308`; no contiene la réplica del proveedor. Los pasos siguientes describen la modalidad de desarrollo en la que únicamente las dependencias se ejecutan en Docker y backend/frontend se levantan manualmente.
 
-El stack completo monta obligatoriamente `backend/.env` como archivo privado de solo lectura. Antes de iniciarlo completa allí `ID_PERU_CLIENT_ID` e `ID_PERU_CLIENT_SECRET`; el perfil local usa ID Perú real y no habilita el simulador.
+El stack completo monta obligatoriamente `backend/.env` como archivo privado de solo lectura. El perfil `local` usa `ID_PERU_MODE=mock` por defecto, acepta cualquier DNI válido y devuelve el nombre sintético `PRUEBA`, sin exigir credenciales institucionales. Para probar ID Perú real configura `ID_PERU_MODE=real`, `ID_PERU_CLIENT_ID` e `ID_PERU_CLIENT_SECRET`. Tras cambiar el modo con el stack iniciado ejecuta `docker compose restart backend`; no es necesario reconstruir la imagen.
 
 Ambas modalidades son alternativas porque publican los mismos puertos. Ejecuta `docker compose down` en la carpeta de la modalidad activa antes de cambiar, sin agregar `-v`.
 
