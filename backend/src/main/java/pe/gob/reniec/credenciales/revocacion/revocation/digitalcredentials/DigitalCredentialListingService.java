@@ -62,8 +62,8 @@ public class DigitalCredentialListingService {
 			throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 					"DigitalCredential collection is missing");
 		}
-		Set<String> uuids = new HashSet<>();
 		Set<Integer> indexes = new HashSet<>();
+		Set<CredentialIdentity> identities = new HashSet<>();
 		Instant now = Instant.now();
 		List<DigitalCredentialListingResult.ListedDigitalCredential> normalized = listed.stream().map(item -> {
 			if (item == null || item.statusListIndex() < 0 || item.credentialType() == null
@@ -92,7 +92,8 @@ public class DigitalCredentialListingService {
 				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 						"DigitalCredential provider returned an invalid UUID");
 			}
-			if (!indexes.add(item.statusListIndex()) || !uuids.add(uuid)) {
+			CredentialIdentity identity = new CredentialIdentity(uuid, item.statusListIndex());
+			if (!identities.add(identity) || !indexes.add(item.statusListIndex())) {
 				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 						"DigitalCredential provider returned duplicate data");
 			}
@@ -102,6 +103,8 @@ public class DigitalCredentialListingService {
 		}).toList();
 		return normalized;
 	}
+
+	private record CredentialIdentity(String digitalCredentialUuid, int statusListIndex) { }
 
 	private static DigitalCredentialListingException providerFailure(DigitalCredentialListingResult result) {
 		Reason reason = switch (result.outcome()) {

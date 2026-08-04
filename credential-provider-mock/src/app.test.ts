@@ -78,12 +78,32 @@ describe("credential provider HTTP contracts", () => {
         credentialStatus: 0,
         revocateDate: null,
       }),
-      expect.objectContaining({ statusListIndex: 31, credentialStatus: 0 }),
+      expect.objectContaining({
+        listCredential: "11111111-1111-4111-8111-111111111111",
+        statusListIndex: 31,
+        credentialStatus: 0,
+      }),
       expect.objectContaining({ statusListIndex: 44, credentialStatus: 1 }),
     ]);
 
     const unknown = await post("/api/v1/list-credentials", { dni: "99999999" });
     expect(unknown.json()).toEqual([]);
+  });
+
+  it("accepts repeated UUIDs when each credential has a distinct index", async () => {
+    const listing = await post("/api/v1/list-credentials", { dni: "00000001" });
+    const credentials = listing.json<Array<{ listCredential: string; statusListIndex: number }>>();
+
+    expect(credentials.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        listCredential: "11111111-1111-4111-8111-111111111111",
+        statusListIndex: 14,
+      }),
+      expect.objectContaining({
+        listCredential: "11111111-1111-4111-8111-111111111111",
+        statusListIndex: 31,
+      }),
+    ]);
   });
 
   it("revokes the exact tuple idempotently and rejects mismatches", async () => {

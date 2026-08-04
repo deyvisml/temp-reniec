@@ -96,15 +96,16 @@ class DigitalCredentialSelectionPersistenceIT extends MySqlContainerSupport {
 		assertThat(listed.digitalCredentials()).hasSize(3);
 		assertThat(digitalCredentialRepository.countByRequest_Id(request.getId())).isEqualTo(3);
 		String selectedUuid = listed.digitalCredentials().get(1).digitalCredentialUuid();
+		int selectedIndex = listed.digitalCredentials().get(1).statusListIndex();
 
 		confirmationService.preview(request.getId(),
-				new RevocationReviewRequest(selectedUuid, RevocationReasonCode.LOSS, null));
+				new RevocationReviewRequest(selectedUuid, selectedIndex, RevocationReasonCode.LOSS, null));
 		assertThat(digitalCredentialRepository.countByRequest_IdAndSelectedTrue(request.getId())).isZero();
 		assertThat(requestRepository.findById(request.getId())).get()
 				.extracting(DigitalCredentialRevocationRequestEntity::getReasonCode).isNull();
 
 		confirmationService.confirm(request.getId(),
-				new RevocationConfirmationRequest(selectedUuid, RevocationReasonCode.LOSS, null,
+				new RevocationConfirmationRequest(selectedUuid, selectedIndex, RevocationReasonCode.LOSS, null,
 						true, RevocationConsentCatalog.VERSION),
 				"confirmation-correlation");
 		assertThat(digitalCredentialRepository.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(
@@ -130,8 +131,36 @@ class DigitalCredentialSelectionPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
+	void persistsRepeatedUuidsAndConfirmsTheRequestedIndex() {
+		DigitalCredentialRevocationRequestEntity request = identityVerifiedRequest("00000022");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE);
+		request = requestRepository.saveAndFlush(request);
+		String repeatedUuid = "e87a7813-880d-4a2d-92f7-4251c841d008";
+		Instant consultedAt = NOW.minusSeconds(5);
+		RevocationRequestDigitalCredentialEntity index11 = new RevocationRequestDigitalCredentialEntity(
+				request, 11, "DniPeruanoCredential", NOW.minusSeconds(120), repeatedUuid,
+				DigitalCredentialAvailabilityStatus.AVAILABLE, null, 0, consultedAt);
+		RevocationRequestDigitalCredentialEntity index12 = new RevocationRequestDigitalCredentialEntity(
+				request, 12, "DniPeruanoCredential", NOW.minusSeconds(60), repeatedUuid,
+				DigitalCredentialAvailabilityStatus.AVAILABLE, null, 0, consultedAt);
+		digitalCredentialRepository.saveAllAndFlush(List.of(index11, index12));
+
+		confirmationService.confirm(request.getId(),
+				new RevocationConfirmationRequest(repeatedUuid, 12, RevocationReasonCode.LOSS, null,
+						true, RevocationConsentCatalog.VERSION),
+				"repeated-uuid-confirmation");
+
+		assertThat(digitalCredentialRepository.findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(
+				request.getId()))
+				.singleElement()
+				.extracting(RevocationRequestDigitalCredentialEntity::getStatusListIndex)
+				.isEqualTo(12);
+	}
+
+	@Test
 	void rejectsInvalidProviderDataAndRestoresTheRetryableState() {
-		DigitalCredentialRevocationRequestEntity request = identityVerifiedRequest("00000023");
+		DigitalCredentialRevocationRequestEntity request = identityVerifiedRequest("00000029");
 
 		assertThatThrownBy(() -> digitalCredentialListingService.list(request.getId(), "invalid-correlation"))
 				.isInstanceOf(DigitalCredentialListingException.class)
@@ -176,13 +205,15 @@ class DigitalCredentialSelectionPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void enforcesUuidRequestOwnershipAndSelectionIntegrity() {
+	void enforcesTupleOwnershipIndexUniquenessAndSelectionIntegrity() {
 		RequestFixture first = request("20000001", 1);
 		RequestFixture second = request("20000002", 1);
 		String sharedUuid = "0dcde0fc-5e1f-4f28-b9be-52aafaa10240";
 		digitalCredential(first, "ORD-A", sharedUuid, 1);
 
-		assertThatThrownBy(() -> digitalCredential(first, "ORD-B", sharedUuid, 2))
+		assertThat(digitalCredential(first, "ORD-B", sharedUuid, 2).getId()).isNotNull();
+		assertThatThrownBy(() -> digitalCredential(first, "ORD-INDEX-DUPLICATE",
+				"7f315ed2-ef17-4af1-865f-0a7784df7d77", 1))
 				.isInstanceOf(DataIntegrityViolationException.class);
 		assertThat(digitalCredential(second, "ORD-C", sharedUuid, 3).getId()).isNotNull();
 		assertThatThrownBy(() -> jdbcTemplate.update("""
@@ -301,7 +332,7 @@ class DigitalCredentialSelectionPersistenceIT extends MySqlContainerSupport {
 		digitalCredentialRepository.saveAndFlush(selected);
 
 		RevocationConfirmationRequest command = new RevocationConfirmationRequest(
-				selected.getDigitalCredentialUuid(), RevocationReasonCode.LOSS, null,
+				selected.getDigitalCredentialUuid(), selected.getStatusListIndex(), RevocationReasonCode.LOSS, null,
 				true, RevocationConsentCatalog.VERSION);
 		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it");
 		confirmationService.confirm(fixture.request().getId(), command, "confirmation-it-retry");

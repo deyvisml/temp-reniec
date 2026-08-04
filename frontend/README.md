@@ -68,7 +68,7 @@ Usa los DNI ficticios documentados en el README del backend para reproducir cada
 
 `/`, `/verificacion-identidad` y `/verificacion-identidad/retorno` existen únicamente como redirecciones hacia `/revocacion`. `/autorizacion` renderiza el mismo componente compartido del flujo cuando el ambiente es local y redirige a `/revocacion` fuera de local. Ningún DNI, `requestId`, credencial digital o resultado de autenticación se transporta en la URL. Una recarga consulta solo el contexto temporal vigente del backend; no recupera solicitudes terminadas ni progreso histórico.
 
-Tras autenticar la identidad, la misma ruta muestra el paso 2 con dos secciones: credenciales vigentes seleccionables y credenciales revocadas informativas con su fecha de revocación. El ciudadano selecciona explícitamente una sola vigente; elegir otra reemplaza la anterior y una revocada nunca habilita el avance. La lista se obtiene del backend y no de parámetros o almacenamiento del navegador.
+Tras autenticar la identidad, la misma ruta muestra el paso 2 con dos secciones: credenciales vigentes seleccionables y credenciales revocadas informativas con su fecha de revocación. El ciudadano selecciona explícitamente una sola vigente; elegir otra reemplaza la anterior y una revocada nunca habilita el avance. La selección se identifica por `digitalCredentialUuid + statusListIndex`, de modo que dos filas con UUID repetido e índices distintos siguen siendo independientes. La lista se obtiene del backend y no de parámetros o almacenamiento del navegador.
 
 ## Cliente HTTP
 

@@ -95,7 +95,7 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `MYSQL_ROOT_PASSWORD` | Solo Compose | Contraseña root para inicialización y healthcheck local. |
 | `CORS_ALLOWED_ORIGINS` | Vacía (`http://localhost:3000` en local/test) | Lista separada por comas de orígenes frontend exactos. |
 | `AVAILABILITY_STALE_ATTEMPT_THRESHOLD` | `30s` | Umbral para cerrar una consulta de existencia interrumpida. |
-| `AVAILABILITY_TIMEOUT` | `1s` | Tiempo máximo del primer servicio de disponibilidad. |
+| `AVAILABILITY_TIMEOUT` | `15s` | Presupuesto máximo de la consulta inicial de disponibilidad. |
 | `AVAILABILITY_MOCK_SIMULATED_TIMEOUT` | `2s` | Demora reproducible del fixture de timeout local. |
 | `RECAPTCHA_MODE` | `disabled` en local y producción | Desactiva la verificación anti-bot sin bloquear el inicio ciudadano. |
 | Modo de ID Perú | `real` en local y producción | Local usa v1 y producción v2. El simulador se conserva únicamente para pruebas automatizadas. |
@@ -108,6 +108,8 @@ Swagger UI permite explorar y ejecutar las operaciones disponibles contra el bac
 | `CREDENTIAL_PROVIDER_MODE` | `real` en local y producción | Usa la réplica local en `8081`; `mock` permanece disponible para pruebas aisladas. |
 | `CREDENTIAL_PROVIDER_BASE_URL` | `http://localhost:8081` en local | Base común de los tres endpoints oficiales. Producción exige HTTPS. |
 | `CREDENTIAL_PROVIDER_API_KEY` | Clave ficticia local | Header privado `x-api-key`; producción exige un secreto externo. |
+| `CREDENTIAL_PROVIDER_CONNECT_TIMEOUT` | `3s` | Tiempo máximo para conectar con el proveedor. |
+| `CREDENTIAL_PROVIDER_READ_TIMEOUT` | `10s` | Tiempo máximo para leer una respuesta del proveedor. |
 | `SESSION_SIGNING_SECRET` | Valor conocido solo en local; obligatorio externo en `prod` | Base64 de al menos 32 bytes para firmar access y refresh JWT. |
 | `SESSION_ACCESS_TTL` | `15m` | Vigencia corta del access JWT, alineada con el proyecto de autorización de referencia. |
 | `SESSION_REFRESH_TTL` | `3d` | Ventana actualizable de la operación activa; cada rotación válida emite un refresh con esta vigencia. |
@@ -242,20 +244,21 @@ El perfil `local` usa por defecto `CREDENTIAL_PROVIDER_MODE=real` contra la rép
 | `00000020` | Lista vacía |
 | `00000021` | Una credencial |
 | `00000022` | Dos credenciales vigentes y una revocada |
-| `00000023` | UUID duplicado, respuesta rechazada |
+| `00000023` | Dos credenciales válidas con UUID repetido e índices distintos |
 | `00000024` | UUID inválido, respuesta rechazada |
 | `00000025` | Timeout |
 | `00000026` | Servicio no disponible |
 | `00000027` | Respuesta malformada |
+| `00000029` | Índice repetido, respuesta rechazada |
 | Cualquier otro DNI válido | Dos credenciales vigentes y una revocada |
 
-La lista vacía o sin credenciales vigentes finaliza en `NO_DIGITAL_CREDENTIALS_AVAILABLE`; en el segundo caso conserva la fotografía de credenciales revocadas. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. La confirmación exige un único UUID vigente, rechaza duplicados, credenciales ajenas o revocadas, y una repetición idéntica es idempotente.
+La lista vacía o sin credenciales vigentes finaliza en `NO_DIGITAL_CREDENTIALS_AVAILABLE`; en el segundo caso conserva la fotografía de credenciales revocadas. Los errores técnicos restauran el estado reintentable sin dejar una consulta bloqueada. Un UUID puede repetirse con índices distintos; la identidad de cada credencial es la tupla `digitalCredentialUuid + statusListIndex`, y el índice continúa siendo único por solicitud.
 
 ## Paso 4: revisión y confirmación
 
 `POST /api/v1/revocation-requests/current/review` valida el borrador sin persistirlo y devuelve el resumen con DNI enmascarado, credencial seleccionada, motivo, consecuencias y versión de consentimiento. `GET` recupera el resumen de una solicitud ya confirmada. Ninguna respuesta ciudadana muestra el UUID.
 
-`POST /api/v1/revocation-requests/current/confirmation` recibe el UUID interno, motivo, descripción opcional, aceptación expresa y versión mostrada. El backend revalida sesión, identidad, estado, motivo y selección dentro de una transacción con bloqueo. Una confirmación repetida idéntica reutiliza la misma operación idempotente.
+`POST /api/v1/revocation-requests/current/confirmation` recibe obligatoriamente el UUID y el índice internos, motivo, descripción opcional, aceptación expresa y versión mostrada. El backend resuelve esa tupla contra la fotografía persistida de la solicitud; el UUID, índice y DNI enviados al proveedor proceden de la base de datos. Una confirmación repetida de la misma tupla reutiliza la misma operación idempotente.
 
 La versión inicial es `REVOCACION_CREDENCIALES_DIGITALES_V1`. La UI invoca la confirmación una sola vez, protege dobles envíos y avanza al paso 5 únicamente después de una revocación exitosa con constancia disponible. Tras una respuesta exitosa del proveedor, el backend respeta `REVOCATION_PROPAGATION_DELAY` (60 segundos por defecto), conserva una constancia `PENDING` y la genera mediante un procesador recuperable aunque el navegador se cierre.
 

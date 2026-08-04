@@ -447,6 +447,8 @@ export interface components {
             otherReason?: string;
             /** @enum {string} */
             reasonCode: "THEFT" | "LOSS" | "DEVICE_OR_NUMBER_CHANGE" | "SUSPECTED_UNAUTHORIZED_USE" | "OTHER";
+            /** Format: int32 */
+            statusListIndex: number;
         };
         /** @description Resultado ciudadano de la revocacion sin exponer identificadores sensibles. */
         RevocationExecutionResponse: {
@@ -519,6 +521,8 @@ export interface components {
             otherReason?: string;
             /** @enum {string} */
             reasonCode: "THEFT" | "LOSS" | "DEVICE_OR_NUMBER_CHANGE" | "SUSPECTED_UNAUTHORIZED_USE" | "OTHER";
+            /** Format: int32 */
+            statusListIndex: number;
         };
         /** @description Resumen autoritativo y minimizado de la revocación. */
         RevocationReviewResponse: {

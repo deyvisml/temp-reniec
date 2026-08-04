@@ -15,6 +15,7 @@ export type RevocationReasonCode = RevocationReviewRequestContract["reasonCode"]
 
 export type RevocationDraft = {
   digitalCredentialUuid: string | null;
+  statusListIndex: number | null;
   reasonCode: RevocationReasonCode | null;
   otherReason: string;
 };

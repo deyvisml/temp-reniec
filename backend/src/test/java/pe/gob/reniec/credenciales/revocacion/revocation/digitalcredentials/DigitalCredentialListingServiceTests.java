@@ -46,18 +46,36 @@ class DigitalCredentialListingServiceTests {
 	}
 
 	@Test
-	void rejectsDuplicateOrInvalidProviderDigitalCredentialsAndRestoresTheRequest() {
+	void acceptsRepeatedUuidsWithDifferentIndexes() {
 		DigitalCredentialListingPersistenceCoordinator persistence = preparedCoordinator();
 		DigitalCredentialListingPort provider = (dni, correlation) -> success(List.of(
 				listed(31, "11111111-1111-4111-8111-111111111111"),
 				listed(32, "11111111-1111-4111-8111-111111111111")));
+		when(persistence.complete(eq(REQUEST_ID), any(), eq(CORRELATION_ID))).thenReturn(List.of());
 
-		assertThatThrownBy(() -> new DigitalCredentialListingService(provider, properties(), persistence)
-				.list(REQUEST_ID, CORRELATION_ID))
-				.isInstanceOf(DigitalCredentialListingException.class)
-				.extracting(error -> ((DigitalCredentialListingException) error).reason())
-				.isEqualTo(DigitalCredentialListingException.Reason.INVALID_PROVIDER_RESPONSE);
-		verify(persistence).restoreAfterFailure(REQUEST_ID, "INVALID_PROVIDER_RESPONSE", CORRELATION_ID);
+		new DigitalCredentialListingService(provider, properties(), persistence)
+				.list(REQUEST_ID, CORRELATION_ID);
+
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<DigitalCredentialListingResult.ListedDigitalCredential>> captor =
+				ArgumentCaptor.forClass(List.class);
+		verify(persistence).complete(eq(REQUEST_ID), captor.capture(), eq(CORRELATION_ID));
+		assertThat(captor.getValue())
+				.extracting(DigitalCredentialListingResult.ListedDigitalCredential::statusListIndex)
+				.containsExactly(31, 32);
+		assertThat(captor.getValue())
+				.extracting(DigitalCredentialListingResult.ListedDigitalCredential::digitalCredentialUuid)
+				.containsOnly("11111111-1111-4111-8111-111111111111");
+	}
+
+	@Test
+	void rejectsRepeatedIndexesAndExactTuples() {
+		assertInvalid(List.of(
+				listed(31, "11111111-1111-4111-8111-111111111111"),
+				listed(31, "22222222-2222-4222-8222-222222222222")));
+		assertInvalid(List.of(
+				listed(31, "11111111-1111-4111-8111-111111111111"),
+				listed(31, "11111111-1111-4111-8111-111111111111")));
 	}
 
 	@Test
@@ -77,6 +95,9 @@ class DigitalCredentialListingServiceTests {
 		assertThat(adapter.listDigitalCredentials("00000020", CORRELATION_ID).digitalCredentials()).isEmpty();
 		assertThat(adapter.listDigitalCredentials("00000021", CORRELATION_ID).digitalCredentials()).hasSize(1);
 		assertThat(adapter.listDigitalCredentials("00000022", CORRELATION_ID).digitalCredentials()).hasSize(3);
+		assertThat(adapter.listDigitalCredentials("00000023", CORRELATION_ID).digitalCredentials())
+				.extracting(DigitalCredentialListingResult.ListedDigitalCredential::digitalCredentialUuid)
+				.containsOnly("11111111-1111-4111-8111-111111111111");
 		assertThat(adapter.listDigitalCredentials("87654321", CORRELATION_ID).digitalCredentials()).hasSize(3);
 		assertThat(adapter.listDigitalCredentials("87654321", CORRELATION_ID).digitalCredentials())
 				.extracting(DigitalCredentialListingResult.ListedDigitalCredential::status)

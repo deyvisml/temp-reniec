@@ -29,6 +29,10 @@ class FlywayIncrementalMigrationIT {
 	static final MySQLContainer DRAFT_MYSQL = new MySQLContainer("mysql:8.4.0")
 			.withDatabaseName("revocacion_draft_test");
 
+	@Container
+	static final MySQLContainer V15_MYSQL = new MySQLContainer("mysql:8.4.0")
+			.withDatabaseName("revocacion_v15_test");
+
 	@Test
 	void upgradesV4ToLatestPreservingDataAndAddingCurrentSchemaChanges() throws Exception {
 		Flyway v4 = Flyway.configure()
@@ -43,7 +47,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(11);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(12);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
@@ -126,6 +130,37 @@ class FlywayIncrementalMigrationIT {
 				  AND table_name = 'revocation_request_digital_credential'
 				  AND index_name = 'uq_revocation_request_single_selected'
 				""")).isEqualTo(1);
+	}
+
+	@Test
+	void upgradesV15ToV16ReplacingUuidUniquenessWithTupleUniqueness() throws Exception {
+		Flyway v15 = Flyway.configure()
+				.dataSource(V15_MYSQL.getJdbcUrl(), V15_MYSQL.getUsername(), V15_MYSQL.getPassword())
+				.target(MigrationVersion.fromVersion("15"))
+				.load();
+		assertThat(v15.migrate().migrationsExecuted).isEqualTo(15);
+
+		Flyway latest = Flyway.configure()
+				.dataSource(V15_MYSQL.getJdbcUrl(), V15_MYSQL.getUsername(), V15_MYSQL.getPassword())
+				.load();
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(1);
+
+		assertThat(schemaRows(V15_MYSQL, """
+				SELECT DISTINCT index_name FROM information_schema.statistics
+				WHERE table_schema = DATABASE()
+				  AND table_name = 'revocation_request_digital_credential'
+				  AND index_name IN ('uq_revocation_request_digital_credential_uuid',
+				    'uq_revocation_request_credential_identity',
+				    'uq_revocation_request_credential_status_index')
+				ORDER BY index_name
+				""")).containsExactly("uq_revocation_request_credential_identity",
+				"uq_revocation_request_credential_status_index");
+		assertThat(schemaRows(V15_MYSQL, """
+				SELECT column_comment FROM information_schema.columns
+				WHERE table_schema = DATABASE()
+				  AND table_name = 'revocation_request_digital_credential'
+				  AND column_name = 'digital_credential_uuid'
+				""")).singleElement().asString().contains("puede repetirse", "status_list_index");
 	}
 
 	@Test
@@ -218,7 +253,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(DRAFT_MYSQL.getJdbcUrl(), DRAFT_MYSQL.getUsername(), DRAFT_MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(6);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(7);
 		assertThat(singleInt(DRAFT_MYSQL, """
 				SELECT COUNT(*) FROM digital_credential_revocation_request
 				WHERE id = 1 AND request_status = 'PENDING_IDENTITY_VERIFICATION'
@@ -342,8 +377,12 @@ class FlywayIncrementalMigrationIT {
 	}
 
 	private List<String> schemaRows(String sql) throws Exception {
+		return schemaRows(MYSQL, sql);
+	}
+
+	private List<String> schemaRows(MySQLContainer container, String sql) throws Exception {
 		try (var connection = DriverManager.getConnection(
-				MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+				container.getJdbcUrl(), container.getUsername(), container.getPassword());
 				var statement = connection.createStatement();
 				var result = statement.executeQuery(sql)) {
 			var metadata = result.getMetaData();

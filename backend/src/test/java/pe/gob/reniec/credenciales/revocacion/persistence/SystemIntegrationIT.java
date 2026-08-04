@@ -102,7 +102,7 @@ class SystemIntegrationIT extends MySqlContainerSupport {
 				.header(HttpHeaders.ORIGIN, LOCAL_ORIGIN)
 				.header(HttpHeaders.CONTENT_TYPE, "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(
-						"{\"digitalCredentialUuid\":\"11111111-1111-4111-8111-111111111111\",\"reasonCode\":\"LOSS\"}"))
+						"{\"digitalCredentialUuid\":\"11111111-1111-4111-8111-111111111111\",\"statusListIndex\":31,\"reasonCode\":\"LOSS\"}"))
 				.build());
 		HttpResponse<String> preflight = send(HttpRequest.newBuilder(
 				uri("/api/v1/revocation-requests/current/review"))

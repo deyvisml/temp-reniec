@@ -92,7 +92,12 @@ describe("generated API aliases", () => {
     const preview = openApi.components.schemas.RevocationReviewRequest;
     const confirmation = openApi.components.schemas.RevocationConfirmationRequest;
     for (const schema of [preview, confirmation]) {
-      expect(schema.required).toEqual(expect.arrayContaining(["digitalCredentialUuid", "reasonCode"]));
+      expect(schema.required).toEqual(expect.arrayContaining([
+        "digitalCredentialUuid",
+        "statusListIndex",
+        "reasonCode",
+      ]));
+      expect(schema.properties.statusListIndex).toMatchObject({ type: "integer", minimum: 0 });
     }
     expect(confirmation.required).toEqual(
       expect.arrayContaining(["consentAccepted", "consentVersion"]),

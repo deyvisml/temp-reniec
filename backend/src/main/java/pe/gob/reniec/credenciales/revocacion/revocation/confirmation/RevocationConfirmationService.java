@@ -47,6 +47,7 @@ public class RevocationConfirmationService {
 			throw failure(NOT_ALLOWED, "Request is not ready for review");
 		}
 		ValidatedDraft draft = validateDraft(command == null ? null : command.digitalCredentialUuid(),
+				command == null ? null : command.statusListIndex(),
 				command == null ? null : command.reasonCode(),
 				command == null ? null : command.otherReason(),
 				digitalCredentials.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(requestId), requestId, false);
@@ -80,7 +81,7 @@ public class RevocationConfirmationService {
 		validateConsent(command);
 
 		List<RevocationRequestDigitalCredentialEntity> current = digitalCredentials.findByRequestIdForUpdate(requestId);
-		ValidatedDraft draft = validateDraft(command.digitalCredentialUuid(), command.reasonCode(),
+		ValidatedDraft draft = validateDraft(command.digitalCredentialUuid(), command.statusListIndex(), command.reasonCode(),
 				command.otherReason(), current, requestId, request.getConfirmedAt() != null);
 
 		if (request.getConfirmedAt() != null) {
@@ -143,14 +144,19 @@ public class RevocationConfirmationService {
 		}
 	}
 
-	private static ValidatedDraft validateDraft(String submittedUuid, RevocationReasonCode reason,
+	private static ValidatedDraft validateDraft(String submittedUuid, Integer submittedStatusListIndex,
+			RevocationReasonCode reason,
 			String submittedOtherReason, List<RevocationRequestDigitalCredentialEntity> available,
 			Long requestId, boolean allowPersistedSelection) {
 		String uuid = canonicalUuid(submittedUuid);
+		if (submittedStatusListIndex == null || submittedStatusListIndex < 0) {
+			throw failure(INVALID_SELECTION, "DigitalCredential statusListIndex is required and must not be negative");
+		}
 		RevocationRequestDigitalCredentialEntity digitalCredential = available.stream()
 				.filter(item -> item.getAvailabilityStatus() == DigitalCredentialAvailabilityStatus.AVAILABLE
 						|| (allowPersistedSelection && item.isSelected()))
 				.filter(item -> item.getDigitalCredentialUuid().equals(uuid))
+				.filter(item -> submittedStatusListIndex.equals(item.getStatusListIndex()))
 				.filter(item -> item.getRequest().getId() != null
 						&& requestId.equals(item.getRequest().getId()))
 				.findFirst()
@@ -208,6 +214,8 @@ public class RevocationConfirmationService {
 			RevocationRequestDigitalCredentialEntity selected, ValidatedDraft submitted,
 			String consentVersion) {
 		return selected.getDigitalCredentialUuid().equals(submitted.digitalCredential().getDigitalCredentialUuid())
+				&& Objects.equals(selected.getStatusListIndex(),
+						submitted.digitalCredential().getStatusListIndex())
 				&& request.getReasonCode() == submitted.reason()
 				&& Objects.equals(request.getOtherReason(), submitted.otherReason())
 				&& Objects.equals(request.getConsentVersion(), consentVersion);

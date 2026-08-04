@@ -13,6 +13,8 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 
+import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityProperties;
+
 class CredentialProviderPropertiesTests {
 
 	@Test
@@ -27,7 +29,10 @@ class CredentialProviderPropertiesTests {
 				.contains("base-url: ${CREDENTIAL_PROVIDER_BASE_URL:http://localhost:8081}")
 				.contains("backend-base-url: ${APP_BACKEND_BASE_URL:http://localhost:${SERVER_PORT:8080}}");
 		assertThat(production).contains("recaptcha:", "mode: disabled");
-		assertThat(common).contains("port: ${SERVER_PORT:8080}");
+		assertThat(common).contains("port: ${SERVER_PORT:8080}",
+				"timeout: ${AVAILABILITY_TIMEOUT:15s}",
+				"read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:10s}");
+		assertThat(production).contains("read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:10s}");
 	}
 
 	@Test
@@ -86,13 +91,41 @@ class CredentialProviderPropertiesTests {
 		assertThatThrownBy(timeout::validate).isInstanceOf(IllegalStateException.class);
 	}
 
+	@Test
+	void requiresAvailabilityBudgetToExceedProviderTimeoutsByOneSecond() {
+		AvailabilityProperties insufficientBudget = availabilityProperties(Duration.ofSeconds(13));
+		CredentialProviderProperties invalid = properties("test", insufficientBudget);
+		invalid.setConnectTimeout(Duration.ofSeconds(3));
+		invalid.setReadTimeout(Duration.ofSeconds(10));
+		assertThatThrownBy(invalid::validate)
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("app.availability.timeout");
+
+		AvailabilityProperties minimumBudget = availabilityProperties(Duration.ofSeconds(14));
+		CredentialProviderProperties valid = properties("test", minimumBudget);
+		valid.setConnectTimeout(Duration.ofSeconds(3));
+		valid.setReadTimeout(Duration.ofSeconds(10));
+		assertThatCode(valid::validate).doesNotThrowAnyException();
+	}
+
 	private static CredentialProviderProperties properties(String profile) {
+		return properties(profile, new AvailabilityProperties());
+	}
+
+	private static CredentialProviderProperties properties(String profile,
+			AvailabilityProperties availabilityProperties) {
 		MockEnvironment environment = new MockEnvironment();
 		environment.setActiveProfiles(profile);
-		CredentialProviderProperties properties = new CredentialProviderProperties(environment);
+		CredentialProviderProperties properties = new CredentialProviderProperties(environment, availabilityProperties);
 		properties.setMode(CredentialProviderProperties.Mode.REAL);
 		properties.setBaseUrl(URI.create("https://provider.example"));
 		properties.setApiKey("test-key");
+		return properties;
+	}
+
+	private static AvailabilityProperties availabilityProperties(Duration timeout) {
+		AvailabilityProperties properties = new AvailabilityProperties();
+		properties.setTimeout(timeout);
 		return properties;
 	}
 }

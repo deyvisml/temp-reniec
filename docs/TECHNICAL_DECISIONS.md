@@ -9,7 +9,7 @@ Este documento registra la base técnica acordada para futuras etapas. No config
 - Después de autenticar al ciudadano, un segundo servicio obtiene todas las credenciales digitales con número de orden, fecha de creación, UUID, estado `ACTIVE | REVOKED` y fecha de revocación cuando corresponde. Solo las vigentes pueden seleccionarse en el paso 2.
 - Después de un resultado inicial positivo, el contrato del segundo servicio exige al menos una credencial vigente. Una respuesta vacía o sin vigentes se considera inválida, bloquea el avance y no genera una instantánea parcial.
 - El flujo exige seleccionar exactamente una credencial disponible por solicitud. Elegir otro antes de confirmar reemplaza la selección; los demás permanecen fuera de la operación.
-- La integración de revocación envía un solo UUID bajo una clave de idempotencia estable y acepta un resultado exitoso, fallido o incierto. No existe resultado parcial dentro de una solicitud.
+- La identidad oficial de una credencial es `UUID + statusListIndex`: el UUID puede repetirse, pero el índice es único dentro de la solicitud. La integración de revocación envía esa tupla junto con el DNI persistido bajo una clave de idempotencia estable y acepta un resultado exitoso, fallido o incierto.
 - `revocation_operation.normalized_result` es la fuente técnica del resultado y la constancia identifica el único credencial seleccionada.
 - Las adaptaciones de contratos, persistencia y vistas se realizarán mediante cambios funcionales posteriores, sin anticipar contratos institucionales externos aún no confirmados.
 

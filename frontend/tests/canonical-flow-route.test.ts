@@ -73,6 +73,7 @@ describe("rutas del flujo ciudadano", () => {
     expect(flow).not.toMatch(/localStorage|sessionStorage/);
     expect(flow).toContain("const [draft, setDraft]");
     expect(flow).toContain("digitalCredentialUuid: null");
+    expect(flow).toContain("statusListIndex: null");
     expect(flow).toContain("reasonCode: null");
     expect(flow).toContain("recoverConfirmed={view.confirmed}");
     expect(source("lib/api/flow-session.ts")).not.toContain('nextStep !== "REASON"');

@@ -22,6 +22,9 @@ final class DeterministicDigitalCredentialListingAdapter implements DigitalCrede
 					digitalCredential("0000123456", FIRST_DATE, "11111111-1111-4111-8111-111111111111"),
 					digitalCredential("0000123457", FIRST_DATE.plusSeconds(60), "11111111-1111-4111-8111-111111111111")));
 			case "00000024" -> success(List.of(digitalCredential("0000123456", FIRST_DATE, "not-a-uuid")));
+			case "00000029" -> success(List.of(
+					digitalCredential("0000123456", FIRST_DATE, "11111111-1111-4111-8111-111111111111"),
+					digitalCredential("0000123456", FIRST_DATE.plusSeconds(60), "22222222-2222-4222-8222-222222222222")));
 			case "00000025" -> failure(Outcome.TIMEOUT, "MOCK_TIMEOUT");
 			case "00000026" -> failure(Outcome.UNAVAILABLE, "MOCK_UNAVAILABLE");
 			case "00000027" -> failure(Outcome.MALFORMED, "MOCK_MALFORMED_RESPONSE");

@@ -22,6 +22,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialStatus;
 import pe.gob.reniec.credenciales.revocacion.revocation.execution.RevocationGateway;
+import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityProperties;
 import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityOutcome;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationResult;
 
@@ -77,6 +78,26 @@ class RealCredentialProviderAdapterTests {
 				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
 	}
 
+	@Test
+	void preservesRepeatedUuidsWithDistinctOfficialIndexes() {
+		listingResponse = "[{\"credentialType\":\"DniPeruanoCredential\","
+				+ "\"listCredential\":\"e87a7813-880d-4a2d-92f7-4251c841d008\","
+				+ "\"statusListIndex\":11,\"issuanceDate\":\"2026-07-06T20:02:44\","
+				+ "\"revocateDate\":null,\"credentialStatus\":0},{"
+				+ "\"credentialType\":\"DniPeruanoCredential\","
+				+ "\"listCredential\":\"e87a7813-880d-4a2d-92f7-4251c841d008\","
+				+ "\"statusListIndex\":12,\"issuanceDate\":\"2026-07-07T13:45:35\","
+				+ "\"revocateDate\":null,\"credentialStatus\":0}]";
+
+		var result = adapter().listDigitalCredentials("42992664", "correlation");
+
+		assertThat(result.digitalCredentials())
+				.extracting(item -> item.digitalCredentialUuid() + ":" + item.statusListIndex())
+				.containsExactly(
+						"e87a7813-880d-4a2d-92f7-4251c841d008:11",
+						"e87a7813-880d-4a2d-92f7-4251c841d008:12");
+	}
+
 	@AfterEach
 	void stopServer() { server.stop(0); }
 
@@ -115,7 +136,8 @@ class RealCredentialProviderAdapterTests {
 	private RealCredentialProviderAdapter adapter() {
 		MockEnvironment environment = new MockEnvironment();
 		environment.setActiveProfiles("test");
-		CredentialProviderProperties properties = new CredentialProviderProperties(environment);
+		CredentialProviderProperties properties = new CredentialProviderProperties(environment,
+				new AvailabilityProperties());
 		properties.setMode(CredentialProviderProperties.Mode.REAL);
 		properties.setBaseUrl(URI.create("http://127.0.0.1:" + server.getAddress().getPort()));
 		properties.setApiKey("test-key");

@@ -5,6 +5,8 @@ import {
 } from "@/lib/api/contracts";
 import { requestJson, type HttpResult } from "@/lib/http-client";
 
+export const INITIAL_AVAILABILITY_TIMEOUT_MS = 18_000;
+
 export function startRevocationRequest(
   dni: string,
   recaptchaToken?: string,
@@ -16,5 +18,5 @@ export function startRevocationRequest(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal,
-  });
+  }, { timeoutMs: INITIAL_AVAILABILITY_TIMEOUT_MS });
 }

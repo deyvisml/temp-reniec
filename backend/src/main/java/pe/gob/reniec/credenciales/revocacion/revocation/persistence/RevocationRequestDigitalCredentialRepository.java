@@ -20,8 +20,8 @@ public interface RevocationRequestDigitalCredentialRepository
 			+ "where digitalCredential.request.id = :requestId order by digitalCredential.emissionCreatedAt asc, digitalCredential.id asc")
 	List<RevocationRequestDigitalCredentialEntity> findByRequestIdForUpdate(@Param("requestId") Long requestId);
 
-	Optional<RevocationRequestDigitalCredentialEntity> findByRequest_IdAndDigitalCredentialUuid(
-			Long requestId, String digitalCredentialUuid);
+	Optional<RevocationRequestDigitalCredentialEntity> findByRequest_IdAndDigitalCredentialUuidAndStatusListIndex(
+			Long requestId, String digitalCredentialUuid, Integer statusListIndex);
 
 	List<RevocationRequestDigitalCredentialEntity> findByRequest_IdAndSelectedTrueOrderByEmissionCreatedAtAscIdAsc(
 			Long requestId);

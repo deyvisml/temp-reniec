@@ -196,14 +196,15 @@ function parseData(raw: string): CredentialData {
   for (const [dni, value] of Object.entries(parsed.citizens)) {
     if (!DNI_PATTERN.test(dni) || !Array.isArray(value)) throw new Error("Credential data contains an invalid DNI");
     const indexes = new Set<number>();
-    const uuids = new Set<string>();
+    const identities = new Set<string>();
     citizens[dni] = value.map((candidate) => {
       if (!isCredential(candidate)) throw new Error("Credential data contains an invalid credential");
-      if (indexes.has(candidate.statusListIndex) || uuids.has(candidate.listCredential)) {
-        throw new Error("Credential data contains duplicate indexes or UUIDs for a DNI");
+      const identity = `${candidate.listCredential}:${candidate.statusListIndex}`;
+      if (indexes.has(candidate.statusListIndex) || identities.has(identity)) {
+        throw new Error("Credential data contains duplicate indexes or credential identities for a DNI");
       }
       indexes.add(candidate.statusListIndex);
-      uuids.add(candidate.listCredential);
+      identities.add(identity);
       return structuredClone(candidate);
     });
   }

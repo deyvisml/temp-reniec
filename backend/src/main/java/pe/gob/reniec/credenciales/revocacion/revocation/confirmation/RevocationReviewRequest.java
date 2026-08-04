@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationReasonCode;
 
@@ -13,6 +14,10 @@ public record RevocationReviewRequest(
 		@Pattern(regexp = "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid")
 		String digitalCredentialUuid,
+		@NotNull
+		@PositiveOrZero
+		@Schema(requiredMode = Schema.RequiredMode.REQUIRED, minimum = "0")
+		Integer statusListIndex,
 		@NotNull
 		@Schema(requiredMode = Schema.RequiredMode.REQUIRED)
 		RevocationReasonCode reasonCode,

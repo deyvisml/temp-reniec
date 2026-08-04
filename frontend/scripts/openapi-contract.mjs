@@ -119,6 +119,10 @@ function assertSingleDigitalCredentialBoundary(document) {
   if (!("digitalCredentialUuid" in selectionProperties) || !selectionRequired.has("digitalCredentialUuid")) {
     throw new Error("El contrato de selección debe exigir un digitalCredentialUuid singular.");
   }
+  if (!("statusListIndex" in selectionProperties) || !selectionRequired.has("statusListIndex")
+      || selectionProperties.statusListIndex?.type !== "integer") {
+    throw new Error("El contrato de seleccion debe exigir un statusListIndex entero.");
+  }
   if ("digitalCredentialUuids" in selectionProperties || selectionProperties.digitalCredentialUuid?.type === "array") {
     throw new Error("El contrato de selección no debe aceptar colecciones de credenciales.");
   }

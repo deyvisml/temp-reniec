@@ -41,7 +41,7 @@ class RevocationRequestInitiationServiceTests {
 		when(persistence.prepare("00000001", "unit-correlation")).thenReturn(preparation);
 		when(availabilityPort.checkAvailability("00000001")).thenReturn(null);
 		service = new RevocationRequestInitiationService(persistence, availabilityPort,
-				antiBotVerificationPort, Duration.ofSeconds(1));
+				antiBotVerificationPort, properties(Duration.ofSeconds(1)));
 
 		assertThatThrownBy(() -> service.initiate("00000001", "valid-token", "unit-correlation"))
 				.isInstanceOf(AvailabilityProviderException.class);
@@ -61,7 +61,7 @@ class RevocationRequestInitiationServiceTests {
 		when(availabilityPort.checkAvailability("00000001")).thenReturn(available);
 		when(persistence.finalizeAttempt(preparation, available)).thenReturn(expected);
 		service = new RevocationRequestInitiationService(persistence, availabilityPort,
-				antiBotVerificationPort, Duration.ofSeconds(1));
+				antiBotVerificationPort, properties(Duration.ofSeconds(1)));
 
 		assertThat(service.initiate("00000001", "valid-token", "unit-correlation")).isSameAs(expected);
 
@@ -76,7 +76,7 @@ class RevocationRequestInitiationServiceTests {
 		org.mockito.Mockito.doThrow(new RecaptchaVerificationException(RecaptchaFailure.REJECTED))
 				.when(antiBotVerificationPort).verify("rejected-token");
 		service = new RevocationRequestInitiationService(persistence, availabilityPort,
-				antiBotVerificationPort, Duration.ofSeconds(1));
+				antiBotVerificationPort, properties(Duration.ofSeconds(1)));
 
 		assertThatThrownBy(() -> service.initiate("00000001", "rejected-token", "unit-correlation"))
 				.isInstanceOf(RecaptchaVerificationException.class);
@@ -85,10 +85,68 @@ class RevocationRequestInitiationServiceTests {
 	}
 
 	@Test
+	void acceptsAProviderResponseThatTakesLongerThanTheFormerOneSecondBudget() {
+		AvailabilityPreparation preparation = new AvailabilityPreparation(1L, 2L);
+		AvailabilityResult available = new AvailabilityResult(AvailabilityOutcome.AVAILABLE, null, null);
+		RevocationRequestResponse expected = org.mockito.Mockito.mock(RevocationRequestResponse.class);
+		when(persistence.prepare("00000001", "unit-correlation")).thenReturn(preparation);
+		when(availabilityPort.checkAvailability("00000001")).thenAnswer(invocation -> {
+			Thread.sleep(1_100);
+			return available;
+		});
+		when(persistence.finalizeAttempt(preparation, available)).thenReturn(expected);
+		service = new RevocationRequestInitiationService(persistence, availabilityPort,
+				antiBotVerificationPort, properties(Duration.ofSeconds(2)));
+
+		assertThat(service.initiate("00000001", null, "unit-correlation")).isSameAs(expected);
+		verify(availabilityPort).checkAvailability("00000001");
+	}
+
+	@Test
+	void convertsProviderAndGlobalTimeoutsIntoTheSameControlledErrorWithoutRetrying() {
+		AvailabilityPreparation providerPreparation = new AvailabilityPreparation(1L, 2L);
+		AvailabilityResult providerTimeout = new AvailabilityResult(
+				AvailabilityOutcome.UNAVAILABLE, null, "PROVIDER_TIMEOUT");
+		when(persistence.prepare("00000001", "provider-correlation")).thenReturn(providerPreparation);
+		when(availabilityPort.checkAvailability("00000001")).thenReturn(providerTimeout);
+		service = new RevocationRequestInitiationService(persistence, availabilityPort,
+				antiBotVerificationPort, properties(Duration.ofSeconds(1)));
+
+		assertThatThrownBy(() -> service.initiate("00000001", null, "provider-correlation"))
+				.isInstanceOf(AvailabilityTimeoutException.class);
+		verify(availabilityPort).checkAvailability("00000001");
+		service.closeExecutor();
+
+		AvailabilityPreparation globalPreparation = new AvailabilityPreparation(3L, 4L);
+		when(persistence.prepare("00000002", "global-correlation")).thenReturn(globalPreparation);
+		when(availabilityPort.checkAvailability("00000002")).thenAnswer(invocation -> {
+			try {
+				Thread.sleep(500);
+			}
+			catch (InterruptedException exception) {
+				Thread.currentThread().interrupt();
+			}
+			return new AvailabilityResult(AvailabilityOutcome.AVAILABLE, null, null);
+		});
+		service = new RevocationRequestInitiationService(persistence, availabilityPort,
+				antiBotVerificationPort, properties(Duration.ofMillis(50)));
+
+		assertThatThrownBy(() -> service.initiate("00000002", null, "global-correlation"))
+				.isInstanceOf(AvailabilityTimeoutException.class);
+		verify(availabilityPort).checkAvailability("00000002");
+	}
+
+	@Test
 	void rejectsNonPositiveTimeoutConfiguration() {
-		assertThatThrownBy(() -> new RevocationRequestInitiationService(
-				persistence, availabilityPort, antiBotVerificationPort, Duration.ZERO))
-				.isInstanceOf(IllegalArgumentException.class)
+		AvailabilityProperties properties = properties(Duration.ZERO);
+		assertThatThrownBy(properties::validate)
+				.isInstanceOf(IllegalStateException.class)
 				.hasMessageContaining("app.availability.timeout");
+	}
+
+	private static AvailabilityProperties properties(Duration timeout) {
+		AvailabilityProperties properties = new AvailabilityProperties();
+		properties.setTimeout(timeout);
+		return properties;
 	}
 }

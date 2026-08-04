@@ -67,8 +67,8 @@ describe("selección de credenciales", () => {
 
   it("muestra la cantidad exacta y habilita continuar con una selección", () => {
     const markup = renderToStaticMarkup(
-      <DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
-        selected={digitalCredentials[0].digitalCredentialUuid} submitting={false}
+		<DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
+			selected={digitalCredentials[0]} submitting={false}
         onSelect={() => undefined} onSubmit={() => undefined}
         onBack={() => undefined} />,
     );
@@ -123,8 +123,8 @@ describe("selección de credenciales", () => {
 
   it("bloquea un segundo envío mientras guarda la selección", () => {
     const markup = renderToStaticMarkup(
-      <DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
-        selected={digitalCredentials[1].digitalCredentialUuid} submitting
+		<DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
+			selected={digitalCredentials[1]} submitting
         onSelect={() => undefined} onSubmit={() => undefined}
         onBack={() => undefined} />,
     );
@@ -136,14 +136,31 @@ describe("selección de credenciales", () => {
 
   it("anula visualmente una selección local que ya corresponde a una credencial revocada", () => {
     const markup = renderToStaticMarkup(
-      <DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
-        selected={digitalCredentials[2].digitalCredentialUuid} submitting={false}
+		<DigitalCredentialSelectionView digitalCredentials={digitalCredentials}
+			selected={digitalCredentials[2]} submitting={false}
         onSelect={() => undefined} onSubmit={() => undefined} />,
     );
 
     expect(markup).toContain("Ninguna credencial seleccionada");
     expect(markup).not.toContain("checked");
     expect(markup).toContain("disabled");
+  });
+
+  it("distingue dos credenciales con el mismo UUID mediante su Ã­ndice", () => {
+    const repeatedUuid = [
+      digitalCredentials[0],
+      { ...digitalCredentials[1], digitalCredentialUuid: digitalCredentials[0].digitalCredentialUuid },
+    ];
+    const markup = renderToStaticMarkup(
+      <DigitalCredentialSelectionView digitalCredentials={repeatedUuid}
+        selected={repeatedUuid[1]} submitting={false}
+        onSelect={() => undefined} onSubmit={() => undefined} />,
+    );
+
+    expect(markup.match(/type="radio"/g)?.length).toBe(2);
+    expect(markup.match(/checked/g)?.length).toBe(1);
+    expect(markup).toContain(`${repeatedUuid[0].digitalCredentialUuid}:31`);
+    expect(markup).toContain(`${repeatedUuid[0].digitalCredentialUuid}:32`);
   });
 
   it("diferencia el paso completado, actual y pendiente sin permitir volver a autenticación", () => {

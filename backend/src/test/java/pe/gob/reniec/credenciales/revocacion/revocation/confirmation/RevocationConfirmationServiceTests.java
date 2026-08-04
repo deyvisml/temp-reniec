@@ -59,7 +59,7 @@ class RevocationConfirmationServiceTests {
 	@Test
 	void previewsAnAuthoritativeSummaryWithoutPersistingTheDraft() {
 		RevocationReviewResponse response = service.preview(7L,
-				new RevocationReviewRequest(UUID, RevocationReasonCode.THEFT, null));
+				new RevocationReviewRequest(UUID, 31, RevocationReasonCode.THEFT, null));
 
 		assertThat(response.maskedDni()).isEqualTo("******91");
 		assertThat(response.firstName()).isEqualTo("ANA");
@@ -75,7 +75,7 @@ class RevocationConfirmationServiceTests {
 	@Test
 	void normalizesOtherReasonOnlyForThePreviewResponse() {
 		RevocationReviewResponse response = service.preview(7L,
-				new RevocationReviewRequest(UUID, RevocationReasonCode.OTHER,
+				new RevocationReviewRequest(UUID, 31, RevocationReasonCode.OTHER,
 						"  Ya no utilizaré el dispositivo asociado  "));
 
 		assertThat(response.otherReason()).isEqualTo("Ya no utilizaré el dispositivo asociado");
@@ -115,13 +115,13 @@ class RevocationConfirmationServiceTests {
 	@Test
 	void rejectsMissingOrObsoleteConsentWithoutChangingTheRequest() {
 		assertThatThrownBy(() -> service.confirm(7L,
-				new RevocationConfirmationRequest(UUID, RevocationReasonCode.THEFT, null,
+				new RevocationConfirmationRequest(UUID, 31, RevocationReasonCode.THEFT, null,
 						false, RevocationConsentCatalog.VERSION), "correlation"))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.CONSENT_REQUIRED));
 		assertThatThrownBy(() -> service.confirm(7L,
-				new RevocationConfirmationRequest(UUID, RevocationReasonCode.THEFT, null,
+				new RevocationConfirmationRequest(UUID, 31, RevocationReasonCode.THEFT, null,
 						true, "OLD_VERSION"), "correlation"))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
@@ -135,18 +135,45 @@ class RevocationConfirmationServiceTests {
 	void rejectsInvalidDraftsWithoutChangingTheRequest() {
 		assertThatThrownBy(() -> service.preview(7L,
 				new RevocationReviewRequest("22222222-2222-4222-8222-222222222222",
-						RevocationReasonCode.THEFT, null)))
+						31, RevocationReasonCode.THEFT, null)))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.INVALID_SELECTION));
 
 		assertThatThrownBy(() -> service.preview(7L,
-				new RevocationReviewRequest(UUID, RevocationReasonCode.OTHER, "corto")))
+				new RevocationReviewRequest(UUID, 31, RevocationReasonCode.OTHER, "corto")))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.INVALID_REASON));
 		assertThat(request.getReasonCode()).isNull();
 		assertThat(digitalCredential.isSelected()).isFalse();
+	}
+
+	@Test
+	void resolvesAndComparesASelectionByUuidAndStatusListIndex() {
+		RevocationRequestDigitalCredentialEntity otherIndex = new RevocationRequestDigitalCredentialEntity(
+				request, 32, "DniPeruanoCredential", Instant.parse("2026-07-16T15:24:00Z"), UUID,
+				DigitalCredentialAvailabilityStatus.AVAILABLE, null, 0, Instant.now().minusSeconds(9));
+		when(digitalCredentials.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(7L))
+				.thenReturn(List.of(digitalCredential, otherIndex));
+		when(digitalCredentials.findByRequestIdForUpdate(7L))
+				.thenReturn(List.of(digitalCredential, otherIndex));
+
+		RevocationReviewResponse preview = service.preview(7L,
+				new RevocationReviewRequest(UUID, 32, RevocationReasonCode.LOSS, null));
+		assertThat(preview.digitalCredential().statusListIndex()).isEqualTo(32);
+
+		service.confirm(7L, new RevocationConfirmationRequest(UUID, 32, RevocationReasonCode.LOSS,
+				null, true, RevocationConsentCatalog.VERSION), "tuple-confirmation");
+
+		assertThat(otherIndex.isSelected()).isTrue();
+		assertThat(digitalCredential.isSelected()).isFalse();
+		assertThatThrownBy(() -> service.confirm(7L,
+				new RevocationConfirmationRequest(UUID, 31, RevocationReasonCode.LOSS, null,
+						true, RevocationConsentCatalog.VERSION), "tuple-conflict"))
+				.isInstanceOfSatisfying(RevocationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								RevocationConfirmationException.Reason.CONFLICT));
 	}
 
 	@Test
@@ -159,7 +186,7 @@ class RevocationConfirmationServiceTests {
 				.thenReturn(List.of(revoked));
 
 		assertThatThrownBy(() -> service.preview(7L,
-				new RevocationReviewRequest(UUID, RevocationReasonCode.THEFT, null)))
+				new RevocationReviewRequest(UUID, 31, RevocationReasonCode.THEFT, null)))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.INVALID_SELECTION));
@@ -176,7 +203,7 @@ class RevocationConfirmationServiceTests {
 				.thenReturn(Optional.of(legacy));
 
 		assertThatThrownBy(() -> service.preview(7L,
-				new RevocationReviewRequest(UUID, RevocationReasonCode.THEFT, null)))
+				new RevocationReviewRequest(UUID, 31, RevocationReasonCode.THEFT, null)))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.IDENTITY_REQUIRED));
@@ -189,7 +216,7 @@ class RevocationConfirmationServiceTests {
 
 	private static RevocationConfirmationRequest command(String uuid,
 			RevocationReasonCode reason, String otherReason) {
-		return new RevocationConfirmationRequest(uuid, reason, otherReason, true,
+		return new RevocationConfirmationRequest(uuid, 31, reason, otherReason, true,
 				RevocationConsentCatalog.VERSION);
 	}
 

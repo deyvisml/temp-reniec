@@ -109,7 +109,7 @@ class RevocationExecutionServiceTests {
 				provider(mock(PlatformTransactionManager.class)));
 		RevocationConfirmationRequest command = new RevocationConfirmationRequest(
 				"11111111-1111-4111-8111-111111111111",
-				RevocationReasonCode.THEFT, null, true, RevocationConsentCatalog.VERSION);
+				31, RevocationReasonCode.THEFT, null, true, RevocationConsentCatalog.VERSION);
 
 		assertThatThrownBy(() -> service.confirmAndExecute(7L, command, "correlation"))
 				.isInstanceOfSatisfying(RevocationConfirmationException.class,

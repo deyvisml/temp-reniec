@@ -38,7 +38,7 @@ Invoke-RestMethod http://localhost:8081/api/v1/list-credentials `
 | `00000022` | Una vigente y una revocada |
 | `00000028` | Únicamente una revocada |
 
-`has-credentials` responde `true` solo cuando queda al menos una credencial vigente. Una revocación modifica el JSON persistente y una repetición sobre la misma tupla responde exitosamente como operación idempotente.
+`has-credentials` responde `true` solo cuando queda al menos una credencial vigente. El fixture `00000001` incluye dos credenciales vigentes con el mismo UUID e índices distintos para reproducir el contrato real. Una revocación modifica el JSON persistente y una repetición sobre la misma tupla responde exitosamente como operación idempotente.
 
 Para restaurar todos los fixtures y regenerar el DNI personal actual:
 

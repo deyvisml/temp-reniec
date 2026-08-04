@@ -34,9 +34,23 @@ const dateFormatter = new Intl.DateTimeFormat("es-PE", {
   hour12: false,
 });
 
+export type DigitalCredentialSelection = Pick<
+  DigitalCredentialItem,
+  "digitalCredentialUuid" | "statusListIndex"
+>;
+
+const isSelected = (
+  credential: DigitalCredentialItem,
+  selected: DigitalCredentialSelection | null,
+) => credential.digitalCredentialUuid === selected?.digitalCredentialUuid
+  && credential.statusListIndex === selected.statusListIndex;
+
+const credentialKey = (credential: DigitalCredentialSelection) =>
+  `${credential.digitalCredentialUuid}:${credential.statusListIndex}`;
+
 export function DigitalCredentialSelectionTransition({ selected, onSelect, onBack, onContinue }: {
-  selected: string | null;
-  onSelect: (uuid: string) => void;
+  selected: DigitalCredentialSelection | null;
+  onSelect: (selection: DigitalCredentialSelection) => void;
   onBack?: () => void;
   onContinue?: () => void;
 }) {
@@ -68,7 +82,7 @@ export function DigitalCredentialSelectionTransition({ selected, onSelect, onBac
   const submit = async () => {
     if (view.kind !== "ready" || selected === null) return;
     const selectedCredential = view.data.digitalCredentials.find(
-      (credential) => credential.digitalCredentialUuid === selected && credential.status === "ACTIVE",
+      (credential) => isSelected(credential, selected) && credential.status === "ACTIVE",
     );
     if (!selectedCredential) return;
     onContinue?.();
@@ -97,7 +111,7 @@ export function DigitalCredentialSelectionTransition({ selected, onSelect, onBac
           <DigitalCredentialSelectionView
             digitalCredentials={view.data.digitalCredentials}
             selected={view.data.digitalCredentials.some(
-              (credential) => credential.digitalCredentialUuid === selected && credential.status === "ACTIVE",
+              (credential) => isSelected(credential, selected) && credential.status === "ACTIVE",
             ) ? selected : null}
             submitting={false}
             onSelect={onSelect}
@@ -112,16 +126,16 @@ export function DigitalCredentialSelectionTransition({ selected, onSelect, onBac
 
 export function DigitalCredentialSelectionView({ digitalCredentials, selected, submitting, onSelect, onSubmit, onBack }: {
   digitalCredentials: DigitalCredentialItem[];
-  selected: string | null;
+  selected: DigitalCredentialSelection | null;
   submitting: boolean;
-  onSelect: (uuid: string) => void;
+  onSelect: (selection: DigitalCredentialSelection) => void;
   onSubmit: () => void;
   onBack?: () => void;
 }) {
   const activeCredentials = digitalCredentials.filter((credential) => credential.status === "ACTIVE");
   const revokedCredentials = digitalCredentials.filter((credential) => credential.status === "REVOKED");
   const hasValidSelection = activeCredentials.some(
-    (credential) => credential.digitalCredentialUuid === selected,
+    (credential) => isSelected(credential, selected),
   );
   const selectedLabel = hasValidSelection ? "1 credencial seleccionada" : "Ninguna credencial seleccionada";
   const selectionStatusColor = hasValidSelection ? "text-[#1768f2]" : "text-[#52678f]";
@@ -166,8 +180,8 @@ export function DigitalCredentialSelectionView({ digitalCredentials, selected, s
         </div>
         <div className="space-y-3">
           {activeCredentials.map((digitalCredential, index) => (
-            <DigitalCredentialRow key={digitalCredential.digitalCredentialUuid} digitalCredential={digitalCredential}
-              position={index + 1} checked={selected === digitalCredential.digitalCredentialUuid} onSelect={onSelect} />
+            <DigitalCredentialRow key={credentialKey(digitalCredential)} digitalCredential={digitalCredential}
+              position={index + 1} checked={isSelected(digitalCredential, selected)} onSelect={onSelect} />
           ))}
         </div>
       </fieldset>
@@ -196,7 +210,7 @@ export function DigitalCredentialSelectionView({ digitalCredentials, selected, s
           <div className="space-y-3">
             {revokedCredentials.map((digitalCredential, index) => (
               <RevokedDigitalCredentialRow
-                key={digitalCredential.digitalCredentialUuid}
+                key={credentialKey(digitalCredential)}
                 digitalCredential={digitalCredential}
                 position={index + 1}
               />
@@ -223,7 +237,8 @@ export function DigitalCredentialSelectionView({ digitalCredentials, selected, s
 }
 
 function DigitalCredentialRow({ digitalCredential, position, checked, onSelect }: {
-  digitalCredential: DigitalCredentialItem; position: number; checked: boolean; onSelect: (uuid: string) => void;
+  digitalCredential: DigitalCredentialItem; position: number; checked: boolean;
+  onSelect: (selection: DigitalCredentialSelection) => void;
 }) {
   const visibleName = `Credencial digital vigente ${String(position).padStart(2, "0")}`;
 
@@ -232,8 +247,11 @@ function DigitalCredentialRow({ digitalCredential, position, checked, onSelect }
       data-selected={checked ? "true" : "false"}
       className={`grid cursor-pointer grid-cols-[32px_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border px-4 py-3.5 transition-[border-color,background-color] duration-200 focus-within:ring-1 focus-within:ring-inset focus-within:ring-[#0755df] md:grid-cols-[64px_minmax(0,1fr)_160px_96px] md:items-center md:gap-x-4 md:px-5 ${checked ? "border-[#1768f2] bg-[#f5f8ff]" : "border-[#dbe4f1] bg-white hover:border-[#8eafe9] hover:bg-[#fbfdff]"}`}
     >
-      <input type="radio" name="selected-digital-credential" value={digitalCredential.digitalCredentialUuid}
-        checked={checked} onChange={() => onSelect(digitalCredential.digitalCredentialUuid)}
+      <input type="radio" name="selected-digital-credential" value={credentialKey(digitalCredential)}
+        checked={checked} onChange={() => onSelect({
+          digitalCredentialUuid: digitalCredential.digitalCredentialUuid,
+          statusListIndex: digitalCredential.statusListIndex,
+        })}
         aria-label={`Seleccionar credencial con índice ${digitalCredential.statusListIndex}`}
         className="sr-only" />
 

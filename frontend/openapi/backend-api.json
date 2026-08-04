@@ -345,12 +345,18 @@
               "OTHER"
             ],
             "type": "string"
+          },
+          "statusListIndex": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
           "consentAccepted",
           "consentVersion",
           "digitalCredentialUuid",
+          "statusListIndex",
           "reasonCode"
         ],
         "type": "object"
@@ -543,10 +549,16 @@
               "OTHER"
             ],
             "type": "string"
+          },
+          "statusListIndex": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
           }
         },
         "required": [
           "digitalCredentialUuid",
+          "statusListIndex",
           "reasonCode"
         ],
         "type": "object"

@@ -25,7 +25,6 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   availability:
     stale-attempt-threshold: ${AVAILABILITY_STALE_ATTEMPT_THRESHOLD:30s}
-    timeout: ${AVAILABILITY_TIMEOUT:1s}
     mock:
       simulated-timeout: ${AVAILABILITY_MOCK_SIMULATED_TIMEOUT:2s}
   recaptcha:

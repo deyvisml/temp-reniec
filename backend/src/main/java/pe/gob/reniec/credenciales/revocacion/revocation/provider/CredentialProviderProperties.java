@@ -10,19 +10,23 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
+import pe.gob.reniec.credenciales.revocacion.revocation.initiation.AvailabilityProperties;
+
 @Component
 @ConfigurationProperties("app.credential-provider")
 public class CredentialProviderProperties {
 
 	private final Environment environment;
+	private final AvailabilityProperties availabilityProperties;
 	private Mode mode = Mode.DISABLED;
 	private URI baseUrl;
 	private String apiKey;
 	private Duration connectTimeout = Duration.ofSeconds(3);
-	private Duration readTimeout = Duration.ofSeconds(5);
+	private Duration readTimeout = Duration.ofSeconds(10);
 
-	public CredentialProviderProperties(Environment environment) {
+	public CredentialProviderProperties(Environment environment, AvailabilityProperties availabilityProperties) {
 		this.environment = environment;
+		this.availabilityProperties = availabilityProperties;
 	}
 
 	@PostConstruct
@@ -33,6 +37,11 @@ public class CredentialProviderProperties {
 			throw new IllegalStateException("app.credential-provider.mode must be real in production");
 		}
 		if (mode != Mode.REAL) return;
+		Duration minimumAvailabilityTimeout = connectTimeout.plus(readTimeout).plusSeconds(1);
+		if (availabilityProperties.getTimeout().compareTo(minimumAvailabilityTimeout) < 0) {
+			throw new IllegalStateException("app.availability.timeout must allow at least one second beyond "
+					+ "credential provider connect-timeout plus read-timeout");
+		}
 		if (baseUrl == null || !baseUrl.isAbsolute() || baseUrl.getHost() == null
 				|| baseUrl.getQuery() != null || baseUrl.getFragment() != null) {
 			throw new IllegalStateException("app.credential-provider.base-url must be an absolute service URL");

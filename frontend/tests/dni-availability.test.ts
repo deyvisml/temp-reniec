@@ -10,11 +10,17 @@ import {
   validateDni,
 } from "@/components/dni-availability-form";
 import type { RevocationRequestResponse } from "@/lib/api/contracts";
-import { startRevocationRequest } from "@/lib/api/revocation-requests";
+import {
+  INITIAL_AVAILABILITY_TIMEOUT_MS,
+  startRevocationRequest,
+} from "@/lib/api/revocation-requests";
 import { HttpClientError } from "@/lib/http-client";
 import { REVOCATION_FLOW_ROUTE } from "@/lib/routes";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("DNI eligibility entry", () => {
   it("accepts only eight ASCII digits", () => {
@@ -79,6 +85,7 @@ describe("DNI eligibility entry", () => {
     expect(url.pathname).toBe("/api/v1/revocation-requests");
     expect(init.method).toBe("POST");
     expect(init.body).toBe('{"dni":"00000001","recaptchaToken":"ephemeral-test-token"}');
+		expect(INITIAL_AVAILABILITY_TIMEOUT_MS).toBe(18_000);
   });
 
   it("omits anti-bot evidence when reCAPTCHA is disabled", async () => {
@@ -96,6 +103,27 @@ describe("DNI eligibility entry", () => {
 
     const [, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(init.body).toBe('{"dni":"00000001"}');
+  });
+
+  it("keeps the initial request alive until the 18 second browser safety timeout", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_url: URL, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    let settled = false;
+    const observed = startRevocationRequest("00000001").then(
+      () => undefined,
+      (error: unknown) => error,
+    ).finally(() => { settled = true; });
+
+    await vi.advanceTimersByTimeAsync(INITIAL_AVAILABILITY_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+
+    await expect(observed).resolves.toMatchObject({ code: "TIMEOUT" });
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 
   it("requires valid DNI, configured widget and current token before submission", () => {

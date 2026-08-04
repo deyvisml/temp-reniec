@@ -365,9 +365,10 @@ function errorState(error: unknown): Extract<State, { kind: "error" }> {
     };
 }
 function completeDraft(draft: RevocationDraft): CompleteRevocationDraft | null {
-    if (!draft.digitalCredentialUuid || !draft.reasonCode) return null;
+    if (!draft.digitalCredentialUuid || draft.statusListIndex === null || !draft.reasonCode) return null;
     return {
         digitalCredentialUuid: draft.digitalCredentialUuid,
+        statusListIndex: draft.statusListIndex,
         reasonCode: draft.reasonCode,
         ...(draft.reasonCode === "OTHER"
             ? { otherReason: draft.otherReason.trim() }

@@ -47,7 +47,7 @@ La solicitud no contiene colecciones JPA automáticas. Los intentos, credenciale
 
 `revocation_request_digital_credential` contiene la solicitud propietaria, `status_list_index`, tipo interno del proveedor, estado crudo validado, fecha de emisión, UUID canónico, disponibilidad, fecha externa de revocación, fecha de consulta, selección, fecha de selección, versión optimista y fechas técnicas. `legacy_order_number` queda nullable y solo conserva evidencia anterior a V15; nunca se convierte artificialmente en un índice oficial.
 
-Una solicitud puede tener cero, uno o varias credenciales. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. `(request_id, digital_credential_uuid)` y `(request_id, status_list_index)` son únicos. No existe `eligibility_check_id` ni otra relación con la consulta inicial porque ese servicio nunca obtiene credenciales.
+Una solicitud puede tener cero, uno o varias credenciales. La selección se guarda sobre la misma fila; no existe una tabla adicional de selección. El UUID puede repetirse: `(request_id, digital_credential_uuid, status_list_index)` identifica la fila y es único, mientras `(request_id, status_list_index)` impide índices repetidos. No existe `eligibility_check_id` ni otra relación con la consulta inicial porque ese servicio nunca obtiene credenciales.
 
 `selected` y `selected_at` siempre son coherentes. Todas las credenciales permanecen sin seleccionar mientras el ciudadano edita el borrador en memoria. Al confirmar, exactamente una credencial disponible se marca como seleccionada en la misma transacción que registra motivo, consentimiento y `confirmed_at`. El índice funcional único `uq_revocation_request_single_selected` impide que dos filas de una solicitud queden seleccionadas. Después de `confirmed_at`, las filas no pueden agregarse ni cambiar su selección. Las no seleccionadas permanecen fuera de la operación.
 
@@ -90,7 +90,7 @@ Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas 
 - `@Version` protege la fila de credencial que puede modificarse concurrentemente antes de confirmar.
 - Un conflicto de versión se rechaza para que el caso de uso recargue el estado; no hay reintentos automáticos generales.
 - La reserva `CHECKING_DIGITAL_CREDENTIAL_LIST` evita llamadas simultáneas al segundo servicio. Si una ejecución queda interrumpida, una reserva vencida puede recuperarse; un fallo técnico vuelve a `AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST`.
-- La respuesta externa se valida completa antes de insertar. Una respuesta vacía o formada solo por revocadas finaliza sin credenciales disponibles; las filas revocadas válidas sí se conservan. La instantánea se guarda atómicamente con unicidad por UUID e índice oficial.
+- La respuesta externa se valida completa antes de insertar. Una respuesta vacía o formada solo por revocadas finaliza sin credenciales disponibles; las filas revocadas válidas sí se conservan. La instantánea se guarda atómicamente y permite UUID repetidos únicamente cuando el índice oficial es distinto.
 - Finalizar conserva credenciales, selecciones, operaciones, constancias y auditoría. El borrado físico queda restringido mientras exista historial relacionado.
 
 ## Datos y seguridad

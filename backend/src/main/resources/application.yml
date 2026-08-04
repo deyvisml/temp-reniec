@@ -30,6 +30,8 @@ springdoc:
     - /actuator/health
 
 app:
+  availability:
+    timeout: ${AVAILABILITY_TIMEOUT:15s}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
   recaptcha:
@@ -42,7 +44,7 @@ app:
     base-url: ${CREDENTIAL_PROVIDER_BASE_URL:}
     api-key: ${CREDENTIAL_PROVIDER_API_KEY:}
     connect-timeout: ${CREDENTIAL_PROVIDER_CONNECT_TIMEOUT:3s}
-    read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:5s}
+    read-timeout: ${CREDENTIAL_PROVIDER_READ_TIMEOUT:10s}
   digital-credential-listing:
     stale-reservation-threshold: ${DIGITAL_CREDENTIAL_LISTING_STALE_THRESHOLD:30s}
   revocation:

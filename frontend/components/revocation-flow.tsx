@@ -32,6 +32,7 @@ type FlowView =
 
 const emptyDraft: RevocationDraft = {
     digitalCredentialUuid: null,
+    statusListIndex: null,
     reasonCode: null,
     otherReason: "",
 };
@@ -130,9 +131,18 @@ export function RevocationFlow() {
         return (
             <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
                 <DigitalCredentialSelectionTransition
-                    selected={draft.digitalCredentialUuid}
-                    onSelect={(digitalCredentialUuid) =>
-                        setDraft((current) => ({ ...current, digitalCredentialUuid }))
+                    selected={draft.digitalCredentialUuid === null || draft.statusListIndex === null
+                        ? null
+                        : {
+                            digitalCredentialUuid: draft.digitalCredentialUuid,
+                            statusListIndex: draft.statusListIndex,
+                        }}
+                    onSelect={({ digitalCredentialUuid, statusListIndex }) =>
+                        setDraft((current) => ({
+                            ...current,
+                            digitalCredentialUuid,
+                            statusListIndex,
+                        }))
                     }
                     onContinue={() => setView({ kind: "reason" })}
                 />

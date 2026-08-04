@@ -122,7 +122,7 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 		String access = flowSessionService.markIdentityVerified(request.getId()).value();
 
 		String draft = """
-				{"digitalCredentialUuid":"11111111-1111-4111-8111-111111111111","reasonCode":"THEFT"}
+				{"digitalCredentialUuid":"11111111-1111-4111-8111-111111111111","statusListIndex":31,"reasonCode":"THEFT"}
 				""";
 		HttpResponse<String> review = currentRequest("POST", "/review", access, draft);
 		assertThat(review.statusCode()).isEqualTo(HttpStatus.OK.value());
@@ -132,7 +132,7 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(requestRepository.findById(request.getId()).orElseThrow().getReasonCode()).isNull();
 
 		String confirmation = """
-				{"digitalCredentialUuid":"11111111-1111-4111-8111-111111111111","reasonCode":"THEFT",
+				{"digitalCredentialUuid":"11111111-1111-4111-8111-111111111111","statusListIndex":31,"reasonCode":"THEFT",
 				"consentAccepted":true,"consentVersion":"REVOCACION_CREDENCIALES_DIGITALES_V1"}
 				""";
 		HttpResponse<String> first;
@@ -357,7 +357,7 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 				.header("Origin", "http://localhost:3000")
 				.header("Content-Type", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(
-						"{\"digitalCredentialUuid\":\"" + digitalCredentialUuid + "\",\"reasonCode\":\"LOSS\"}"))
+						"{\"digitalCredentialUuid\":\"" + digitalCredentialUuid + "\",\"statusListIndex\":123456,\"reasonCode\":\"LOSS\"}"))
 				.build(), HttpResponse.BodyHandlers.ofString());
 		HttpResponse<String> session = client.send(HttpRequest.newBuilder(
 				URI.create("http://localhost:" + port + "/api/v1/session/current"))
@@ -466,7 +466,7 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 				"identity_verification", "revocation_audit_event", "revocation_flow_session",
 				"revocation_operation", "revocation_receipt", "revocation_request_digital_credential");
 		assertThat(obsoleteColumns).isEmpty();
-		assertThat(migrationCount).isEqualTo(15);
+		assertThat(migrationCount).isEqualTo(16);
 		assertThat(singleSelectionIndexCount).isEqualTo(1);
 		assertThat(tablesWithoutComments).isEmpty();
 		assertThat(columnsWithoutComments).isEmpty();
