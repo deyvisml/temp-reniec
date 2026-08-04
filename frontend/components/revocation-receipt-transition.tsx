@@ -81,7 +81,7 @@ export function RevocationReceiptTransition({ dni, initialData }: {
             <header className="text-center">
               <p className="inline-flex rounded-full bg-[#fae9f0] px-4 py-1.5 text-xs font-black text-reniec-red">PASO 5 DE 5</p>
               <h1 id="receipt-title" className="mt-4 text-2xl font-black tracking-[-0.025em] text-[#061a50] sm:text-3xl">Constancia generada correctamente</h1>
-              <p className="mt-3 text-sm leading-6 text-[#52678f] sm:text-base">La credencial digital seleccionada fue revocada correctamente.</p>
+              <p className="mt-3 text-sm leading-6 text-[#52678f] sm:text-base">La credencial verificable seleccionada fue revocada correctamente.</p>
             </header>
             <ReceiptIllustration />
             <dl className="mt-4 overflow-hidden rounded-xl bg-white ring-1 ring-[#e5e9f0] shadow-[0_5px_18px_rgba(22,46,91,0.08)]">
@@ -95,7 +95,7 @@ export function RevocationReceiptTransition({ dni, initialData }: {
             <div className="mt-4 flex gap-4 rounded-xl border-l-2 border-reniec-red bg-[#fff7fa] px-4 py-3.5 text-sm leading-6 text-[#52627f] sm:px-5">
               <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full border border-[#d83a76] text-reniec-red" aria-hidden="true"><InfoIcon /></span>
               <div>
-                <p className="font-bold text-[#173568]">Se revocó únicamente la credencial digital seleccionada.</p>
+                <p className="font-bold text-[#173568]">Se revocó únicamente la credencial verificable seleccionada.</p>
                 <p>Esta acción no afecta tu DNI ni tu identidad civil.</p>
               </div>
             </div>

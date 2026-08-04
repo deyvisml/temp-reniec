@@ -48,7 +48,7 @@ describe("constancia de revocación", () => {
     expect(markup).toContain("Esta acción no afecta tu DNI ni tu identidad civil");
     expect(markup).not.toContain("ID Perú");
     expect(markup).toContain("receipt-confirmation-complete-v2.png");
-    expect(markup).toContain("únicamente la credencial digital seleccionada");
+    expect(markup).toContain("únicamente la credencial verificable seleccionada");
     expect(markup).not.toMatch(/UUID|11111111/);
   });
 

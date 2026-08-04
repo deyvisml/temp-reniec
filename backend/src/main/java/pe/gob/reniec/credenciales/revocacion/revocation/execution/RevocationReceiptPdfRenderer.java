@@ -38,7 +38,7 @@ public class RevocationReceiptPdfRenderer {
 	private static final DateTimeFormatter EXACT_TIME = DateTimeFormatter
 			.ofPattern("HH:mm:ss 'UTC-5'", SPANISH_PERU).withZone(LIMA);
 	private static final String LOGO_RESOURCE = "/pdf/reniec-logo.png";
-	private static final String TITLE = "CONSTANCIA DE REVOCACIÓN DE CREDENCIAL DIGITAL";
+	private static final String TITLE = "CONSTANCIA DE REVOCACIÓN DE CREDENCIAL VERIFICABLE";
 	private static final float PAGE_MARGIN = 43.5f;
 	private static final float PAGE_LEFT = PAGE_MARGIN;
 	private static final float PAGE_RIGHT = PDRectangle.A4.getWidth() - PAGE_MARGIN;
@@ -67,7 +67,7 @@ public class RevocationReceiptPdfRenderer {
 				float introductionBottom = paragraph(content, regular, 10, TEXT, PAGE_LEFT, 631,
 						CONTENT_WIDTH, 15,
 						"El Registro Nacional de Identificación y Estado Civil (RENIEC) deja constancia "
-								+ "de que la credencial digital detallada a continuación fue revocada "
+								+ "de que la credencial verificable detallada a continuación fue revocada "
 								+ "satisfactoriamente a solicitud del ciudadano autenticado.");
 
 				float top = introductionBottom - 22;
@@ -89,7 +89,7 @@ public class RevocationReceiptPdfRenderer {
 				informationNotice(content, Math.max(178, detailsBottom - 28));
 				line(content, PAGE_LEFT, 74, PAGE_RIGHT, 74, LINE, 0.7f);
 				centeredText(content, regular, 7, MUTED, 52,
-						"Documento generado electrónicamente por el Sistema de Gestión de Credenciales Digitales de RENIEC.");
+						"Documento generado electrónicamente por el Sistema de Gestión de Credenciales Verificables de RENIEC.");
 			}
 			document.save(output);
 			return output.toByteArray();
@@ -156,7 +156,7 @@ public class RevocationReceiptPdfRenderer {
 		content.addRect(PAGE_LEFT, bottom, 3, 72);
 		content.fill();
 		text(content, bold, 9, NAVY, PAGE_LEFT + 18, top - 24,
-				"Se revocó únicamente la credencial digital seleccionada.");
+				"Se revocó únicamente la credencial verificable seleccionada.");
 		text(content, regular, 8.5f, MUTED, PAGE_LEFT + 18, top - 44,
 				"Esta acción no afecta tu DNI ni tu identidad civil.");
 	}

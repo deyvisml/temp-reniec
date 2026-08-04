@@ -15,7 +15,7 @@ describe("SweetAlert2 eligibility outcome feedback", () => {
     expect(presentation.tone).toBe("informative");
     expect(presentation.title).toBe("No encontramos credenciales para revocar");
     expect(presentation.description).toBe(
-      "No encontramos credenciales digitales disponibles para revocar con el DNI ingresado.",
+      "No encontramos credenciales verificables disponibles para revocar con el DNI ingresado.",
     );
     expect(presentation.primaryAction).toEqual({
       kind: "reset",

@@ -50,8 +50,8 @@ describe("selección de credenciales", () => {
     expect(markup).toContain("Índice de credencial");
     expect(markup).toContain(">31<");
     expect(markup).toContain(">32<");
-    expect(markup).toContain("Credencial digital vigente 01");
-    expect(markup).toContain("Credencial digital vigente 02");
+    expect(markup).toContain("Credencial verificable vigente 01");
+    expect(markup).toContain("Credencial verificable vigente 02");
     expect(markup).not.toMatch(/>UUID</);
     expect(markup).not.toContain("Emisión asociada a tu DNI");
     expect(markup.match(/viewBox="0 0 56 64"/g)?.length).toBe(3);
@@ -94,11 +94,11 @@ describe("selección de credenciales", () => {
         submitting={false} onSelect={() => undefined} onSubmit={() => undefined} />,
     );
 
-    expect(markup).toContain("Credenciales digitales");
+    expect(markup).toContain("Credenciales verificables");
     expect(markup).toContain("2 vigentes · 1 revocadas");
     expect(markup).toContain("Disponibles para revocar");
     expect(markup).toContain("Credenciales revocadas");
-    expect(markup).toContain("Credencial digital revocada 01");
+    expect(markup).toContain("Credencial verificable revocada 01");
     expect(markup).toContain("Revocada el");
     expect(markup).toContain("25/07/2026");
     expect(markup).toContain(">33<");
@@ -117,7 +117,7 @@ describe("selección de credenciales", () => {
         submitting={false} onSelect={() => undefined} onSubmit={() => undefined} />,
     );
 
-    expect(markup).toContain("Credencial digital revocada 01");
+    expect(markup).toContain("Credencial verificable revocada 01");
     expect(markup).toContain("Revocada el");
     expect(markup).toContain("Fecha no disponible");
     expect(markup).not.toContain("Seleccionar credencial con índice 33");
@@ -130,7 +130,7 @@ describe("selección de credenciales", () => {
         onSubmit={() => undefined} onBack={() => undefined} />,
     );
 
-    expect(markup).toContain("Credenciales digitales");
+    expect(markup).toContain("Credenciales verificables");
     expect(markup).toContain(">31<");
     expect(markup).toContain("Ninguna credencial seleccionada");
     expect(markup).not.toContain("checked");

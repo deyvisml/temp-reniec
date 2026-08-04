@@ -22,12 +22,17 @@ describe("base application rendering", () => {
   it("renders the real citizen home and accessible DNI form", () => {
     const html = renderToStaticMarkup(<RevocationEntry onContinue={() => undefined} />);
 
-    expect(html).toContain("Revocación de <span>credenciales digitales</span>");
+    expect(html).toContain("Revocación de <span>credenciales verificables</span>");
     expect(html).toContain("Ingresa tu DNI para comenzar");
-    expect(html).toContain('aria-label="Consulta de credenciales digitales"');
+    expect(html).toContain('aria-label="Consulta de credenciales verificables"');
     expect(html).toContain("<form");
     expect(html).toContain('inputMode="numeric"');
     expect(html).toContain('maxLength="8"');
+    expect(html).not.toContain("Servicio digital seguro");
+    expect(html).not.toContain("Cancela las credenciales verificables");
+    expect(html).not.toContain("Servicio RENIEC");
+    expect(html).not.toContain("Debe contener 8 dígitos numéricos");
+    expect(html).not.toContain("Tu información se utiliza únicamente para iniciar esta consulta");
     expect(html).not.toContain("Proyecto en preparación");
     expect(html).not.toContain("Comprobando integración");
     expect(html).not.toContain("ID Perú");
@@ -47,7 +52,7 @@ describe("base application rendering", () => {
     expect(html).toContain('href="#main-content"');
     expect(html).toContain('id="global-messages"');
     expect(html).toContain("Contenido de prueba");
-    expect(metadata.title).toBe("Revocación de credenciales digitales");
+    expect(metadata.title).toBe("Revocación de credenciales verificables");
     expect(metadata.description).toContain("Consulta e inicia");
   });
 

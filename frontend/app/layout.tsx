@@ -8,8 +8,8 @@ import "sweetalert2/dist/sweetalert2.min.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Revocación de credenciales digitales",
-  description: "Consulta e inicia la revocación de credenciales digitales asociados a tu DNI.",
+  title: "Revocación de credenciales verificables",
+  description: "Consulta e inicia la revocación de credenciales verificables asociados a tu DNI.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

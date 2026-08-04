@@ -53,14 +53,14 @@ class RevocationReceiptPdfRendererTests {
 					throw new AssertionError(exception);
 				}
 			});
-			assertThat(text).contains("CONSTANCIA DE REVOCACIÓN DE CREDENCIAL DIGITAL",
+			assertThat(text).contains("CONSTANCIA DE REVOCACIÓN DE CREDENCIAL VERIFICABLE",
 					"REGISTRO NACIONAL DE IDENTIFICACIÓN Y ESTADO CIVIL",
 					"NOMBRE VERIFICADO (PRIMER NOMBRE)", "José Luis",
 					"DNI 73905791", "CÓDIGO DE CONSTANCIA", "RV-2026-000128",
 					"ESTADO FINAL", "REVOCADA", "ÍNDICE DE CREDENCIAL",
 					"31", "MOTIVO", "Robo", "FECHA DE REVOCACIÓN",
 					"30 de julio de 2026", "13:00:01 UTC-5",
-					"únicamente la credencial digital seleccionada",
+					"únicamente la credencial verificable seleccionada",
 					"Documento generado electrónicamente");
 			assertThat(text).doesNotContain("******", "UUID", "11111111-1111", "ID Perú",
 					"QR", "SHA256", "Ley N", "firma", "PROCESADO", "AUTORIZADO",
@@ -98,7 +98,7 @@ class RevocationReceiptPdfRendererTests {
 	}
 
 	private static final class TitleFontSizeStripper extends PDFTextStripper {
-		private static final String TITLE = "CONSTANCIA DE REVOCACIÓN DE CREDENCIAL DIGITAL";
+		private static final String TITLE = "CONSTANCIA DE REVOCACIÓN DE CREDENCIAL VERIFICABLE";
 		private final List<Float> titleFontSizes = new ArrayList<>();
 
 		private TitleFontSizeStripper() throws IOException { }

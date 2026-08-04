@@ -44,7 +44,7 @@ export function ReviewView({ dni, review, accepted, submitting, onAccepted, onBa
       </h2>
       <ul className="mt-2.5 space-y-1.5 pl-3 text-sm leading-6 text-[#52627f]">
         <li className="flex gap-3"><span className="text-[#ef9d3f]" aria-hidden="true">•</span><span>La propagación de la revocación puede tardar aproximadamente un minuto.</span></li>
-        <li className="flex gap-3"><span className="text-[#ef9d3f]" aria-hidden="true">•</span><span>Se revocará únicamente la credencial digital seleccionada.</span></li>
+        <li className="flex gap-3"><span className="text-[#ef9d3f]" aria-hidden="true">•</span><span>Se revocará únicamente la credencial verificable seleccionada.</span></li>
         <li className="flex gap-3"><span className="text-[#ef9d3f]" aria-hidden="true">•</span><span>Esta acción no afecta tu DNI, tu identidad civil ni tu acceso a ID Perú.</span></li>
       </ul>
     </section>

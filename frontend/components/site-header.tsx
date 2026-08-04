@@ -16,11 +16,7 @@ export function SiteHeader() {
       >
         <div className="flex shrink-0 items-center">
           <Image
-            className={`object-contain object-center min-[801px]:object-left ${
-              isInternalFlow
-                ? "h-[58px] w-[120px] min-[520px]:h-[70px] min-[520px]:w-[180px]"
-                : "h-[70px] w-[180px]"
-            }`}
+            className="block h-[50px] w-[129px] object-contain"
             src="/images/reniec-logo.png"
             alt="RENIEC - Registro Nacional de Identificación y Estado Civil"
             width={129}
@@ -40,7 +36,7 @@ export function SiteHeader() {
             <HeaderItem
               icon={<ShieldIcon />}
               title="Servicio ciudadano"
-              text="Revocación de credenciales digitales"
+              text="Revocación de credenciales verificables"
             />
           </div>
         )}
@@ -51,7 +47,7 @@ export function SiteHeader() {
 
 function HeaderItem({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
-    <div className="flex items-center gap-3 border-l border-white/35 px-[26px]">
+    <div className="flex items-center gap-3 px-[26px]">
       <span className="size-9 [&_svg]:size-full">{icon}</span>
       <p>
         <strong className="block text-sm">{title}</strong>

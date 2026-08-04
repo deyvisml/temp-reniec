@@ -160,7 +160,7 @@ export function DigitalCredentialSelectionView({ digitalCredentials, selected, s
       <div className="mt-7 flex flex-col gap-3 rounded-lg bg-[#f8f9fb] px-4 py-3.5 ring-1 ring-[#e5e9f0] sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <p className="flex items-center gap-3 text-sm font-medium text-[#243654]">
           <span className="grid size-8 place-items-center rounded-full bg-white text-[#314a73] ring-1 ring-[#e1e6ed]" aria-hidden="true"><DigitalCredentialListIcon /></span>
-          <span>Credenciales digitales</span>
+          <span>Credenciales verificables</span>
           <span className="text-lg font-medium leading-none text-[#061a50]">{digitalCredentials.length}</span>
           <span className="hidden text-xs font-normal text-[#687893] sm:inline">
             {activeCredentials.length} vigentes · {revokedCredentials.length} revocadas
@@ -246,7 +246,7 @@ function DigitalCredentialRow({ digitalCredential, position, checked, onSelect }
   digitalCredential: DigitalCredentialItem; position: number; checked: boolean;
   onSelect: (selection: DigitalCredentialSelection) => void;
 }) {
-  const visibleName = `Credencial digital vigente ${String(position).padStart(2, "0")}`;
+  const visibleName = `Credencial verificable vigente ${String(position).padStart(2, "0")}`;
 
   return (
     <label
@@ -303,7 +303,7 @@ function RevokedDigitalCredentialRow({ digitalCredential, position }: {
   digitalCredential: DigitalCredentialItem;
   position: number;
 }) {
-  const visibleName = `Credencial digital revocada ${String(position).padStart(2, "0")}`;
+  const visibleName = `Credencial verificable revocada ${String(position).padStart(2, "0")}`;
 
   return (
     <article
@@ -349,7 +349,7 @@ function RevokedDigitalCredentialRow({ digitalCredential, position }: {
 }
 
 function LoadingState() {
-  return <div className="grid min-h-[440px] place-items-center text-center" aria-live="polite" aria-busy="true"><div><span className="mx-auto block size-10 animate-spin rounded-full border-4 border-[#d6e2f7] border-t-reniec-red motion-reduce:animate-none" /><p className="mt-4 font-semibold text-[#52678f]">Consultando tus credenciales digitales…</p></div></div>;
+  return <div className="grid min-h-[440px] place-items-center text-center" aria-live="polite" aria-busy="true"><div><span className="mx-auto block size-10 animate-spin rounded-full border-4 border-[#d6e2f7] border-t-reniec-red motion-reduce:animate-none" /><p className="mt-4 font-semibold text-[#52678f]">Consultando tus credenciales verificables…</p></div></div>;
 }
 
 function EmptyState({ onExit }: { onExit: () => void }) {

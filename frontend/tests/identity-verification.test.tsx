@@ -97,7 +97,7 @@ describe("paso de verificación de identidad", () => {
     );
 
     expect(markup).toContain("Paso actual 2: Selección");
-    expect(markup).toContain("Consultando tus credenciales digitales");
+    expect(markup).toContain("Consultando tus credenciales verificables");
     expect(markup).not.toMatch(/UUID|número de orden|seleccionar credencial/i);
   });
 
