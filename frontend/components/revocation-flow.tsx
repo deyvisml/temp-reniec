@@ -25,7 +25,7 @@ type FlowView =
           callbackOutcome?: IdentityCallbackOutcome;
           verified?: boolean;
       }
-    | { kind: "selection" }
+    | { kind: "selection"; selectionStale?: boolean }
     | { kind: "reason" }
     | { kind: "confirmation"; confirmed: boolean }
     | { kind: "receipt"; data?: RevocationExecution };
@@ -131,6 +131,7 @@ export function RevocationFlow() {
         return (
             <div className="relative px-4 py-8 sm:py-12 overflow-hidden">
                 <DigitalCredentialSelectionTransition
+					selectionStale={view.selectionStale === true}
                     selected={draft.digitalCredentialUuid === null || draft.statusListIndex === null
                         ? null
                         : {
@@ -180,6 +181,14 @@ export function RevocationFlow() {
                     draft={draft}
                     recoverConfirmed={view.confirmed}
                     onBack={() => setView({ kind: "reason" })}
+					onSelectionStale={() => {
+						setDraft((current) => ({
+							...current,
+							digitalCredentialUuid: null,
+							statusListIndex: null,
+						}));
+						setView({ kind: "selection", selectionStale: true });
+					}}
                     onCompleted={(data) => setView({ kind: "receipt", data })}
                 />
             </div>

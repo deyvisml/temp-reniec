@@ -90,7 +90,7 @@ Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas 
 - `@Version` protege la fila de credencial que puede modificarse concurrentemente antes de confirmar.
 - Un conflicto de versión se rechaza para que el caso de uso recargue el estado; no hay reintentos automáticos generales.
 - La reserva `CHECKING_DIGITAL_CREDENTIAL_LIST` evita llamadas simultáneas al segundo servicio. Si una ejecución queda interrumpida, una reserva vencida puede recuperarse; un fallo técnico vuelve a `AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST`.
-- La respuesta externa se valida completa antes de insertar. Una respuesta vacía o formada solo por revocadas finaliza sin credenciales disponibles; las filas revocadas válidas sí se conservan. La instantánea se guarda atómicamente y permite UUID repetidos únicamente cuando el índice oficial es distinto.
+- La respuesta externa se valida completa antes de insertar. Antes de confirmar, cada consulta reemplaza atómicamente la fotografía previa; si falla, las filas anteriores se conservan solo como evidencia interna. Una respuesta vacía o formada solo por revocadas finaliza sin credenciales disponibles, y los UUID pueden repetirse cuando el índice oficial es distinto. Al confirmar, la fotografía revalidada y la tupla seleccionada quedan inmutables.
 - Finalizar conserva credenciales, selecciones, operaciones, constancias y auditoría. El borrado físico queda restringido mientras exista historial relacionado.
 
 ## Datos y seguridad

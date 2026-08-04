@@ -1,8 +1,0 @@
-## MODIFIED Requirements
-
-### Requirement: Technical-foundation-only boundary
-The backend foundation MAY contain MySQL, Flyway, Testcontainers, the simplified six-table cancellation-request persistence model specified by `cancellation-request-persistence-model`, the versioned technical integration API, a development-only Docker Compose service containing MySQL 8.4, and the citizen eligibility endpoint and use case specified by `citizen-eligibility-entry`. It MUST NOT persist request sessions, public-reference UUIDs, consent versions, recovery or expiration windows, automatic request expiration, or generic optimistic-version columns; containerize backend or frontend; add application Dockerfiles or PowerShell startup scripts; or introduce functional JWT or refresh-token behavior, real ID Perú, real certificate-lookup, revocation, document-storage or other external integrations, complete progress-recovery UI, cancellation reason or confirmation behavior, PDF generation, production deployment, administrative modules, microservices, queues, event sourcing, CQRS, a multi-module Maven build, another database, Redis, workflow stored procedures, complex triggers, generated guard columns, unassessed tables, or unused layers.
-
-#### Scenario: Completed change is reviewed for scope
-- **WHEN** the implementation diff, Compose model, runtime routes, migration and JPA model are inspected
-- **THEN** they contain the technical backend foundation, six justified persistence tables, direct request-state recovery, the technical integration, citizen eligibility, tests and documentation, with no session table, anticipatory columns, later citizen-flow stage, real external integration, production deployment configuration or administrative capability

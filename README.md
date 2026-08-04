@@ -73,4 +73,3 @@ El Compose del backend levanta exclusivamente MySQL en `3308`. Este modo y el st
 - Las credenciales de MySQL y del proveedor incluidas en el Compose raíz son ficticias; las credenciales de ID Perú solo se leen desde `backend/.env`.
 - La configuración productiva no se incluye en estas imágenes ni acepta HTTP para el proveedor.
 - reCAPTCHA permanece deshabilitado en local y producción.
-- OpenSpec no forma parte de este flujo.

@@ -95,6 +95,17 @@ class DigitalCredentialSelectionPersistenceIT extends MySqlContainerSupport {
 		assertThat(listed.requestStatus()).isEqualTo("DIGITAL_CREDENTIALS_AVAILABLE");
 		assertThat(listed.digitalCredentials()).hasSize(3);
 		assertThat(digitalCredentialRepository.countByRequest_Id(request.getId())).isEqualTo(3);
+		List<Long> originalIds = digitalCredentialRepository
+				.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(request.getId()).stream()
+				.map(RevocationRequestDigitalCredentialEntity::getId).toList();
+
+		listed = digitalCredentialListingService.list(request.getId(), "refresh-correlation");
+
+		assertThat(listed.digitalCredentials()).hasSize(3);
+		assertThat(digitalCredentialRepository.countByRequest_Id(request.getId())).isEqualTo(3);
+		assertThat(digitalCredentialRepository.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(request.getId()))
+				.extracting(RevocationRequestDigitalCredentialEntity::getId)
+				.doesNotContainAnyElementsOf(originalIds);
 		String selectedUuid = listed.digitalCredentials().get(1).digitalCredentialUuid();
 		int selectedIndex = listed.digitalCredentials().get(1).statusListIndex();
 

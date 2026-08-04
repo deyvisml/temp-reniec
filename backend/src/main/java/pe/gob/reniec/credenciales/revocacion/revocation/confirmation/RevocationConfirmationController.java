@@ -77,9 +77,10 @@ public class RevocationConfirmationController {
 		@ApiResponse(responseCode = "400", description = "Consentimiento ausente o formato inválido", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "401", description = "Sesión ausente o expirada", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "403", description = "Identidad o paso no permitido", content = @Content(schema = @Schema(implementation = ApiError.class))),
-		@ApiResponse(responseCode = "409", description = "Versión o decisión incompatible", content = @Content(schema = @Schema(implementation = ApiError.class))),
-		@ApiResponse(responseCode = "422", description = "Motivo o selección inválida", content = @Content(schema = @Schema(implementation = ApiError.class))),
-		@ApiResponse(responseCode = "503", description = "Integración de revocación no disponible; la decisión no se persiste", content = @Content(schema = @Schema(implementation = ApiError.class)))
+		@ApiResponse(responseCode = "409", description = "Versión, decisión o vigencia incompatible", content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "422", description = "Motivo, selección o respuesta del proveedor inválida", content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "503", description = "Proveedor de listado o revocación no disponible; la decisión no se persiste", content = @Content(schema = @Schema(implementation = ApiError.class))),
+		@ApiResponse(responseCode = "504", description = "Timeout al revalidar la credencial; la decisión no se persiste", content = @Content(schema = @Schema(implementation = ApiError.class)))
 	})
 	public RevocationExecutionResponse confirm(@Valid @RequestBody RevocationConfirmationRequest body,
 			HttpServletRequest request) {

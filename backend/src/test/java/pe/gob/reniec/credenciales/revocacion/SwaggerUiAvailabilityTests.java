@@ -57,4 +57,17 @@ class SwaggerUiAvailabilityTests {
 					location -> assertThat(location).contains("/swagger-ui/index.html"));
 		}
 	}
+
+	@Test
+	void openApiDocumentsRefreshAndFinalRevalidationFailures() throws Exception {
+		HttpResponse<String> response = HttpClient.newHttpClient().send(
+				HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v3/api-docs")).GET().build(),
+				HttpResponse.BodyHandlers.ofString());
+
+		assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(response.body())
+				.contains("Consulta el proveedor en cada entrada previa a la confirmación")
+				.contains("Timeout al revalidar la credencial")
+				.contains("Proveedor de listado o revocación no disponible");
+	}
 }

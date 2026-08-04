@@ -34,26 +34,65 @@ public class DigitalCredentialListingService {
 			return response(preparation.snapshot(), preparation.requestStatus().name());
 		}
 		try {
-			DigitalCredentialListingResult result = provider.listDigitalCredentials(preparation.dni(), correlationId);
-			if (result == null || result.outcome() == null) {
-				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
-						"DigitalCredential provider returned no normalized outcome");
-			}
-			if (result.outcome() != DigitalCredentialListingResult.Outcome.SUCCESS) {
-				throw providerFailure(result);
-			}
-			List<DigitalCredentialListingResult.ListedDigitalCredential> normalized = validateAndNormalize(result.digitalCredentials());
+			List<DigitalCredentialListingResult.ListedDigitalCredential> normalized =
+					fetchValidated(preparation.dni(), correlationId);
 			return response(persistence.complete(requestId, normalized, correlationId));
 		}
 		catch (DigitalCredentialListingException exception) {
-			persistence.restoreAfterFailure(requestId, exception.reason().name(), correlationId);
+			persistence.restoreAfterFailure(requestId, preparation.previousStatus(),
+					exception.reason().name(), correlationId);
 			throw exception;
 		}
 		catch (RuntimeException exception) {
-			persistence.restoreAfterFailure(requestId, "UNEXPECTED_PROVIDER_FAILURE", correlationId);
+			persistence.restoreAfterFailure(requestId, preparation.previousStatus(),
+					"UNEXPECTED_PROVIDER_FAILURE", correlationId);
 			throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 					"DigitalCredential provider response could not be processed");
 		}
+	}
+
+	public RevalidationOutcome revalidateSelection(Long requestId, String submittedUuid,
+			int submittedStatusListIndex, String correlationId) {
+		String uuid = canonicalUuid(submittedUuid);
+		if (submittedStatusListIndex < 0) {
+			throw new DigitalCredentialListingException(Reason.INVALID_SELECTION,
+					"DigitalCredential statusListIndex must not be negative");
+		}
+		DigitalCredentialListingPersistenceCoordinator.Preparation preparation = persistence.prepare(
+				requestId, correlationId, properties.getStaleReservationThreshold());
+		if (!preparation.providerRequired()) return RevalidationOutcome.FROZEN;
+		try {
+			List<DigitalCredentialListingResult.ListedDigitalCredential> normalized =
+					fetchValidated(preparation.dni(), correlationId);
+			DigitalCredentialListingPersistenceCoordinator.RevalidationCompletion completion =
+					persistence.completeForConfirmation(requestId, normalized, uuid,
+							submittedStatusListIndex, correlationId);
+			return completion.selectedIsCurrent() ? RevalidationOutcome.CURRENT : RevalidationOutcome.STALE;
+		}
+		catch (DigitalCredentialListingException exception) {
+			persistence.restoreAfterFailure(requestId, preparation.previousStatus(),
+					exception.reason().name(), correlationId);
+			throw exception;
+		}
+		catch (RuntimeException exception) {
+			persistence.restoreAfterFailure(requestId, preparation.previousStatus(),
+					"UNEXPECTED_PROVIDER_FAILURE", correlationId);
+			throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
+					"DigitalCredential provider response could not be processed");
+		}
+	}
+
+	private List<DigitalCredentialListingResult.ListedDigitalCredential> fetchValidated(
+			String dni, String correlationId) {
+		DigitalCredentialListingResult result = provider.listDigitalCredentials(dni, correlationId);
+		if (result == null || result.outcome() == null) {
+			throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
+					"DigitalCredential provider returned no normalized outcome");
+		}
+		if (result.outcome() != DigitalCredentialListingResult.Outcome.SUCCESS) {
+			throw providerFailure(result);
+		}
+		return validateAndNormalize(result.digitalCredentials());
 	}
 
 	private static List<DigitalCredentialListingResult.ListedDigitalCredential> validateAndNormalize(
@@ -105,6 +144,12 @@ public class DigitalCredentialListingService {
 	}
 
 	private record CredentialIdentity(String digitalCredentialUuid, int statusListIndex) { }
+
+	public enum RevalidationOutcome {
+		CURRENT,
+		STALE,
+		FROZEN
+	}
 
 	private static DigitalCredentialListingException providerFailure(DigitalCredentialListingResult result) {
 		Reason reason = switch (result.outcome()) {

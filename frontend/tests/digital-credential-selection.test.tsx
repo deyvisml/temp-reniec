@@ -200,4 +200,16 @@ describe("selección de credenciales", () => {
     expect(source).not.toContain("replaceDigitalCredentialSelection");
     expect(source).not.toContain("Guardando selección");
   });
+
+	it("regresa al paso 2 y limpia solo la selección cuando la vigencia cambió", () => {
+		const flow = readFileSync(resolve(process.cwd(), "components/revocation-flow.tsx"), "utf8");
+		const review = readFileSync(resolve(process.cwd(), "components/revocation-review-transition.tsx"), "utf8");
+
+		expect(review).toContain("DIGITAL_CREDENTIAL_SELECTION_STALE");
+		expect(review).toContain("onSelectionStale()");
+		expect(flow).toContain('setView({ kind: "selection", selectionStale: true })');
+		expect(flow).toContain("digitalCredentialUuid: null");
+		expect(flow).toContain("statusListIndex: null");
+		expect(flow).not.toContain("reasonCode: null,\n\t\t\t\t\t\t\totherReason");
+	});
 });

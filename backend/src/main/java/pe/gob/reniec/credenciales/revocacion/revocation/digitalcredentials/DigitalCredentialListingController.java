@@ -40,9 +40,9 @@ public class DigitalCredentialListingController {
 	@GetMapping(value = "/digital-credentials", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "getCurrentRequestDigitalCredentials",
 			summary = "Obtiene el listado de credenciales de la solicitud autenticada",
-			description = "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.")
+			description = "Consulta el proveedor en cada entrada previa a la confirmación y reemplaza la instantánea persistida.")
 	@ApiResponses({
-		@ApiResponse(responseCode = "200", description = "Listado persistido, incluido el escenario vacío"),
+		@ApiResponse(responseCode = "200", description = "Listado externo actualizado y persistido, incluido el escenario vacío"),
 		@ApiResponse(responseCode = "401", description = "Sesión ausente o expirada", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "403", description = "Identidad no verificada o paso no permitido", content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "409", description = "Consulta concurrente", content = @Content(schema = @Schema(implementation = ApiError.class))),

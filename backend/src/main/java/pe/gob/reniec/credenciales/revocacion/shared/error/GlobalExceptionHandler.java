@@ -219,6 +219,9 @@ public final class GlobalExceptionHandler {
 					"CONSENT_REQUIRED", "Debes aceptar la confirmación para continuar.", request);
 			case CONSENT_CHANGED -> respond(HttpStatus.CONFLICT,
 					"CONSENT_VERSION_CHANGED", "La información de confirmación fue actualizada. Revísala nuevamente.", request);
+			case STALE_SELECTION -> respond(HttpStatus.CONFLICT,
+					"DIGITAL_CREDENTIAL_SELECTION_STALE",
+					"La credencial seleccionada ya no está vigente. Revisa la lista actualizada.", request);
 			case CONFLICT -> respond(HttpStatus.CONFLICT,
 					"CONFIRMATION_CONFLICT", "La solicitud cambió. Recarga la información e inténtalo nuevamente.", request);
 			case DEPENDENCY_UNAVAILABLE -> respond(HttpStatus.SERVICE_UNAVAILABLE,

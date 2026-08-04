@@ -71,6 +71,24 @@ public class RevocationConfirmationService {
 				request.getReasonCode(), request.getOtherReason(), true);
 	}
 
+	@Transactional(readOnly = true)
+	public boolean requiresRevalidation(Long requestId, RevocationConfirmationRequest command) {
+		ensurePersistence();
+		DigitalCredentialRevocationRequestEntity request = requests.findById(requestId)
+				.orElseThrow(() -> failure(NOT_ALLOWED, "Request not found"));
+		validateIdentity(requestId, true);
+		validateConsent(command);
+		if (request.getConfirmedAt() != null) return false;
+		if (request.getRequestStatus() != RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
+				&& request.getRequestStatus() != RevocationRequestStatus.PENDING_CONFIRMATION) {
+			throw failure(NOT_ALLOWED, "Request is not ready for confirmation");
+		}
+		validateDraft(command.digitalCredentialUuid(), command.statusListIndex(), command.reasonCode(),
+				command.otherReason(),
+				digitalCredentials.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(requestId), requestId, false);
+		return true;
+	}
+
 	@Transactional
 	public RevocationReviewResponse confirm(Long requestId, RevocationConfirmationRequest command,
 			String correlationId) {
@@ -95,7 +113,8 @@ public class RevocationConfirmationService {
 			throw failure(CONFLICT, "Confirmed request does not match the submitted decision");
 		}
 
-		if (request.getRequestStatus() != RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE) {
+		if (request.getRequestStatus() != RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
+				&& request.getRequestStatus() != RevocationRequestStatus.PENDING_CONFIRMATION) {
 			throw failure(NOT_ALLOWED, "Request is not ready for confirmation");
 		}
 		if (current.stream().anyMatch(RevocationRequestDigitalCredentialEntity::isSelected)
@@ -103,6 +122,7 @@ public class RevocationConfirmationService {
 			throw failure(CONFLICT, "Unconfirmed request contains persisted draft data");
 		}
 
+		RevocationRequestStatus previousStatus = request.getRequestStatus();
 		Instant confirmedAt = Instant.now();
 		draft.digitalCredential().select(confirmedAt);
 		try {
@@ -113,7 +133,7 @@ public class RevocationConfirmationService {
 		}
 		auditEvents.save(new RevocationAuditEventEntity(request,
 				RevocationAuditEventType.CONSENT_CONFIRMED,
-				RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE,
+				previousStatus,
 				RevocationRequestStatus.CONFIRMED, consent.version(), correlationId,
 				AuditEventOrigin.CITIZEN, confirmedAt));
 		digitalCredentials.flush();

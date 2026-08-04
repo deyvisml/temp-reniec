@@ -132,7 +132,7 @@ export interface paths {
         };
         /**
          * Obtiene el listado de credenciales de la solicitud autenticada
-         * @description Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.
+         * @description Consulta el proveedor en cada entrada previa a la confirmación y reemplaza la instantánea persistida.
          */
         get: operations["getCurrentRequestDigitalCredentials"];
         put?: never;
@@ -898,7 +898,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Versión o decisión incompatible */
+            /** @description Versión, decisión o vigencia incompatible */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -907,7 +907,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Motivo o selección inválida */
+            /** @description Motivo, selección o respuesta del proveedor inválida */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -916,8 +916,17 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Integración de revocación no disponible; la decisión no se persiste */
+            /** @description Proveedor de listado o revocación no disponible; la decisión no se persiste */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Timeout al revalidar la credencial; la decisión no se persiste */
+            504: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -936,7 +945,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Listado persistido, incluido el escenario vacío */
+            /** @description Listado externo actualizado y persistido, incluido el escenario vacío */
             200: {
                 headers: {
                     [name: string]: unknown;

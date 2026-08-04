@@ -15,6 +15,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationC
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationConfirmationRequest;
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationConfirmationService;
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationReasonCatalog;
+import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.*;
 
 @Service
@@ -22,6 +23,7 @@ public class RevocationExecutionService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RevocationExecutionService.class);
 
 	private final RevocationConfirmationService confirmation;
+	private final DigitalCredentialListingService listing;
 	private final DigitalCredentialRevocationRequestRepository requests;
 	private final RevocationRequestDigitalCredentialRepository digitalCredentials;
 	private final RevocationOperationRepository operations;
@@ -34,6 +36,7 @@ public class RevocationExecutionService {
 	private final Clock clock;
 
 	public RevocationExecutionService(RevocationConfirmationService confirmation,
+			DigitalCredentialListingService listing,
 			ObjectProvider<DigitalCredentialRevocationRequestRepository> requests,
 			ObjectProvider<RevocationRequestDigitalCredentialRepository> digitalCredentials,
 			ObjectProvider<RevocationOperationRepository> operations,
@@ -45,6 +48,7 @@ public class RevocationExecutionService {
 			ObjectProvider<Clock> clock,
 			ObjectProvider<PlatformTransactionManager> transactionManager) {
 		this.confirmation = confirmation;
+		this.listing = listing;
 		this.requests = requests.getIfAvailable();
 		this.digitalCredentials = digitalCredentials.getIfAvailable();
 		this.operations = operations.getIfAvailable();
@@ -63,6 +67,15 @@ public class RevocationExecutionService {
 			RevocationConfirmationRequest command, String correlationId) {
 		ensurePersistence();
 		ensureRevocationAvailable();
+		if (confirmation.requiresRevalidation(requestId, command)) {
+			DigitalCredentialListingService.RevalidationOutcome revalidation = listing.revalidateSelection(
+					requestId, command.digitalCredentialUuid(), command.statusListIndex(), correlationId);
+			if (revalidation == DigitalCredentialListingService.RevalidationOutcome.STALE) {
+				throw new RevocationConfirmationException(
+						RevocationConfirmationException.Reason.STALE_SELECTION,
+						"Selected digitalCredential is no longer active");
+			}
+		}
 		confirmation.confirm(requestId, command, correlationId);
 		return execute(requestId, correlationId);
 	}

@@ -3,6 +3,8 @@ package pe.gob.reniec.credenciales.revocacion.revocation.execution;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +25,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationC
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationConfirmationRequest;
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationConfirmationService;
 import pe.gob.reniec.credenciales.revocacion.revocation.confirmation.RevocationConsentCatalog;
+import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationAuditEventRepository;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationReasonCode;
 import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationRequestDigitalCredentialRepository;
@@ -77,7 +80,8 @@ class RevocationExecutionServiceTests {
 		properties.setPropagationDelay(Duration.ofSeconds(60));
 
 		RevocationExecutionService service = new RevocationExecutionService(
-				mock(RevocationConfirmationService.class), provider(requests), provider(digitalCredentials),
+				mock(RevocationConfirmationService.class), mock(DigitalCredentialListingService.class),
+				provider(requests), provider(digitalCredentials),
 				provider(operations), provider(audit), provider(verifications), gateway, properties, receipts,
 				provider(Clock.fixed(now, ZoneOffset.UTC)), provider(transactionManager()));
 
@@ -97,6 +101,7 @@ class RevocationExecutionServiceTests {
 		RevocationConfirmationService confirmation = mock(RevocationConfirmationService.class);
 		RevocationExecutionService service = new RevocationExecutionService(
 				confirmation,
+				mock(DigitalCredentialListingService.class),
 				provider(mock(DigitalCredentialRevocationRequestRepository.class)),
 				provider(mock(RevocationRequestDigitalCredentialRepository.class)),
 				provider(mock(RevocationOperationRepository.class)),
@@ -116,6 +121,38 @@ class RevocationExecutionServiceTests {
 						error -> assertThat(error.reason()).isEqualTo(
 								RevocationConfirmationException.Reason.DEPENDENCY_UNAVAILABLE));
 		verifyNoInteractions(confirmation);
+	}
+
+	@Test
+	void rejectsAStaleSelectionBeforeConfirmationOrRevocation() {
+		RevocationConfirmationService confirmation = mock(RevocationConfirmationService.class);
+		pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService listing =
+				mock(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService.class);
+		RevocationGateway gateway = mock(RevocationGateway.class);
+		when(gateway.isAvailable()).thenReturn(true);
+		RevocationConfirmationRequest command = new RevocationConfirmationRequest(
+				"11111111-1111-4111-8111-111111111111", 31,
+				RevocationReasonCode.THEFT, null, true, RevocationConsentCatalog.VERSION);
+		when(confirmation.requiresRevalidation(7L, command)).thenReturn(true);
+		when(listing.revalidateSelection(7L, command.digitalCredentialUuid(), 31, "correlation"))
+				.thenReturn(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService.RevalidationOutcome.STALE);
+
+		RevocationExecutionService service = new RevocationExecutionService(
+				confirmation, listing,
+				provider(mock(DigitalCredentialRevocationRequestRepository.class)),
+				provider(mock(RevocationRequestDigitalCredentialRepository.class)),
+				provider(mock(RevocationOperationRepository.class)),
+				provider(mock(RevocationAuditEventRepository.class)),
+				provider(mock(IdentityVerificationRepository.class)), gateway,
+				new RevocationProperties(), mock(RevocationReceiptService.class),
+				provider(Clock.systemUTC()), provider(transactionManager()));
+
+		assertThatThrownBy(() -> service.confirmAndExecute(7L, command, "correlation"))
+				.isInstanceOfSatisfying(RevocationConfirmationException.class,
+						error -> assertThat(error.reason()).isEqualTo(
+								RevocationConfirmationException.Reason.STALE_SELECTION));
+		verify(confirmation, never()).confirm(7L, command, "correlation");
+		verify(gateway, never()).revoke(org.mockito.ArgumentMatchers.any());
 	}
 
 	@SuppressWarnings("unchecked")

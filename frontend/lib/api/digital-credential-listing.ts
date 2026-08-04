@@ -14,7 +14,7 @@ let currentDigitalCredentialsRequest: ReturnType<typeof requestJson<DigitalCrede
  * Comparte únicamente la lectura que está en curso. Esto evita que un
  * remontaje de React en desarrollo cancele una consulta y cree otra idéntica.
  * La promesa se libera al terminar, por lo que cada entrada posterior vuelve
- * a consultar el estado vigente del trámite.
+ * a solicitar al backend una fotografía actualizada desde el proveedor.
  */
 export function getCurrentDigitalCredentials() {
   currentDigitalCredentialsRequest ??= requestJson<DigitalCredentialList>(CURRENT_DIGITAL_CREDENTIALS_PATH)

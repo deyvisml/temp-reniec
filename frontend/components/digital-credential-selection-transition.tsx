@@ -48,7 +48,8 @@ const isSelected = (
 const credentialKey = (credential: DigitalCredentialSelection) =>
   `${credential.digitalCredentialUuid}:${credential.statusListIndex}`;
 
-export function DigitalCredentialSelectionTransition({ selected, onSelect, onBack, onContinue }: {
+export function DigitalCredentialSelectionTransition({ selectionStale = false, selected, onSelect, onBack, onContinue }: {
+	selectionStale?: boolean;
   selected: DigitalCredentialSelection | null;
   onSelect: (selection: DigitalCredentialSelection) => void;
   onBack?: () => void;
@@ -102,6 +103,11 @@ export function DigitalCredentialSelectionTransition({ selected, onSelect, onBac
         <RevocationStepper currentStep={2} />
       </div>
       <div className="mx-2 mt-6 rounded-2xl bg-white px-4 py-7 sm:mx-8 sm:px-8 sm:py-9 lg:mx-14">
+		{selectionStale ? (
+			<div className="mb-6 rounded-lg border border-[#e6b94f] bg-[#fff8e6] px-4 py-3 text-sm text-[#644b12]" role="alert">
+				La credencial seleccionada ya no está vigente. Revisa la lista actualizada y selecciona otra para continuar.
+			</div>
+		) : null}
         {view.kind === "loading" ? <LoadingState /> : null}
         {view.kind === "empty" ? <EmptyState onExit={() => void exitToHome()} /> : null}
         {view.kind === "error" ? (

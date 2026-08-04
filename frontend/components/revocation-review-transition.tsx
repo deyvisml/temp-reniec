@@ -32,19 +32,28 @@ type State =
           review: RevocationReview;
           outcome?: RevocationExecution;
       }
-    | { kind: "error"; title: string; description: string; reload: boolean };
+    | {
+		  kind: "error";
+		  title: string;
+		  description: string;
+		  reload: boolean;
+		  retry: "load" | "submit";
+		  review?: RevocationReview;
+	  };
 
 export function RevocationReviewTransition({
     dni,
     draft,
     recoverConfirmed,
     onBack,
+	onSelectionStale,
     onCompleted,
 }: {
     dni: string;
     draft: RevocationDraft;
     recoverConfirmed: boolean;
     onBack: () => void;
+	onSelectionStale: () => void;
     onCompleted: (data: RevocationExecution) => void;
 }) {
     const [state, setState] = useState<State>({ kind: "loading" });
@@ -103,7 +112,7 @@ export function RevocationReviewTransition({
                     window.location.assign("/");
                     return;
                 }
-                setState(errorState(error));
+				setState(errorState(error, "load"));
             }
         },
         [draft, onBack, onCompleted, recoverConfirmed],
@@ -166,9 +175,9 @@ export function RevocationReviewTransition({
                 return;
             }
             setState((current) =>
-                current.kind === "ready"
-                    ? { ...current, outcome: result.data }
-                    : current,
+				(current.kind === "ready" || current.kind === "error") && current.review
+					? { kind: "ready", review: current.review, outcome: result.data }
+					: current,
             );
         } catch (error) {
             if (
@@ -178,6 +187,11 @@ export function RevocationReviewTransition({
                 window.location.assign("/");
                 return;
             }
+			if (error instanceof HttpClientError
+				&& error.code === "DIGITAL_CREDENTIAL_SELECTION_STALE") {
+				onSelectionStale();
+				return;
+			}
             if (
                 uncertainOnTransportFailure &&
                 error instanceof HttpClientError &&
@@ -186,7 +200,8 @@ export function RevocationReviewTransition({
                 setSubmissionUncertain(true);
                 return;
             }
-            setState(errorState(error));
+			setState(errorState(error, "submit",
+				state.kind === "ready" ? state.review : state.kind === "error" ? state.review : undefined));
         } finally {
             submissionInFlight.current = false;
             setSubmitting(false);
@@ -195,13 +210,15 @@ export function RevocationReviewTransition({
 
     const submit = () =>
         run(async () => {
-            if (state.kind !== "ready" || !accepted)
+			const review = state.kind === "ready" ? state.review
+				: state.kind === "error" ? state.review : undefined;
+			if (!review || !accepted)
                 throw new Error("Consent required");
             const complete = completeDraft(draft);
             if (!complete) throw new Error("Missing draft");
             return confirmCurrentRevocation(
                 complete,
-                state.review.consentVersion,
+				review.consentVersion,
             );
         }, true);
 
@@ -229,7 +246,8 @@ export function RevocationReviewTransition({
             <div className="bg-white mx-2 sm:mx-8 lg:mx-14 mt-6 px-4 sm:px-8 py-7 sm:py-9 rounded-2xl">
                 {state.kind === "loading" ? <LoadingState /> : null}
                 {state.kind === "error" ? (
-                    <ErrorState state={state} onRetry={() => void load()} />
+					<ErrorState state={state} onRetry={() =>
+						state.retry === "submit" ? void submit() : void load()} />
                 ) : null}
                 {state.kind === "ready" && submissionUncertain ? (
                     <SubmissionUncertainView
@@ -326,8 +344,22 @@ function ErrorState({
         </div>
     );
 }
-function errorState(error: unknown): Extract<State, { kind: "error" }> {
+function errorState(error: unknown, retry: "load" | "submit",
+	review?: RevocationReview): Extract<State, { kind: "error" }> {
     if (error instanceof HttpClientError) {
+		if (error.code === "DIGITAL_CREDENTIAL_LIST_TIMEOUT"
+			|| error.code === "DIGITAL_CREDENTIAL_LIST_UNAVAILABLE"
+			|| error.code === "DIGITAL_CREDENTIAL_LIST_INVALID_RESPONSE"
+			|| error.code === "DIGITAL_CREDENTIAL_LIST_IN_PROGRESS") {
+			return {
+				kind: "error",
+				title: "No pudimos validar la vigencia",
+				description: "Tu decisión no fue registrada. Consulta nuevamente el servicio para continuar.",
+				reload: false,
+				retry,
+				review,
+			};
+		}
         if (error.status === 409 || error.code === "CONSENT_VERSION_CHANGED") {
             return {
                 kind: "error",
@@ -335,6 +367,8 @@ function errorState(error: unknown): Extract<State, { kind: "error" }> {
                 description:
                     "Recarga el resumen y revisa nuevamente la confirmación.",
                 reload: true,
+				retry,
+				review,
             };
         }
         if (error.status === 403 || error.status === 422) {
@@ -344,6 +378,8 @@ function errorState(error: unknown): Extract<State, { kind: "error" }> {
                 description:
                     "Recarga la página para recuperar el estado vigente de la solicitud.",
                 reload: true,
+				retry,
+				review,
             };
         }
         if (error.status === 503 || error.code === "REVOCATION_UNAVAILABLE") {
@@ -353,6 +389,8 @@ function errorState(error: unknown): Extract<State, { kind: "error" }> {
                 description:
                     "Tu decisión no fue registrada. Inténtalo nuevamente más tarde.",
                 reload: false,
+				retry,
+				review,
             };
         }
     }
@@ -362,6 +400,8 @@ function errorState(error: unknown): Extract<State, { kind: "error" }> {
         description:
             "Inténtalo nuevamente. Si el problema continúa, vuelve a iniciar la solicitud.",
         reload: false,
+		retry,
+		review,
     };
 }
 function completeDraft(draft: RevocationDraft): CompleteRevocationDraft | null {

@@ -66,7 +66,7 @@ export const confirmCurrentRevocation = (
       consentVersion,
     } satisfies RevocationConfirmationContract),
     signal,
-  }, { timeoutMs: 20_000 });
+	}, { timeoutMs: 30_000 });
 
 export function getCurrentRevocationOutcome() {
   outcomeRequest ??= requestJson<RevocationExecution>(REVOCATION_OUTCOME_PATH)

@@ -34,38 +34,26 @@ public class DigitalCredentialListingPersistenceCoordinator {
 		List<RevocationRequestDigitalCredentialEntity> snapshot = digitalCredentials
 				.findByRequest_IdOrderByEmissionCreatedAtAscIdAsc(requestId);
 		RevocationRequestStatus current = request.getRequestStatus();
-		if (current == RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
-				|| current == RevocationRequestStatus.DIGITAL_CREDENTIALS_SELECTED
-				|| current == RevocationRequestStatus.REASON_REGISTERED
-				|| current == RevocationRequestStatus.PENDING_CONFIRMATION
-				|| current == RevocationRequestStatus.CONFIRMED) {
-			return new Preparation(requestId, request.getDni(), snapshot, current, false);
-		}
-		if (current == RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE) {
-			return new Preparation(requestId, request.getDni(), snapshot, current, false);
+		if (isFrozen(current)) {
+			return new Preparation(requestId, request.getDni(), snapshot, current, current, false);
 		}
 		if (current == RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST
 				&& request.getUpdatedAt().isAfter(Instant.now().minus(staleThreshold))) {
 			throw new DigitalCredentialListingException(DigitalCredentialListingException.Reason.IN_PROGRESS,
 					"DigitalCredential listing is already in progress");
 		}
-		if (current != RevocationRequestStatus.IDENTITY_VERIFIED
-				&& current != RevocationRequestStatus.AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST
-				&& current != RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST) {
+		RevocationRequestStatus previous = current == RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST
+				? statusFor(snapshot) : current;
+		if (!isRefreshable(previous)) {
 			throw new DigitalCredentialListingException(DigitalCredentialListingException.Reason.NOT_ALLOWED,
 					"Request is not ready for digitalCredential listing");
 		}
-		if (!snapshot.isEmpty()) {
-			throw new DigitalCredentialListingException(DigitalCredentialListingException.Reason.CONFLICT,
-					"Unexpected digitalCredential snapshot before listing");
-		}
-		RevocationRequestStatus previous = current;
 		request.transitionTo(RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST, null);
 		auditEvents.save(new RevocationAuditEventEntity(request,
 				RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_REQUESTED, previous,
 				RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST, "REQUESTED", correlationId,
 				AuditEventOrigin.SYSTEM, Instant.now()));
-		return new Preparation(requestId, request.getDni(), List.of(), current, true);
+		return new Preparation(requestId, request.getDni(), snapshot, current, previous, true);
 	}
 
 	@Transactional
@@ -73,52 +61,110 @@ public class DigitalCredentialListingPersistenceCoordinator {
 			List<DigitalCredentialListingResult.ListedDigitalCredential> listed, String correlationId) {
 		DigitalCredentialRevocationRequestEntity request = lockRequest(requestId);
 		ensureReserved(request);
-		if (!digitalCredentials.findByRequestIdForUpdate(requestId).isEmpty()) {
-			throw new DigitalCredentialListingException(DigitalCredentialListingException.Reason.CONFLICT,
-					"DigitalCredential list was completed concurrently");
-		}
+		List<RevocationRequestDigitalCredentialEntity> previous =
+				digitalCredentials.findByRequestIdForUpdate(requestId);
+		List<RevocationRequestDigitalCredentialEntity> saved = replaceSnapshot(request, previous, listed);
 		Instant now = Instant.now();
-		if (listed.isEmpty()) {
-			request.transitionTo(RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE, null);
-			auditEvents.save(new RevocationAuditEventEntity(request,
-					RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_EMPTY,
-					RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST,
-					RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE, "EMPTY", correlationId,
-					AuditEventOrigin.EXTERNAL_PROVIDER, now));
-			return List.of();
-		}
+		boolean hasActive = listed.stream().anyMatch(item -> item.status() == DigitalCredentialStatus.ACTIVE);
+		RevocationRequestStatus next = hasActive ? RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
+				: RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE;
+		request.transitionTo(next, null);
+		auditEvents.save(new RevocationAuditEventEntity(request,
+				!previous.isEmpty() ? RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_REFRESHED
+						: hasActive ? RevocationAuditEventType.DIGITAL_CREDENTIALS_AVAILABLE
+								: RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_EMPTY,
+				RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST,
+				next, listed.isEmpty() ? "EMPTY" : "COUNT_" + saved.size(), correlationId,
+				AuditEventOrigin.EXTERNAL_PROVIDER, now));
+		return saved;
+	}
+
+	@Transactional
+	RevalidationCompletion completeForConfirmation(Long requestId,
+			List<DigitalCredentialListingResult.ListedDigitalCredential> listed,
+			String selectedUuid, int selectedStatusListIndex, String correlationId) {
+		DigitalCredentialRevocationRequestEntity request = lockRequest(requestId);
+		ensureReserved(request);
+		List<RevocationRequestDigitalCredentialEntity> previous =
+				digitalCredentials.findByRequestIdForUpdate(requestId);
+		List<RevocationRequestDigitalCredentialEntity> saved = replaceSnapshot(request, previous, listed);
+		boolean selectedIsCurrent = saved.stream().anyMatch(item ->
+				item.getAvailabilityStatus() == DigitalCredentialAvailabilityStatus.AVAILABLE
+						&& item.getDigitalCredentialUuid().equals(selectedUuid)
+						&& item.getStatusListIndex() != null
+						&& item.getStatusListIndex() == selectedStatusListIndex);
+		boolean hasActive = saved.stream().anyMatch(item ->
+				item.getAvailabilityStatus() == DigitalCredentialAvailabilityStatus.AVAILABLE);
+		RevocationRequestStatus next = selectedIsCurrent ? RevocationRequestStatus.PENDING_CONFIRMATION
+				: hasActive ? RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
+						: RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE;
+		request.transitionTo(next, null);
+		auditEvents.save(new RevocationAuditEventEntity(request,
+				selectedIsCurrent ? RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_REVALIDATED
+						: RevocationAuditEventType.DIGITAL_CREDENTIAL_SELECTION_STALE,
+				RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST, next,
+				selectedIsCurrent ? "CURRENT" : "STALE", correlationId,
+				AuditEventOrigin.EXTERNAL_PROVIDER, Instant.now()));
+		return new RevalidationCompletion(saved, selectedIsCurrent);
+	}
+
+	private List<RevocationRequestDigitalCredentialEntity> replaceSnapshot(
+			DigitalCredentialRevocationRequestEntity request,
+			List<RevocationRequestDigitalCredentialEntity> previous,
+			List<DigitalCredentialListingResult.ListedDigitalCredential> listed) {
+		digitalCredentials.deleteAll(previous);
+		digitalCredentials.flush();
+		Instant consultedAt = Instant.now();
 		List<RevocationRequestDigitalCredentialEntity> entities = listed.stream()
 				.map(item -> new RevocationRequestDigitalCredentialEntity(request, item.statusListIndex(),
 						item.credentialType(), item.emissionCreatedAt(), item.digitalCredentialUuid(),
 						item.status() == DigitalCredentialStatus.ACTIVE
 								? DigitalCredentialAvailabilityStatus.AVAILABLE
 								: DigitalCredentialAvailabilityStatus.REVOKED,
-						item.revokedAt(), item.providerCredentialStatus(), now))
+						item.revokedAt(), item.providerCredentialStatus(), consultedAt))
 				.toList();
-		List<RevocationRequestDigitalCredentialEntity> saved = digitalCredentials.saveAllAndFlush(entities);
-		boolean hasActive = listed.stream().anyMatch(item -> item.status() == DigitalCredentialStatus.ACTIVE);
-		RevocationRequestStatus next = hasActive ? RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
-				: RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE;
-		request.transitionTo(next, null);
-		auditEvents.save(new RevocationAuditEventEntity(request,
-				hasActive ? RevocationAuditEventType.DIGITAL_CREDENTIALS_AVAILABLE
-						: RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_EMPTY,
-				RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST,
-				next, "COUNT_" + saved.size(), correlationId,
-				AuditEventOrigin.EXTERNAL_PROVIDER, now));
-		return saved;
+		return entities.isEmpty() ? List.of() : digitalCredentials.saveAllAndFlush(entities);
 	}
 
 	@Transactional
-	void restoreAfterFailure(Long requestId, String code, String correlationId) {
+	void restoreAfterFailure(Long requestId, RevocationRequestStatus previousStatus,
+			String code, String correlationId) {
 		DigitalCredentialRevocationRequestEntity request = lockRequest(requestId);
 		if (request.getRequestStatus() != RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST) return;
-		request.transitionTo(RevocationRequestStatus.AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST, null);
+		RevocationRequestStatus restored = isRefreshable(previousStatus)
+				? previousStatus : RevocationRequestStatus.AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST;
+		request.transitionTo(restored, null);
 		auditEvents.save(new RevocationAuditEventEntity(request,
 				RevocationAuditEventType.DIGITAL_CREDENTIAL_LIST_FAILED,
 				RevocationRequestStatus.CHECKING_DIGITAL_CREDENTIAL_LIST,
-				RevocationRequestStatus.AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST, code, correlationId,
+				restored, code, correlationId,
 				AuditEventOrigin.EXTERNAL_PROVIDER, Instant.now()));
+	}
+
+	private static boolean isFrozen(RevocationRequestStatus status) {
+		return switch (status) {
+			case CONFIRMED, REVOCATION_IN_PROGRESS, REVOCATION_SUCCEEDED, REVOCATION_FAILED,
+					REVOCATION_OUTCOME_UNKNOWN, COMPLETED, FAILED, OUTCOME_UNKNOWN,
+					RECEIPT_AVAILABLE, ABANDONED -> true;
+			default -> false;
+		};
+	}
+
+	private static boolean isRefreshable(RevocationRequestStatus status) {
+		return switch (status) {
+			case IDENTITY_VERIFIED, AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST,
+					DIGITAL_CREDENTIALS_AVAILABLE, NO_DIGITAL_CREDENTIALS_AVAILABLE,
+					DIGITAL_CREDENTIALS_SELECTED, REASON_REGISTERED, PENDING_CONFIRMATION -> true;
+			default -> false;
+		};
+	}
+
+	private static RevocationRequestStatus statusFor(List<RevocationRequestDigitalCredentialEntity> snapshot) {
+		if (snapshot.isEmpty()) return RevocationRequestStatus.AUTHENTICATED_PENDING_DIGITAL_CREDENTIAL_LIST;
+		return snapshot.stream().anyMatch(item ->
+				item.getAvailabilityStatus() == DigitalCredentialAvailabilityStatus.AVAILABLE)
+				? RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE
+				: RevocationRequestStatus.NO_DIGITAL_CREDENTIALS_AVAILABLE;
 	}
 
 	private DigitalCredentialRevocationRequestEntity lockRequest(Long requestId) {
@@ -152,5 +198,9 @@ public class DigitalCredentialListingPersistenceCoordinator {
 
 	record Preparation(Long requestId, String dni,
 			List<RevocationRequestDigitalCredentialEntity> snapshot,
-			RevocationRequestStatus requestStatus, boolean providerRequired) { }
+			RevocationRequestStatus requestStatus, RevocationRequestStatus previousStatus,
+			boolean providerRequired) { }
+
+	record RevalidationCompletion(List<RevocationRequestDigitalCredentialEntity> snapshot,
+			boolean selectedIsCurrent) { }
 }

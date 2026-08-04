@@ -18,6 +18,7 @@ public final class RevocationConfirmationException extends RuntimeException {
 		INVALID_SELECTION,
 		CONSENT_REQUIRED,
 		CONSENT_CHANGED,
+		STALE_SELECTION,
 		CONFLICT,
 		DEPENDENCY_UNAVAILABLE
 	}

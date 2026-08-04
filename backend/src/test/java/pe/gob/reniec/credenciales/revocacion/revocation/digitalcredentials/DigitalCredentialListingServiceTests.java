@@ -112,7 +112,7 @@ class DigitalCredentialListingServiceTests {
 	}
 
 	@Test
-	void exposesActiveAndRevokedCredentialsWithTheAuthoritativeRevocationDate() {
+	void refreshesAnExistingSnapshotAndExposesTheAuthoritativeRevocationDate() {
 		DigitalCredentialListingPersistenceCoordinator persistence = mock(DigitalCredentialListingPersistenceCoordinator.class);
 		RevocationRequestDigitalCredentialEntity active = persisted(31,
 				"11111111-1111-4111-8111-111111111111", DigitalCredentialAvailabilityStatus.AVAILABLE, null);
@@ -122,10 +122,18 @@ class DigitalCredentialListingServiceTests {
 		when(persistence.prepare(eq(REQUEST_ID), eq(CORRELATION_ID), any()))
 				.thenReturn(new DigitalCredentialListingPersistenceCoordinator.Preparation(
 						REQUEST_ID, "12345678", List.of(active, revoked),
-						RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE, false));
+						RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE,
+						RevocationRequestStatus.DIGITAL_CREDENTIALS_AVAILABLE, true));
+		when(persistence.complete(eq(REQUEST_ID), any(), eq(CORRELATION_ID)))
+				.thenReturn(List.of(active, revoked));
 
 		DigitalCredentialListResponse response = new DigitalCredentialListingService(
-				(dni, correlation) -> { throw new AssertionError("Provider must not be called for a snapshot"); },
+				(dni, correlation) -> success(List.of(
+						listed(31, "11111111-1111-4111-8111-111111111111"),
+						new DigitalCredentialListingResult.ListedDigitalCredential(32,
+								"DniPeruanoCredential", Instant.parse("2025-01-01T10:00:00Z"),
+								"22222222-2222-4222-8222-222222222222",
+								DigitalCredentialStatus.REVOKED, revokedAt, 1))),
 				properties(), persistence).list(REQUEST_ID, CORRELATION_ID);
 
 		assertThat(response.canContinue()).isTrue();
@@ -159,6 +167,43 @@ class DigitalCredentialListingServiceTests {
 		verify(persistence).complete(eq(REQUEST_ID), any(), eq(CORRELATION_ID));
 	}
 
+	@Test
+	void revalidatesTheSelectedTupleAgainstAFreshProviderList() {
+		DigitalCredentialListingPersistenceCoordinator persistence = preparedCoordinator();
+		DigitalCredentialListingPort provider = (dni, correlation) -> success(List.of(
+				listed(31, "11111111-1111-4111-8111-111111111111")));
+		when(persistence.completeForConfirmation(eq(REQUEST_ID), any(),
+				eq("11111111-1111-4111-8111-111111111111"), eq(31), eq(CORRELATION_ID)))
+				.thenReturn(new DigitalCredentialListingPersistenceCoordinator.RevalidationCompletion(
+						List.of(), true));
+
+		DigitalCredentialListingService.RevalidationOutcome outcome =
+				new DigitalCredentialListingService(provider, properties(), persistence)
+						.revalidateSelection(REQUEST_ID,
+								"11111111-1111-4111-8111-111111111111", 31, CORRELATION_ID);
+
+		assertThat(outcome).isEqualTo(DigitalCredentialListingService.RevalidationOutcome.CURRENT);
+		verify(persistence).completeForConfirmation(eq(REQUEST_ID), any(),
+				eq("11111111-1111-4111-8111-111111111111"), eq(31), eq(CORRELATION_ID));
+	}
+
+	@Test
+	void reportsASelectionThatIsNoLongerActiveAfterRevalidation() {
+		DigitalCredentialListingPersistenceCoordinator persistence = preparedCoordinator();
+		DigitalCredentialListingPort provider = (dni, correlation) -> success(List.of());
+		when(persistence.completeForConfirmation(eq(REQUEST_ID), any(),
+				eq("11111111-1111-4111-8111-111111111111"), eq(31), eq(CORRELATION_ID)))
+				.thenReturn(new DigitalCredentialListingPersistenceCoordinator.RevalidationCompletion(
+						List.of(), false));
+
+		DigitalCredentialListingService.RevalidationOutcome outcome =
+				new DigitalCredentialListingService(provider, properties(), persistence)
+						.revalidateSelection(REQUEST_ID,
+								"11111111-1111-4111-8111-111111111111", 31, CORRELATION_ID);
+
+		assertThat(outcome).isEqualTo(DigitalCredentialListingService.RevalidationOutcome.STALE);
+	}
+
 	private void assertProviderFailure(DigitalCredentialListingResult.Outcome outcome,
 			DigitalCredentialListingException.Reason expected) {
 		DigitalCredentialListingPersistenceCoordinator persistence = preparedCoordinator();
@@ -169,7 +214,8 @@ class DigitalCredentialListingServiceTests {
 				.list(REQUEST_ID, CORRELATION_ID))
 				.isInstanceOf(DigitalCredentialListingException.class)
 				.extracting(error -> ((DigitalCredentialListingException) error).reason()).isEqualTo(expected);
-		verify(persistence).restoreAfterFailure(REQUEST_ID, expected.name(), CORRELATION_ID);
+		verify(persistence).restoreAfterFailure(REQUEST_ID, RevocationRequestStatus.IDENTITY_VERIFIED,
+				expected.name(), CORRELATION_ID);
 	}
 
 	private static DigitalCredentialListingPersistenceCoordinator preparedCoordinator() {
@@ -177,7 +223,8 @@ class DigitalCredentialListingServiceTests {
 		when(persistence.prepare(eq(REQUEST_ID), eq(CORRELATION_ID), any()))
 				.thenReturn(new DigitalCredentialListingPersistenceCoordinator.Preparation(
 						REQUEST_ID, "12345678", List.of(),
-						pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationRequestStatus.IDENTITY_VERIFIED,
+						RevocationRequestStatus.IDENTITY_VERIFIED,
+						RevocationRequestStatus.IDENTITY_VERIFIED,
 						true));
 		return persistence;
 	}
@@ -206,7 +253,8 @@ class DigitalCredentialListingServiceTests {
 				.isInstanceOf(DigitalCredentialListingException.class)
 				.extracting(error -> ((DigitalCredentialListingException) error).reason())
 				.isEqualTo(DigitalCredentialListingException.Reason.INVALID_PROVIDER_RESPONSE);
-		verify(persistence).restoreAfterFailure(REQUEST_ID, "INVALID_PROVIDER_RESPONSE", CORRELATION_ID);
+		verify(persistence).restoreAfterFailure(REQUEST_ID, RevocationRequestStatus.IDENTITY_VERIFIED,
+				"INVALID_PROVIDER_RESPONSE", CORRELATION_ID);
 	}
 
 	private static RevocationRequestDigitalCredentialEntity persisted(int index, String uuid,

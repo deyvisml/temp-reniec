@@ -1228,7 +1228,7 @@
                 }
               }
             },
-            "description": "Versión o decisión incompatible"
+            "description": "Versión, decisión o vigencia incompatible"
           },
           "422": {
             "content": {
@@ -1238,7 +1238,7 @@
                 }
               }
             },
-            "description": "Motivo o selección inválida"
+            "description": "Motivo, selección o respuesta del proveedor inválida"
           },
           "503": {
             "content": {
@@ -1248,7 +1248,17 @@
                 }
               }
             },
-            "description": "Integración de revocación no disponible; la decisión no se persiste"
+            "description": "Proveedor de listado o revocación no disponible; la decisión no se persiste"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Timeout al revalidar la credencial; la decisión no se persiste"
           }
         },
         "security": [
@@ -1264,7 +1274,7 @@
     },
     "/api/v1/revocation-requests/current/digital-credentials": {
       "get": {
-        "description": "Consulta el segundo servicio solo en la primera carga y luego devuelve la instantánea persistida.",
+        "description": "Consulta el proveedor en cada entrada previa a la confirmación y reemplaza la instantánea persistida.",
         "operationId": "getCurrentRequestDigitalCredentials",
         "responses": {
           "200": {
@@ -1275,7 +1285,7 @@
                 }
               }
             },
-            "description": "Listado persistido, incluido el escenario vacío"
+            "description": "Listado externo actualizado y persistido, incluido el escenario vacío"
           },
           "401": {
             "content": {
