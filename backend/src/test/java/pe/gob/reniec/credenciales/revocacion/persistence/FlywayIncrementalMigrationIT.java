@@ -47,7 +47,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(12);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(13);
 
 		assertThat(currentRows()).containsExactlyElementsOf(retainedBefore);
 		assertThat(singleInt("""
@@ -133,12 +133,12 @@ class FlywayIncrementalMigrationIT {
 	}
 
 	@Test
-	void upgradesV15ToV16ReplacingUuidUniquenessWithTupleUniqueness() throws Exception {
-		Flyway v15 = Flyway.configure()
+	void upgradesV16ToV17AllowingRevokedCredentialsWithoutDates() throws Exception {
+		Flyway v16 = Flyway.configure()
 				.dataSource(V15_MYSQL.getJdbcUrl(), V15_MYSQL.getUsername(), V15_MYSQL.getPassword())
-				.target(MigrationVersion.fromVersion("15"))
+				.target(MigrationVersion.fromVersion("16"))
 				.load();
-		assertThat(v15.migrate().migrationsExecuted).isEqualTo(15);
+		assertThat(v16.migrate().migrationsExecuted).isEqualTo(16);
 
 		Flyway latest = Flyway.configure()
 				.dataSource(V15_MYSQL.getJdbcUrl(), V15_MYSQL.getUsername(), V15_MYSQL.getPassword())
@@ -155,6 +155,37 @@ class FlywayIncrementalMigrationIT {
 				ORDER BY index_name
 				""")).containsExactly("uq_revocation_request_credential_identity",
 				"uq_revocation_request_credential_status_index");
+
+		try (var connection = DriverManager.getConnection(
+				V15_MYSQL.getJdbcUrl(), V15_MYSQL.getUsername(), V15_MYSQL.getPassword());
+				var statement = connection.createStatement()) {
+			statement.executeUpdate("""
+					INSERT INTO digital_credential_revocation_request
+					(id, dni, request_status, availability_result, created_at, updated_at)
+					VALUES (1, '42983609', 'IDENTITY_VERIFIED', 'AVAILABLE',
+						'2026-08-04 14:00:00', '2026-08-04 14:00:00')
+					""");
+			statement.executeUpdate("""
+					INSERT INTO revocation_request_digital_credential
+					(request_id, status_list_index, credential_type, provider_credential_status,
+					 emission_created_at, digital_credential_uuid, availability_status,
+					 consulted_at, selected, selected_at, revoked_at, version, created_at, updated_at)
+					VALUES (1, 12, 'DniPeruanoCredential', 1,
+						'2026-07-07 13:45:35', 'e87a7813-880d-4a2d-92f7-4251c841d008', 'REVOKED',
+						'2026-08-04 14:00:00', FALSE, NULL, NULL, 0,
+						'2026-08-04 14:00:00', '2026-08-04 14:00:00')
+					""");
+			assertThatThrownBy(() -> statement.executeUpdate("""
+					INSERT INTO revocation_request_digital_credential
+					(request_id, status_list_index, credential_type, provider_credential_status,
+					 emission_created_at, digital_credential_uuid, availability_status,
+					 consulted_at, selected, selected_at, revoked_at, version, created_at, updated_at)
+					VALUES (1, 11, 'DniPeruanoCredential', 0,
+						'2026-07-06 20:02:44', 'f87a7813-880d-4a2d-92f7-4251c841d008', 'AVAILABLE',
+						'2026-08-04 14:00:00', FALSE, NULL, '2026-08-04 13:00:00', 0,
+						'2026-08-04 14:00:00', '2026-08-04 14:00:00')
+					""")).hasMessageContaining("chk_revocation_request_digital_credential_revoked_at");
+		}
 		assertThat(schemaRows(V15_MYSQL, """
 				SELECT column_comment FROM information_schema.columns
 				WHERE table_schema = DATABASE()
@@ -253,7 +284,7 @@ class FlywayIncrementalMigrationIT {
 		Flyway latest = Flyway.configure()
 				.dataSource(DRAFT_MYSQL.getJdbcUrl(), DRAFT_MYSQL.getUsername(), DRAFT_MYSQL.getPassword())
 				.load();
-		assertThat(latest.migrate().migrationsExecuted).isEqualTo(7);
+		assertThat(latest.migrate().migrationsExecuted).isEqualTo(8);
 		assertThat(singleInt(DRAFT_MYSQL, """
 				SELECT COUNT(*) FROM digital_credential_revocation_request
 				WHERE id = 1 AND request_status = 'PENDING_IDENTITY_VERIFICATION'

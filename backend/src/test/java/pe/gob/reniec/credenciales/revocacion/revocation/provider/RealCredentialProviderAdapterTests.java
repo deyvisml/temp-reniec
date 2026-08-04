@@ -71,7 +71,7 @@ class RealCredentialProviderAdapterTests {
 	}
 
 	@Test
-	void rejectsUnknownStatusesAndInvalidLimaDatesAsMalformedListings(CapturedOutput output) {
+	void rejectsUnknownStatusesAndDiscardsInvalidRevocationDates(CapturedOutput output) {
 		listingResponse = listingResponse.replace("\"credentialStatus\":0", "\"credentialStatus\":7");
 		assertThat(adapter().listDigitalCredentials("42992664", "correlation").outcome())
 				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
@@ -80,8 +80,8 @@ class RealCredentialProviderAdapterTests {
 		listingResponse = listingResponse.replace("\"credentialStatus\":7", "\"credentialStatus\":1")
 				.replace("\"revocateDate\":null", "\"revocateDate\":\"invalid-date\"");
 		assertThat(adapter().listDigitalCredentials("42992664", "correlation").outcome())
-				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
-		assertThat(output).contains("diagnostic=INVALID_PROVIDER_DATE");
+				.isEqualTo(pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.SUCCESS);
+		assertThat(output).contains("reason=INVALID_FORMAT");
 	}
 
 	@Test
@@ -105,16 +105,65 @@ class RealCredentialProviderAdapterTests {
 	}
 
 	@Test
-	void rejectsRevokedCredentialWithoutRevocationDate(CapturedOutput output) {
+	void acceptsTheProviderListingWithActiveAndRevokedCredentials() {
+		listingResponse = "[{\"title\":\"Adapter Reniec\","
+				+ "\"credentialType\":\"DniPeruanoCredential\","
+				+ "\"listCredential\":\"e87a7813-880d-4a2d-92f7-4251c841d008\","
+				+ "\"statusListIndex\":12,\"issuanceDate\":\"2026-07-07T13:45:35\","
+				+ "\"revocateDate\":\"2026-08-04T17:05:02\",\"credentialStatus\":1},{"
+				+ "\"title\":\"Adapter Reniec\","
+				+ "\"credentialType\":\"DniPeruanoCredential\","
+				+ "\"listCredential\":\"e87a7813-880d-4a2d-92f7-4251c841d008\","
+				+ "\"statusListIndex\":11,\"issuanceDate\":\"2026-07-06T20:02:44\","
+				+ "\"revocateDate\":\"2026-08-04T16:59:13\",\"credentialStatus\":0}]";
+
+		var result = adapter().listDigitalCredentials("42983609", "correlation");
+
+		assertThat(result.outcome()).isEqualTo(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.SUCCESS);
+		assertThat(result.digitalCredentials()).satisfiesExactly(
+				revoked -> {
+					assertThat(revoked.statusListIndex()).isEqualTo(12);
+					assertThat(revoked.status()).isEqualTo(DigitalCredentialStatus.REVOKED);
+					assertThat(revoked.revokedAt()).isEqualTo(Instant.parse("2026-08-04T22:05:02Z"));
+				},
+				active -> {
+					assertThat(active.statusListIndex()).isEqualTo(11);
+					assertThat(active.status()).isEqualTo(DigitalCredentialStatus.ACTIVE);
+					assertThat(active.revokedAt()).isNull();
+				});
+	}
+
+	@Test
+	void acceptsRevokedCredentialWithoutRevocationDate(CapturedOutput output) {
 		listingResponse = listingResponse.replace("\"credentialStatus\":0", "\"credentialStatus\":1");
 
 		var result = adapter().listDigitalCredentials("42983609", "correlation");
 
 		assertThat(result.outcome()).isEqualTo(
-				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.MALFORMED);
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.SUCCESS);
+		assertThat(result.digitalCredentials()).singleElement().satisfies(credential -> {
+			assertThat(credential.status()).isEqualTo(DigitalCredentialStatus.REVOKED);
+			assertThat(credential.revokedAt()).isNull();
+		});
 		assertThat(output)
-				.contains("diagnostic=INCONSISTENT_REVOCATION_DATE")
+				.contains("reason=MISSING")
 				.doesNotContain("42983609", "e87a7813-880d-4a2d-92f7-4251c841d008", "test-key");
+	}
+
+	@Test
+	void acceptsRevokedCredentialWithMalformedRevocationDate(CapturedOutput output) {
+		listingResponse = listingResponse.replace("\"credentialStatus\":0", "\"credentialStatus\":1")
+				.replace("\"revocateDate\":null", "\"revocateDate\":\"not-a-date\"");
+
+		var result = adapter().listDigitalCredentials("42983609", "correlation");
+
+		assertThat(result.outcome()).isEqualTo(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.Outcome.SUCCESS);
+		assertThat(result.digitalCredentials()).singleElement().extracting(
+				pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingResult.ListedDigitalCredential::revokedAt)
+				.isNull();
+		assertThat(output).contains("reason=INVALID_FORMAT").doesNotContain("not-a-date");
 	}
 
 	@Test

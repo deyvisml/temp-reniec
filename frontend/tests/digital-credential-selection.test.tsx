@@ -107,6 +107,22 @@ describe("selección de credenciales", () => {
     expect(markup.match(/type="radio"/g)?.length).toBe(2);
   });
 
+  it("muestra una credencial revocada aunque su fecha no esté disponible", () => {
+    const withoutRevocationDate = [
+      digitalCredentials[0],
+      { ...digitalCredentials[2], revokedAt: null },
+    ];
+    const markup = renderToStaticMarkup(
+      <DigitalCredentialSelectionView digitalCredentials={withoutRevocationDate} selected={null}
+        submitting={false} onSelect={() => undefined} onSubmit={() => undefined} />,
+    );
+
+    expect(markup).toContain("Credencial digital revocada 01");
+    expect(markup).toContain("Revocada el");
+    expect(markup).toContain("Fecha no disponible");
+    expect(markup).not.toContain("Seleccionar credencial con índice 33");
+  });
+
   it("mantiene la selección explícita con un único credencial", () => {
     const markup = renderToStaticMarkup(
       <DigitalCredentialSelectionView digitalCredentials={[digitalCredentials[0]]} selected={null}

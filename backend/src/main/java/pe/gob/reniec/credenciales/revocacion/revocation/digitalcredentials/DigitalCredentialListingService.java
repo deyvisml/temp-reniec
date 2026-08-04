@@ -7,6 +7,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingException.Reason;
@@ -14,6 +16,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.persistence.RevocationRe
 
 @Service
 public class DigitalCredentialListingService {
+	private static final Logger LOGGER = LoggerFactory.getLogger(DigitalCredentialListingService.class);
 
 	private final DigitalCredentialListingPort provider;
 	private final DigitalCredentialListingProperties properties;
@@ -113,13 +116,6 @@ public class DigitalCredentialListingService {
 				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 						"DigitalCredential provider returned invalid required data");
 			}
-			if ((item.status() == DigitalCredentialStatus.ACTIVE && item.revokedAt() != null)
-					|| (item.status() == DigitalCredentialStatus.REVOKED
-							&& (item.revokedAt() == null || item.revokedAt().isBefore(item.emissionCreatedAt())
-									|| item.revokedAt().isAfter(now)))) {
-				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
-						"DigitalCredential provider returned an inconsistent revocation date");
-			}
 			if ((item.status() == DigitalCredentialStatus.ACTIVE && item.providerCredentialStatus() != 0)
 					|| (item.status() == DigitalCredentialStatus.REVOKED && item.providerCredentialStatus() != 1)) {
 				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
@@ -136,11 +132,32 @@ public class DigitalCredentialListingService {
 				throw new DigitalCredentialListingException(Reason.INVALID_PROVIDER_RESPONSE,
 						"DigitalCredential provider returned duplicate data");
 			}
+			Instant revokedAt = normalizedRevocationDate(item);
 			return new DigitalCredentialListingResult.ListedDigitalCredential(item.statusListIndex(),
 					item.credentialType().trim(), item.emissionCreatedAt(), uuid,
-					item.status(), item.revokedAt(), item.providerCredentialStatus());
+					item.status(), revokedAt, item.providerCredentialStatus());
 		}).toList();
 		return normalized;
+	}
+
+	private static Instant normalizedRevocationDate(
+			DigitalCredentialListingResult.ListedDigitalCredential item) {
+		if (item.status() == DigitalCredentialStatus.ACTIVE || item.revokedAt() == null) return null;
+		if (item.revokedAt().isBefore(item.emissionCreatedAt())) {
+			logDiscardedRevocationDate(item.statusListIndex(), RevocationDateDiscardReason.BEFORE_ISSUANCE);
+			return null;
+		}
+		return item.revokedAt();
+	}
+
+	private static void logDiscardedRevocationDate(int statusListIndex,
+			RevocationDateDiscardReason reason) {
+		LOGGER.warn("Credential provider revocation date discarded operation=list-credentials statusListIndex={} reason={}",
+				statusListIndex, reason);
+	}
+
+	private enum RevocationDateDiscardReason {
+		BEFORE_ISSUANCE
 	}
 
 	private record CredentialIdentity(String digitalCredentialUuid, int statusListIndex) { }

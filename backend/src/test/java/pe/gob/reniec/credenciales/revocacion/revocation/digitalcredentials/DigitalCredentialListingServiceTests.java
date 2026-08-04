@@ -144,14 +144,32 @@ class DigitalCredentialListingServiceTests {
 	}
 
 	@Test
-	void rejectsMissingOrInconsistentRevocationMetadata() {
-		assertInvalid(List.of(new DigitalCredentialListingResult.ListedDigitalCredential(
-				31, "DniPeruanoCredential", Instant.parse("2025-01-01T10:00:00Z"),
-				"11111111-1111-4111-8111-111111111111", DigitalCredentialStatus.REVOKED, null, 1)));
-		assertInvalid(List.of(new DigitalCredentialListingResult.ListedDigitalCredential(
-				31, "DniPeruanoCredential", Instant.parse("2025-01-01T10:00:00Z"),
-				"11111111-1111-4111-8111-111111111111", DigitalCredentialStatus.ACTIVE,
-				Instant.parse("2025-02-01T10:00:00Z"), 0)));
+	void treatsCredentialStatusAsAuthoritativeAndPreservesAParseableFutureRevocationDate() {
+		DigitalCredentialListingPersistenceCoordinator persistence = preparedCoordinator();
+		Instant emission = Instant.parse("2025-01-01T10:00:00Z");
+		Instant providerFutureDate = Instant.parse("2099-08-04T22:05:02Z");
+		DigitalCredentialListingPort provider = (dni, correlation) -> success(List.of(
+				new DigitalCredentialListingResult.ListedDigitalCredential(31, "DniPeruanoCredential", emission,
+						"11111111-1111-4111-8111-111111111111", DigitalCredentialStatus.REVOKED, null, 1),
+				new DigitalCredentialListingResult.ListedDigitalCredential(32, "DniPeruanoCredential", emission,
+						"22222222-2222-4222-8222-222222222222", DigitalCredentialStatus.REVOKED,
+						emission.minusSeconds(1), 1),
+				new DigitalCredentialListingResult.ListedDigitalCredential(33, "DniPeruanoCredential", emission,
+						"33333333-3333-4333-8333-333333333333", DigitalCredentialStatus.REVOKED,
+						providerFutureDate, 1),
+				new DigitalCredentialListingResult.ListedDigitalCredential(34, "DniPeruanoCredential", emission,
+						"44444444-4444-4444-8444-444444444444", DigitalCredentialStatus.ACTIVE,
+						Instant.parse("2025-02-01T10:00:00Z"), 0)));
+		when(persistence.complete(eq(REQUEST_ID), any(), eq(CORRELATION_ID))).thenReturn(List.of());
+
+		new DigitalCredentialListingService(provider, properties(), persistence).list(REQUEST_ID, CORRELATION_ID);
+
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<DigitalCredentialListingResult.ListedDigitalCredential>> captor = ArgumentCaptor.forClass(List.class);
+		verify(persistence).complete(eq(REQUEST_ID), captor.capture(), eq(CORRELATION_ID));
+		assertThat(captor.getValue()).extracting(
+				DigitalCredentialListingResult.ListedDigitalCredential::revokedAt)
+				.containsExactly(null, null, providerFutureDate, null);
 	}
 
 	@Test

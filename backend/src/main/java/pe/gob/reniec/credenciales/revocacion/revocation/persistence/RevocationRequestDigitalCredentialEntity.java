@@ -229,8 +229,8 @@ public class RevocationRequestDigitalCredentialEntity {
 			throw new IllegalArgumentException("consultedAt cannot precede emissionCreatedAt");
 		}
 		if (availabilityStatus == DigitalCredentialAvailabilityStatus.REVOKED) {
-			if (revokedAt == null || revokedAt.isBefore(emissionCreatedAt)) {
-				throw new IllegalArgumentException("A revoked digitalCredential requires a valid revokedAt");
+			if (revokedAt != null && revokedAt.isBefore(emissionCreatedAt)) {
+				throw new IllegalArgumentException("revokedAt cannot precede emissionCreatedAt");
 			}
 		}
 		else if (revokedAt != null) {
