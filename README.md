@@ -50,8 +50,6 @@ La réplica del servicio externo no forma parte del stack principal. Se inicia y
 
 ```powershell
 cd credential-provider-mock
-Copy-Item .env.example .env
-# PERSONAL_TEST_DNI es opcional y solo se configura en el .env no versionado.
 docker compose up --build -d --wait
 ```
 

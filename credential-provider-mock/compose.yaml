@@ -5,9 +5,7 @@ services:
     build:
       context: .
     environment:
-      API_KEY: ${API_KEY:-local-credential-provider-key}
-      PERSONAL_TEST_DNI: ${PERSONAL_TEST_DNI:-}
-      ADDITIONAL_TEST_DNI: ${ADDITIONAL_TEST_DNI:-}
+      API_KEY: app_revocaciones_reniec.RENIEC2026
       PORT: 8081
       SEED_FILE: /app/fixtures/credentials.seed.json
       DATA_FILE: /app/data/credentials.json

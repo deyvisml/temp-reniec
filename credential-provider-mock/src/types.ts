@@ -20,6 +20,4 @@ export interface AppConfig {
   apiKey: string;
   seedFile: string;
   dataFile: string;
-  personalTestDni?: string;
-  additionalTestDni?: string;
 }

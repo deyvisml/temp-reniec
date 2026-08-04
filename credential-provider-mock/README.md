@@ -5,13 +5,11 @@ Servicio exclusivo para desarrollo que reproduce los contratos oficiales de disp
 ## Arranque con Docker
 
 ```powershell
-Copy-Item .env.example .env
-# Agrega tu DNI únicamente en .env si probarás ID Perú real.
 docker compose up --build -d --wait
 docker compose ps
 ```
 
-`PERSONAL_TEST_DNI` y `ADDITIONAL_TEST_DNI` son opcionales, deben contener ocho dígitos distintos y nunca deben confirmarse en Git. Para el primero se generan dos credenciales vigentes y una revocada; para el segundo, cuatro vigentes y una revocada. Los cambios se conservan en el volumen `credential-provider-mock-local_credential-provider-data`.
+No se requiere configurar variables de DNI. Los datos iniciales están versionados en `fixtures/credentials.seed.json` y los cambios se conservan en el volumen `credential-provider-mock-local_credential-provider-data`.
 
 El healthcheck público está disponible en:
 
@@ -22,7 +20,7 @@ Invoke-RestMethod http://localhost:8081/health
 Todos los POST requieren `x-api-key`. El valor local predeterminado es ficticio:
 
 ```powershell
-$headers = @{ "x-api-key" = "local-credential-provider-key" }
+$headers = @{ "x-api-key" = "app_revocaciones_reniec.RENIEC2026" }
 Invoke-RestMethod http://localhost:8081/api/v1/list-credentials `
   -Method Post -ContentType application/json -Headers $headers `
   -Body '{"dni":"00000022"}'
@@ -37,10 +35,12 @@ Invoke-RestMethod http://localhost:8081/api/v1/list-credentials `
 | `00000021` | Una vigente |
 | `00000022` | Una vigente y una revocada |
 | `00000028` | Únicamente una revocada |
+| `73905791` | Dos vigentes y una revocada |
+| `42992664` | Cuatro vigentes y una revocada |
 
 `has-credentials` responde `true` solo cuando queda al menos una credencial vigente. El fixture `00000001` incluye dos credenciales vigentes con el mismo UUID e índices distintos para reproducir el contrato real. Una revocación modifica el JSON persistente y una repetición sobre la misma tupla responde exitosamente como operación idempotente.
 
-Para restaurar todos los fixtures y regenerar el DNI personal actual:
+Para restaurar todos los fixtures desde el JSON versionado:
 
 ```powershell
 Invoke-RestMethod http://localhost:8081/__admin/reset `

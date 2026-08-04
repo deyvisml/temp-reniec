@@ -27,11 +27,9 @@ El resultado debe mostrar `3308->3306` y estado saludable. Compose crea la base 
 
 ## 2. Réplica del proveedor oficial
 
-Desde `/credential-provider-mock`, crea el archivo privado y levanta el servicio separado:
+Desde `/credential-provider-mock`, levanta el servicio separado:
 
 ```powershell
-Copy-Item .env.example .env
-# Configura PERSONAL_TEST_DNI en .env únicamente si usarás ID Perú real.
 docker compose up --build -d --wait
 docker compose ps
 Invoke-RestMethod http://localhost:8081/health

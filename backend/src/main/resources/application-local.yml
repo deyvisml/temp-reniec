@@ -45,7 +45,7 @@ app:
   credential-provider:
     mode: ${CREDENTIAL_PROVIDER_MODE:real}
     base-url: ${CREDENTIAL_PROVIDER_BASE_URL:http://localhost:8081}
-    api-key: ${CREDENTIAL_PROVIDER_API_KEY:local-credential-provider-key}
+    api-key: ${CREDENTIAL_PROVIDER_API_KEY:app_revocaciones_reniec.RENIEC2026}
   revocation:
     mock-outcome: ${REVOCATION_MOCK_OUTCOME:SUCCEEDED}
     propagation-delay: ${REVOCATION_PROPAGATION_DELAY:60s}
