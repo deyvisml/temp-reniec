@@ -181,6 +181,24 @@ Un endpoint no se considera terminado mientras la documentación generada difier
 
 Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/revocacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
 
+### Diagnóstico del callback de ID Perú
+
+Cuando el retorno termina con `identityOutcome=UNAVAILABLE`, la identidad no fue rechazada: el backend no pudo completar alguna fase técnica de ID Perú. Los logs del callback incluyen el mismo `correlationId` en todas sus líneas y muestran `phase`, `outcome`, `technicalCode`, duración y reintento sin registrar DNI, `state`, código de autorización, secretos ni tokens. Las fases esperadas son `TOKEN`, `USERINFO`, `JWKS`, `VALIDATION`, `PERSISTENCE` y `CALLBACK`.
+
+Ejecución individual:
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+Ejecución Docker:
+
+```powershell
+docker compose logs -f backend
+```
+
+Busca primero `ID Peru callback completed` alrededor de la hora del incidente. Luego filtra por el `correlationId` mostrado al inicio de esa línea para revisar la fase exacta. Por ejemplo, `TOKEN_HTTP_503`, `USERINFO_HTTP_500` o `JWKS_UNKNOWN_HOST_EXCEPTION` permiten distinguir una respuesta HTTP del proveedor de un problema de DNS, TLS o conectividad de la máquina.
+
 El retorno siempre responde `303 See Other` hacia una URI frontend fija. Éxitos y fallos no exponen un documento JSON en el navegador ni propagan `code`, `state`, `session_state`, tokens o DNI en la redirección. Solo una identidad verificada recibe la autorización temporal; los resultados controlados regresan al paso 1 mediante un aviso efímero.
 
 Los códigos y tokens de ID Perú no se devuelven al frontend ni se persisten. El verifier se cifra temporalmente con AES-GCM y se elimina al terminar. Una verificación correcta eleva la misma sesión a identidad verificada. Los refresh JWT rotan y solo sus hashes se guardan; logout invalida la familia, elimina ambas cookies y abandona una solicitud reversible. No existe recuperación multidispositivo ni reapertura de trámites finalizados.

@@ -76,6 +76,17 @@ describe("paso de verificación de identidad", () => {
     expect(JSON.stringify(presentation)).not.toMatch(/state|code|token|session_state/i);
   });
 
+  it("mantiene un aviso visible con una acción segura de reintento", () => {
+    const markup = renderToStaticMarkup(
+      <IdentityVerificationPanel callbackOutcome="UNAVAILABLE" />,
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("ID Perú no está disponible");
+    expect(markup).toContain("Reintentar verificación");
+    expect(markup).not.toMatch(/TOKEN_|USERINFO_|JWKS_|technicalCode/);
+  });
+
   it("inicia el paso 2 consultando las credenciales sin inventar datos locales", () => {
     const markup = renderToStaticMarkup(
       <DigitalCredentialSelectionTransition
@@ -104,8 +115,8 @@ describe("paso de verificación de identidad", () => {
     expect(flowSource).toContain('router.replace("/autorizacion", { scroll: false })');
     expect(source).not.toContain("Verificación completada");
     expect(source).not.toContain("function Stepper");
-    expect(alertSource).toContain("const shownOutcome = useRef");
-    expect(alertSource).toContain("if (shownOutcome.current === outcome) return");
+    expect(alertSource).not.toContain("shownOutcome");
+    expect(alertSource).toContain("if (active) acknowledge()");
     expect(alertSource).toContain('confirmButtonText: "Aceptar"');
     expect(alertSource).not.toMatch(/window\.location|router\.(push|replace)/);
   });

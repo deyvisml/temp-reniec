@@ -94,6 +94,8 @@ public class IdentityVerificationController {
 			}
 		}
 		catch (IdentityIntegrationException exception) {
+			LOGGER.warn("ID Peru callback rejected outcome={} technicalCode={} exceptionType={}",
+					exception.failure(), exception.technicalCode(), exception.getClass().getSimpleName());
 			response = failureRedirect(response, IdentityCallbackOutcome.fromFailure(exception.failure()));
 		}
 		catch (RuntimeException exception) {

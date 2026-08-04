@@ -5,6 +5,8 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 
@@ -18,6 +20,7 @@ import pe.gob.reniec.credenciales.revocacion.revocation.session.FlowSessionServi
 
 @Service
 public class IdentityVerificationService {
+	private static final Logger LOGGER = LoggerFactory.getLogger(IdentityVerificationService.class);
 	private static final Pattern STATE_VALUE = Pattern.compile("[A-Za-z0-9_-]{1,512}");
 	private static final Pattern CODE_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,512}");
 	private static final Pattern SESSION_STATE_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,256}");
@@ -48,6 +51,9 @@ public class IdentityVerificationService {
 	}
 
 	public CallbackResult callback(String code, String state, String sessionState, String providerError) {
+		long startedAt = System.nanoTime();
+		LOGGER.info("ID Peru callback received codePresent={} statePresent={} sessionStatePresent={} providerErrorPresent={}",
+				present(code), present(state), present(sessionState), present(providerError));
 		if (!matches(STATE_VALUE, state)) {
 			throw new IdentityIntegrationException(IdentityFailure.INVALID_STATE, "State inválido");
 		}
@@ -56,6 +62,7 @@ public class IdentityVerificationService {
 				|| !matchesOptional(PROVIDER_ERROR_VALUE, providerError)) {
 			persistence.completeFailure(attempt.attemptId(), IdentityVerificationStatus.ERROR,
 					IdentityMatchResult.NOT_EVALUATED, "INVALID_CALLBACK", null);
+			logCallbackResult("ERROR", "CALLBACK", "INVALID_CALLBACK", attempt.attemptId(), startedAt);
 			return new CallbackResult(false, null, "ERROR");
 		}
 		if (providerError != null && !providerError.isBlank()) {
@@ -63,6 +70,7 @@ public class IdentityVerificationService {
 					? IdentityVerificationStatus.CANCELLED : IdentityVerificationStatus.REJECTED;
 			persistence.completeFailure(attempt.attemptId(), status, IdentityMatchResult.NOT_EVALUATED,
 					providerError, sessionState);
+			logCallbackResult(status.name(), "CALLBACK", "PROVIDER_" + status.name(), attempt.attemptId(), startedAt);
 			return new CallbackResult(false, null, status.name());
 		}
 		if (!matches(CODE_VALUE, code)
@@ -70,6 +78,7 @@ public class IdentityVerificationService {
 				&& !matches(SESSION_STATE_VALUE, sessionState)) {
 			persistence.completeFailure(attempt.attemptId(), IdentityVerificationStatus.ERROR,
 					IdentityMatchResult.NOT_EVALUATED, "MISSING_CODE", sessionState);
+			logCallbackResult("ERROR", "CALLBACK", "MISSING_CODE", attempt.attemptId(), startedAt);
 			return new CallbackResult(false, null, "ERROR");
 		}
 		try {
@@ -78,18 +87,47 @@ public class IdentityVerificationService {
 			if (!Objects.equals(attempt.dni(), citizen.dni())) {
 				persistence.completeFailure(attempt.attemptId(), IdentityVerificationStatus.IDENTITY_MISMATCH,
 						IdentityMatchResult.MISMATCH, "IDENTITY_MISMATCH", sessionState);
+				logCallbackResult("IDENTITY_MISMATCH", "VALIDATION", "IDENTITY_MISMATCH",
+						attempt.attemptId(), startedAt);
 				return new CallbackResult(false, null, "IDENTITY_MISMATCH");
 			}
 			persistence.completeSuccess(attempt.attemptId(), security.sha256(citizen.subject()),
 					VerifiedFirstName.normalize(citizen.firstName()), citizen.externalReference(), sessionState);
 			FlowSessionJwtService.IssuedToken access = sessions.markIdentityVerified(attempt.requestId());
+			logCallbackResult("VERIFIED", "COMPLETION", null, attempt.attemptId(), startedAt);
 			return new CallbackResult(true, access, "VERIFIED");
 		}
 		catch (IdentityIntegrationException exception) {
 			persistence.completeFailure(attempt.attemptId(), mapStatus(exception.failure()),
 					IdentityMatchResult.INCONCLUSIVE, exception.technicalCode(), sessionState);
+			logCallbackResult(exception.failure().name(), diagnosticPhase(exception.technicalCode()),
+					exception.technicalCode(), attempt.attemptId(), startedAt);
 			return new CallbackResult(false, null, exception.failure().name());
 		}
+	}
+
+	private static void logCallbackResult(String outcome, String phase, String technicalCode,
+			Long attemptId, long startedAt) {
+		String template = "ID Peru callback completed outcome={} phase={} technicalCode={} attemptId={} durationMs={}";
+		long durationMs = (System.nanoTime() - startedAt) / 1_000_000;
+		if ("VERIFIED".equals(outcome) || "CANCELLED".equals(outcome) || "REJECTED".equals(outcome)) {
+			LOGGER.info(template, outcome, phase, technicalCode, attemptId, durationMs);
+		}
+		else {
+			LOGGER.warn(template, outcome, phase, technicalCode, attemptId, durationMs);
+		}
+	}
+
+	private static String diagnosticPhase(String technicalCode) {
+		if (technicalCode == null || technicalCode.isBlank()) return "UNKNOWN";
+		for (String phase : new String[] { "TOKEN", "USERINFO", "JWKS", "VALIDATION", "PERSISTENCE", "CALLBACK" }) {
+			if (technicalCode.startsWith(phase)) return phase;
+		}
+		return "AUTHENTICATION";
+	}
+
+	private static boolean present(String value) {
+		return value != null && !value.isBlank();
 	}
 
 	private static boolean matches(Pattern pattern, String value) {

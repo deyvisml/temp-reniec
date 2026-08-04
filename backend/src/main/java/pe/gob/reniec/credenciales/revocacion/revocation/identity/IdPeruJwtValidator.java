@@ -11,14 +11,19 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 @ConditionalOnProperty(prefix = "app.id-peru", name = "mode", havingValue = "real")
 public class IdPeruJwtValidator {
+	private static final Logger LOGGER = LoggerFactory.getLogger(IdPeruJwtValidator.class);
 	private final IdPeruProperties properties;
 	private final RestClient client;
 	private volatile JWKSet cached;
@@ -56,16 +61,62 @@ public class IdPeruJwtValidator {
 
 	private synchronized JWKSet jwks(boolean forceRefresh) {
 		if (!forceRefresh && cached != null && cacheExpiresAt.isAfter(Instant.now())) return cached;
+		long startedAt = System.nanoTime();
 		try {
+			LOGGER.info("ID Peru request phase=JWKS forceRefresh={}", forceRefresh);
 			String body = client.get().uri(properties.getJwksUri()).accept(MediaType.APPLICATION_JSON)
 					.retrieve().body(String.class);
 			cached = JWKSet.parse(body);
 			cacheExpiresAt = Instant.now().plus(properties.getJwksTtl());
+			LOGGER.info("ID Peru response phase=JWKS outcome=SUCCESS forceRefresh={} keyCount={} durationMs={}",
+					forceRefresh, cached.getKeys().size(), elapsedMillis(startedAt));
 			return cached;
 		}
-		catch (Exception exception) {
-			throw new IdentityIntegrationException(IdentityFailure.UNAVAILABLE, "No se pudieron validar las llaves públicas", exception);
+		catch (RestClientResponseException exception) {
+			int status = exception.getStatusCode().value();
+			LOGGER.warn("ID Peru response phase=JWKS outcome=HTTP_ERROR httpStatus={} technicalCode={} durationMs={}",
+					status, "JWKS_HTTP_" + status, elapsedMillis(startedAt));
+			throw unavailable("JWKS_HTTP_" + status, exception);
 		}
+		catch (RestClientException exception) {
+			Throwable root = rootCause(exception);
+			String technicalCode = "JWKS_" + diagnosticCode(root);
+			LOGGER.warn("ID Peru response phase=JWKS outcome=TRANSPORT_ERROR technicalCode={} durationMs={} exceptionType={} rootCause={}",
+					technicalCode, elapsedMillis(startedAt), exception.getClass().getSimpleName(),
+					root.getClass().getSimpleName());
+			throw unavailable(technicalCode, exception);
+		}
+		catch (Exception exception) {
+			LOGGER.warn("ID Peru response phase=JWKS outcome=INVALID_RESPONSE technicalCode=JWKS_INVALID_RESPONSE durationMs={} exceptionType={}",
+					elapsedMillis(startedAt), exception.getClass().getSimpleName());
+			throw unavailable("JWKS_INVALID_RESPONSE", exception);
+		}
+	}
+
+	private static IdentityIntegrationException unavailable(String technicalCode, Exception cause) {
+		return new IdentityIntegrationException(IdentityFailure.UNAVAILABLE, technicalCode,
+				"No se pudieron validar las llaves públicas", cause);
+	}
+
+	private static long elapsedMillis(long startedAt) {
+		return (System.nanoTime() - startedAt) / 1_000_000;
+	}
+
+	private static Throwable rootCause(Throwable exception) {
+		Throwable root = exception;
+		while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+		return root;
+	}
+
+	private static String diagnosticCode(Throwable exception) {
+		String simpleName = exception.getClass().getSimpleName();
+		StringBuilder code = new StringBuilder(simpleName.length() + 8);
+		for (int index = 0; index < simpleName.length(); index++) {
+			char current = simpleName.charAt(index);
+			if (index > 0 && Character.isUpperCase(current)) code.append('_');
+			code.append(Character.toUpperCase(current));
+		}
+		return code.toString();
 	}
 
 	private static IdentityIntegrationException invalid() {

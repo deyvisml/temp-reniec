@@ -25,9 +25,13 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.mock.env.MockEnvironment;
 
+@ExtendWith(OutputCaptureExtension.class)
 class RealIdPeruAdapterTests {
 	private HttpServer server;
 	private IdPeruProperties properties;
@@ -38,6 +42,7 @@ class RealIdPeruAdapterTests {
 	private AtomicReference<String> tokenAccept;
 	private AtomicReference<String> userinfoAccept;
 	private AtomicInteger tokenStatus;
+	private AtomicInteger jwksStatus;
 	private AtomicInteger tokenCalls;
 	private AtomicInteger userinfoTransientFailures;
 	private AtomicInteger userinfoCalls;
@@ -63,11 +68,12 @@ class RealIdPeruAdapterTests {
 		tokenAccept = new AtomicReference<>();
 		userinfoAccept = new AtomicReference<>();
 		tokenStatus = new AtomicInteger(200);
+		jwksStatus = new AtomicInteger(200);
 		tokenCalls = new AtomicInteger();
 		userinfoTransientFailures = new AtomicInteger();
 		userinfoCalls = new AtomicInteger();
 		tokenDelayMillis = new AtomicLong();
-		server.createContext("/service/jwks", exchange -> respond(exchange, 200, jwksBody.get()));
+		server.createContext("/service/jwks", exchange -> respond(exchange, jwksStatus.get(), jwksBody.get()));
 		server.createContext("/service/token", exchange -> {
 			tokenCalls.incrementAndGet();
 			tokenAccept.set(exchange.getRequestHeaders().getFirst("Accept"));
@@ -240,6 +246,46 @@ class RealIdPeruAdapterTests {
 				.keyID(signingKey.getKeyID()).build(), claims.build());
 		jwt.sign(new RSASSASigner(signingKey));
 		return jwt.serialize();
+	}
+
+	@Test
+	void identifiesJwksUnavailabilityWithoutLoggingSensitiveCallbackData(CapturedOutput output) {
+		jwksStatus.set(503);
+		IdPeruHttpClientFactory clients = testClients();
+		RealIdPeruAdapter adapter = new RealIdPeruAdapter(properties, new IdPeruDniEncryptor(),
+				new IdPeruJwtValidator(properties, clients), clients);
+
+		assertThatThrownBy(() -> adapter.authenticate(
+				"sensitive-code", "sensitive-session", "sensitive-verifier", "73905791"))
+				.isInstanceOfSatisfying(IdentityIntegrationException.class, exception -> {
+					assertThat(exception.failure()).isEqualTo(IdentityFailure.UNAVAILABLE);
+					assertThat(exception.technicalCode()).isEqualTo("JWKS_HTTP_503");
+				});
+
+		assertThat(output).contains("phase=JWKS", "outcome=HTTP_ERROR", "technicalCode=JWKS_HTTP_503")
+				.doesNotContain("sensitive-code", "sensitive-session", "sensitive-verifier", "73905791");
+	}
+
+	@Test
+	void identifiesUserinfoServerFailureAfterSafeRetries(CapturedOutput output) {
+		properties.setVersion(IdPeruVersion.V1);
+		tokenBody.set("{\"access_token\":\"access-test\",\"expires_in\":300,"
+				+ "\"id_token\":\"unused\",\"token_type\":\"bearer\"}");
+		userinfoTransientFailures.set(3);
+		IdPeruHttpClientFactory clients = testClients();
+		RealIdPeruAdapter adapter = new RealIdPeruAdapter(properties, new IdPeruDniEncryptor(),
+				new IdPeruJwtValidator(properties, clients), clients);
+
+		assertThatThrownBy(() -> adapter.authenticate(
+				"sensitive-code", null, "sensitive-verifier", "73905791"))
+				.isInstanceOfSatisfying(IdentityIntegrationException.class, exception -> {
+					assertThat(exception.failure()).isEqualTo(IdentityFailure.UNAVAILABLE);
+					assertThat(exception.technicalCode()).isEqualTo("USERINFO_HTTP_500");
+				});
+
+		assertThat(userinfoCalls).hasValue(3);
+		assertThat(output).contains("phase=USERINFO", "attempt=3", "technicalCode=USERINFO_HTTP_500")
+				.doesNotContain("sensitive-code", "sensitive-verifier", "73905791", "access-test");
 	}
 
 	private String jwtWithoutFirstName(RSAKey signingKey) throws Exception {

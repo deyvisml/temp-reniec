@@ -1,11 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { RevocationStepper } from "@/components/revocation-stepper";
 import {
+  getIdentityCallbackPresentation,
   IdentityCallbackAlert,
+  type IdentityAlertLoader,
   type IdentityCallbackOutcome,
 } from "@/components/identity-callback-alert";
 import { startIdentityVerification } from "@/lib/api/identity-verifications";
@@ -18,19 +20,30 @@ export function IdentityVerificationPanel({
   identityVerified = false,
   onContinue,
   onCallbackOutcomeAcknowledged,
+  identityAlertLoader,
 }: {
   callbackOutcome?: IdentityCallbackOutcome;
   identityVerified?: boolean;
   onContinue?: () => void;
   onCallbackOutcomeAcknowledged?: () => void;
+  identityAlertLoader?: IdentityAlertLoader;
 }) {
   const [view, setView] = useState<IdentityView>("ready");
   const [outcome, setOutcome] = useState<IdentityCallbackOutcome | undefined>(callbackOutcome);
+  const [modalOutcome, setModalOutcome] = useState<IdentityCallbackOutcome | undefined>(callbackOutcome);
   const inFlight = useRef(false);
+
+  useEffect(() => {
+    if (!callbackOutcome) return;
+    setOutcome(callbackOutcome);
+    setModalOutcome(callbackOutcome);
+  }, [callbackOutcome]);
 
   async function begin() {
     if (inFlight.current) return;
     inFlight.current = true;
+    setOutcome(undefined);
+    setModalOutcome(undefined);
     setView("starting");
 
     try {
@@ -40,17 +53,23 @@ export function IdentityVerificationPanel({
     } catch (error) {
       inFlight.current = false;
       setView("ready");
-      setOutcome(mapStartError(error));
+      const mappedOutcome = mapStartError(error);
+      setOutcome(mappedOutcome);
+      setModalOutcome(mappedOutcome);
     }
   }
 
   return (
     <section className="mx-auto w-full max-w-[1040px]" aria-labelledby="identity-title" aria-busy={view === "starting"}>
-      {outcome ? (
-        <IdentityCallbackAlert outcome={outcome} onAcknowledge={() => {
-          setOutcome(undefined);
-          onCallbackOutcomeAcknowledged?.();
-        }} />
+      {modalOutcome ? (
+        <IdentityCallbackAlert
+          outcome={modalOutcome}
+          loadAlert={identityAlertLoader}
+          onAcknowledge={() => {
+            setModalOutcome(undefined);
+            onCallbackOutcomeAcknowledged?.();
+          }}
+        />
       ) : null}
       <div className="px-2 sm:px-8 lg:px-14">
         <RevocationStepper
@@ -67,7 +86,11 @@ export function IdentityVerificationPanel({
             Validamos tu identidad de forma segura mediante ID Perú. En este paso todavía no se revocará ninguna credencial.
           </p>
 
-          <div className="mx-auto mt-7 grid max-w-[680px] gap-4 text-left sm:grid-cols-3 sm:gap-0" aria-label="Características de la verificación">
+          {outcome ? (
+            <IdentityOutcomeNotice outcome={outcome} onRetry={() => void begin()} />
+          ) : null}
+
+          <div className={`${outcome ? "mt-5" : "mt-7"} mx-auto grid max-w-[680px] gap-4 text-left sm:grid-cols-3 sm:gap-0`} aria-label="Características de la verificación">
             <TrustFeature icon={<ShieldCheckIcon />} title="Seguro" text="Tus datos están protegidos" />
             <TrustFeature icon={<BoltIcon />} title="Rápido" text="Solo toma unos segundos" separated />
             <TrustFeature icon={<OfficialIcon />} title="Oficial" text="Validación mediante ID Perú" separated />
@@ -95,7 +118,7 @@ export function IdentityVerificationPanel({
             <button type="button" onClick={onContinue} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
               Continuar a selección de credenciales <ForwardIcon />
             </button>
-          ) : (
+          ) : outcome ? null : (
             <button type="button" disabled={view === "starting"} onClick={() => void begin()} className="mx-auto mt-6 flex min-h-[56px] w-full max-w-[520px] cursor-pointer items-center justify-center gap-3 rounded-lg bg-[linear-gradient(100deg,#c3004b,#950037)] px-6 font-extrabold text-white transition-[filter] hover:not-disabled:brightness-95 active:not-disabled:brightness-90 disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f4b400] motion-reduce:transition-none">
               <FaceScanIcon />
               {view === "starting" ? "Preparando verificación…" : "Verificar identidad"}
@@ -104,6 +127,40 @@ export function IdentityVerificationPanel({
         </div>
       </div>
     </section>
+  );
+}
+
+function IdentityOutcomeNotice({
+  outcome,
+  onRetry,
+}: {
+  outcome: IdentityCallbackOutcome;
+  onRetry: () => void;
+}) {
+  const presentation = getIdentityCallbackPresentation(outcome);
+  return (
+    <div
+      className="mx-auto mt-6 flex max-w-[680px] flex-col gap-4 rounded-xl border border-[#e2b56f] bg-[#fff8e8] p-4 text-left sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      role="alert"
+      aria-live="polite"
+    >
+      <div className="flex min-w-0 gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#f7e4b9] text-[#7a4300]" aria-hidden="true">
+          <WarningIcon />
+        </span>
+        <div>
+          <h2 className="text-balance text-base font-extrabold text-[#512d00]">{presentation.title}</h2>
+          <p className="mt-1 max-w-[58ch] text-pretty text-sm leading-6 text-[#694414]">{presentation.description}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="min-h-11 shrink-0 rounded-lg bg-[#8f0038] px-5 py-2.5 text-sm font-extrabold text-white transition-[filter] hover:brightness-95 active:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8f0038] motion-reduce:transition-none"
+      >
+        Reintentar verificación
+      </button>
+    </div>
   );
 }
 
@@ -151,3 +208,4 @@ function BoltIcon() { return <svg className={iconClass} viewBox="0 0 24 24"><pat
 function OfficialIcon() { return <svg className={iconClass} viewBox="0 0 24 24"><path d="m12 3 2 2.2 3-.2.8 2.9 2.6 1.5-1.1 2.8 1.1 2.8-2.6 1.5-.8 2.9-3-.2L12 21l-2-2.2-3 .2-.8-2.9-2.6-1.5 1.1-2.8-1.1-2.8 2.6-1.5L7 5l3 .2L12 3Z"/><path d="m9.5 12 1.7 1.7 3.5-3.7"/></svg>; }
 function FaceScanIcon() { return <svg className={`${iconClass} size-6 shrink-0`} viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="12" cy="10" r="2.5"/><path d="M7.5 17c.6-2.7 2.1-4 4.5-4s3.9 1.3 4.5 4"/></svg>; }
 function ForwardIcon() { return <svg className={`${iconClass} size-5 shrink-0`} viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>; }
+function WarningIcon() { return <svg className={`${iconClass} size-5`} viewBox="0 0 24 24"><path d="M12 3 2.8 19h18.4L12 3Z"/><path d="M12 9v4.5M12 16.5h.01"/></svg>; }

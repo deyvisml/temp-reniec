@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 import type { SweetAlertOptions } from "sweetalert2";
 
 export type IdentityCallbackOutcome =
@@ -50,26 +50,30 @@ export function getIdentityCallbackPresentation(outcome: IdentityCallbackOutcome
 export function IdentityCallbackAlert({
   outcome,
   onAcknowledge,
+  loadAlert = loadIdentityAlert,
 }: {
   outcome: IdentityCallbackOutcome;
   onAcknowledge: () => void;
+  loadAlert?: IdentityAlertLoader;
 }) {
   const acknowledge = useEffectEvent(onAcknowledge);
-  const shownOutcome = useRef<IdentityCallbackOutcome | null>(null);
 
   useEffect(() => {
-    if (shownOutcome.current === outcome) return;
-    shownOutcome.current = outcome;
     let active = true;
     let closePopup: (() => void) | undefined;
 
     void (async () => {
-      const { default: Swal } = await import("sweetalert2");
-      if (!active) return;
-      closePopup = () => Swal.close();
-      const presentation = getIdentityCallbackPresentation(outcome);
-      await Swal.fire(identityAlertOptions(presentation));
-      if (active) acknowledge();
+      try {
+        const { default: Swal } = await loadAlert();
+        if (!active) return;
+        closePopup = () => Swal.close();
+        const presentation = getIdentityCallbackPresentation(outcome);
+        await Swal.fire(identityAlertOptions(presentation));
+        if (active) acknowledge();
+      } catch {
+        // El aviso persistente continúa visible aunque el modal no pueda cargarse.
+        if (active) acknowledge();
+      }
     })();
 
     return () => {
@@ -79,6 +83,13 @@ export function IdentityCallbackAlert({
   }, [outcome]);
 
   return null;
+}
+
+type IdentityAlertDriver = Pick<typeof import("sweetalert2").default, "fire" | "close">;
+export type IdentityAlertLoader = () => Promise<{ default: IdentityAlertDriver }>;
+
+function loadIdentityAlert(): Promise<{ default: IdentityAlertDriver }> {
+  return import("sweetalert2");
 }
 
 function identityAlertOptions(presentation: { title: string; description: string }): SweetAlertOptions {

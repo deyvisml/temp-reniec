@@ -79,10 +79,16 @@ public class RealIdPeruAdapter implements CitizenIdentityProviderPort {
 					VerifiedFirstName.normalize(response.first_name()), sessionState);
 		}
 		catch (IdentityIntegrationException exception) { throw exception; }
-		catch (Exception exception) { throw new IdentityIntegrationException(IdentityFailure.INVALID_RESPONSE, "Respuesta inválida de ID Perú", exception); }
+		catch (Exception exception) {
+			LOGGER.warn("ID Peru operation=authenticate phase=VALIDATION outcome=INVALID_RESPONSE rootCause={}",
+					rootCause(exception).getClass().getSimpleName());
+			throw new IdentityIntegrationException(IdentityFailure.INVALID_RESPONSE,
+					"VALIDATION_INVALID_RESPONSE", "Respuesta inválida de ID Perú", exception);
+		}
 	}
 
 	private TokenResponse exchangeCode(String code, String codeVerifier) {
+		long startedAt = System.nanoTime();
 		LinkedMultiValueMap<String, String> form = new LinkedMultiValueMap<>();
 		form.add("grant_type", "authorization_code");
 		form.add("code", code);
@@ -91,51 +97,61 @@ public class RealIdPeruAdapter implements CitizenIdentityProviderPort {
 		form.add("client_secret", properties.getClientSecret());
 		if (properties.usesPkce()) form.add("code_verifier", codeVerifier);
 		try {
-			return client.post().uri(properties.getTokenUri())
+			LOGGER.info("ID Peru request phase=TOKEN attempt=1");
+			TokenResponse response = client.post().uri(properties.getTokenUri())
 					.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 					.accept(MediaType.APPLICATION_JSON)
 					.headers(headers -> addRefererForV2(headers))
 					.body(form).retrieve().body(TokenResponse.class);
+			LOGGER.info("ID Peru response phase=TOKEN outcome=SUCCESS durationMs={}", elapsedMillis(startedAt));
+			return response;
 		}
 		catch (RestClientResponseException exception) {
 			int status = exception.getStatusCode().value();
-			LOGGER.warn("ID Peru token exchange failed with status {}", status);
+			LOGGER.warn("ID Peru response phase=TOKEN outcome=HTTP_ERROR httpStatus={} technicalCode={} durationMs={}",
+					status, "TOKEN_HTTP_" + status, elapsedMillis(startedAt));
 			IdentityFailure failure = exception.getStatusCode().is4xxClientError()
 					? IdentityFailure.TOKEN_REJECTED : IdentityFailure.UNAVAILABLE;
 			throw providerFailure(failure, "TOKEN_HTTP_" + status, exception);
 		}
 		catch (RestClientException exception) {
-			logTransportFailure("TOKEN", exception);
+			logTransportFailure("TOKEN", 1, startedAt, exception);
 			throw transportFailure("TOKEN", exception);
 		}
 	}
 
 	private UserInfoEnvelope requestUserInfo(String accessToken) {
 		for (int attempt = 1; attempt <= USERINFO_MAX_ATTEMPTS; attempt++) {
+			long startedAt = System.nanoTime();
 			try {
-				return client.post().uri(properties.getUserinfoUri())
+				LOGGER.info("ID Peru request phase=USERINFO attempt={}", attempt);
+				UserInfoEnvelope response = client.post().uri(properties.getUserinfoUri())
 						.contentType(MediaType.APPLICATION_FORM_URLENCODED)
 						.accept(MediaType.APPLICATION_JSON)
 						.headers(headers -> addRefererForV2(headers))
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
 						.retrieve().body(UserInfoEnvelope.class);
+				LOGGER.info("ID Peru response phase=USERINFO outcome=SUCCESS attempt={} durationMs={}",
+						attempt, elapsedMillis(startedAt));
+				return response;
 			}
 			catch (RestClientResponseException exception) {
 				if (attempt < USERINFO_MAX_ATTEMPTS && exception.getStatusCode().is5xxServerError()) {
-					LOGGER.warn("ID Peru userinfo returned status {}; retrying ({}/{})",
-							exception.getStatusCode().value(), attempt, USERINFO_MAX_ATTEMPTS);
+					LOGGER.warn("ID Peru response phase=USERINFO outcome=RETRYABLE_HTTP_ERROR httpStatus={} attempt={} maxAttempts={} durationMs={}",
+							exception.getStatusCode().value(), attempt, USERINFO_MAX_ATTEMPTS,
+						elapsedMillis(startedAt));
 					pauseBeforeUserInfoRetry();
 					continue;
 				}
-				LOGGER.warn("ID Peru userinfo failed after {} attempt(s) with status {}",
-						attempt, exception.getStatusCode().value());
 				int status = exception.getStatusCode().value();
+				LOGGER.warn("ID Peru response phase=USERINFO outcome=HTTP_ERROR httpStatus={} technicalCode={} attempt={} durationMs={}",
+						status, "USERINFO_HTTP_" + status, attempt, elapsedMillis(startedAt));
 				IdentityFailure failure = exception.getStatusCode().is4xxClientError()
 						? IdentityFailure.TOKEN_REJECTED : IdentityFailure.UNAVAILABLE;
 				throw providerFailure(failure, "USERINFO_HTTP_" + status, exception);
 			}
 			catch (RestClientException exception) {
-				logTransportFailure("USERINFO", exception);
+				logTransportFailure("USERINFO", attempt, startedAt, exception);
 				throw transportFailure("USERINFO", exception);
 			}
 		}
@@ -166,9 +182,15 @@ public class RealIdPeruAdapter implements CitizenIdentityProviderPort {
 				phase + "_" + diagnosticCode(rootCause(exception)), exception);
 	}
 
-	private static void logTransportFailure(String phase, RestClientException exception) {
-		LOGGER.warn("ID Peru {} transport failure type={} rootCause={}", phase,
+	private static void logTransportFailure(String phase, int attempt, long startedAt,
+			RestClientException exception) {
+		LOGGER.warn("ID Peru response phase={} outcome=TRANSPORT_ERROR technicalCode={} attempt={} durationMs={} exceptionType={} rootCause={}",
+				phase, phase + "_" + diagnosticCode(rootCause(exception)), attempt, elapsedMillis(startedAt),
 				exception.getClass().getSimpleName(), rootCause(exception).getClass().getSimpleName());
+	}
+
+	private static long elapsedMillis(long startedAt) {
+		return (System.nanoTime() - startedAt) / 1_000_000;
 	}
 
 	private static Throwable rootCause(Throwable exception) {
