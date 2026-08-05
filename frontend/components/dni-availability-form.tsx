@@ -177,8 +177,7 @@ export function DniAvailabilityForm({ onContinue }: { onContinue: () => void }) 
         <PersonIcon />
       </div>
       <div>
-        <h2 className="m-0 text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]">Ingresa tu DNI para comenzar</h2>
-        <p className="mt-2 mb-[25px] text-sm text-[#61729a]">Solo necesitas tu número de DNI para consultar si puedes iniciar la revocación.</p>
+        <h2 className="mt-0 mb-[25px] text-[24px] tracking-[-0.02em] text-[#061a50] max-[480px]:text-[21px]">Ingresa tu DNI para comenzar</h2>
       </div>
 
       <div className="mb-[22px] text-left">

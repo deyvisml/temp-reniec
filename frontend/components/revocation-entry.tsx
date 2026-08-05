@@ -32,11 +32,11 @@ export function RevocationEntry({ onContinue }: { onContinue: () => void }) {
                     aria-hidden="true"
                 >
                     <Image
-                        className="block w-full max-w-[300px] h-auto object-contain"
-                        src="/images/home-image.png"
+                        className="block w-full max-w-[230px] max-[480px]:max-w-[187px] h-auto object-contain"
+                        src="/images/peru-pass-logo.png"
                         alt=""
-                        width={441}
-                        height={335}
+                        width={875}
+                        height={880}
                         priority
                         unoptimized
                     />

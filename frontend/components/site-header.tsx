@@ -35,7 +35,7 @@ export function SiteHeader() {
           <div className="hidden items-center min-[801px]:flex">
             <HeaderItem
               icon={<ShieldIcon />}
-              title="Servicio ciudadano"
+              title="Servicio de ciudadano"
               text="Revocación de credenciales verificables"
             />
           </div>
