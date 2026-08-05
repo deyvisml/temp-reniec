@@ -179,7 +179,7 @@ Un endpoint no se considera terminado mientras la documentación generada difier
 
 ## Verificación de identidad con ID Perú
 
-Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/revocacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; el callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente.
+Tras un resultado `AVAILABLE`, el backend crea una única sesión transaccional y emite access y refresh JWT en cookies `HttpOnly`, `SameSite=Lax` y de corta vigencia. El frontend muestra la verificación dentro de la URL canónica `/revocacion`, sin DNI, `requestId` ni nombre de paso en la URL. El inicio genera `state` y PKCE S256; si el ciudadano regresa antes del callback y vuelve a iniciar, el intento no consumido se cancela y se reemplaza por artefactos nuevos. Un callback ya reservado nunca se reemplaza. El callback admite GET de ID Perú v1 y POST compatible, consume el state una sola vez, intercambia el código, valida firma RS256, `kid`, issuer, audience y vigencia, consulta `/userinfo`, compara el DNI en backend y retorna a la ruta configurada para el ambiente. La cancelación voluntaria (`user_cancelled` o `access_denied`) se audita como `CANCELLED` y vuelve silenciosamente al paso 1, sin resultado de error para presentación.
 
 ### Diagnóstico del callback de ID Perú
 

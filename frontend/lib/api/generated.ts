@@ -30,7 +30,7 @@ export interface paths {
         put?: never;
         /**
          * Inicia la autenticación con ID Perú
-         * @description Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.
+         * @description Valida la continuidad temporal, reemplaza cualquier intento anterior cuyo state no haya sido consumido, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.
          */
         post: operations["startIdentityVerification"];
         delete?: never;
@@ -346,10 +346,10 @@ export interface components {
         };
         CurrentIdentityResponse: {
             /**
-             * @description Resultado efímero del último callback, consumido una sola vez para presentación.
+             * @description Resultado efímero no neutral del último callback, consumido una sola vez para presentación.
              * @enum {string|null}
              */
-            callbackOutcome?: "CANCELLED" | "REJECTED" | "IDENTITY_MISMATCH" | "EXPIRED" | "TIMEOUT" | "UNAVAILABLE" | "ERROR" | null;
+            callbackOutcome?: "REJECTED" | "IDENTITY_MISMATCH" | "EXPIRED" | "TIMEOUT" | "UNAVAILABLE" | "ERROR" | null;
             /** @description Indica si la autorización temporal permite continuar. */
             canContinue: boolean;
             /**
@@ -659,7 +659,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiError"];
                 };
             };
-            /** @description La verificación no puede iniciarse en el estado actual */
+            /** @description El callback de la verificación vigente ya se está procesando */
             409: {
                 headers: {
                     [name: string]: unknown;

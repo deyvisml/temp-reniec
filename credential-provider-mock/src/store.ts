@@ -32,8 +32,8 @@ export class CredentialStore {
     }
   }
 
-  hasActiveCredentials(dni: string): boolean {
-    return this.credentialsFor(dni).some((credential) => credential.credentialStatus === 0);
+  hasCredentials(dni: string): boolean {
+    return this.credentialsFor(dni).length > 0;
   }
 
   listCredentials(dni: string): Credential[] {

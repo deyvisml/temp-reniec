@@ -16,6 +16,10 @@ public interface IdentityVerificationRepository extends JpaRepository<IdentityVe
 	@EntityGraph(attributePaths = "request")
 	Optional<IdentityVerificationEntity> findFirstByRequest_IdOrderByAttemptNumberDesc(Long requestId);
 
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	@EntityGraph(attributePaths = "request")
+	Optional<IdentityVerificationEntity> findTopByRequest_IdOrderByAttemptNumberDesc(Long requestId);
+
 	Optional<IdentityVerificationEntity> findFirstByRequest_IdAndVerificationStatusOrderByAttemptNumberDesc(
 			Long requestId, IdentityVerificationStatus status);
 

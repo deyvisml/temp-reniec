@@ -3,6 +3,7 @@ package pe.gob.reniec.credenciales.revocacion.revocation.identity;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -21,6 +22,8 @@ import pe.gob.reniec.credenciales.revocacion.revocation.session.FlowSessionServi
 @Service
 public class IdentityVerificationService {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IdentityVerificationService.class);
+	private static final Set<String> PROVIDER_CANCELLATION_ERRORS = Set.of(
+			"user_cancelled", "access_denied");
 	private static final Pattern STATE_VALUE = Pattern.compile("[A-Za-z0-9_-]{1,512}");
 	private static final Pattern CODE_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,512}");
 	private static final Pattern SESSION_STATE_VALUE = Pattern.compile("[A-Za-z0-9._-]{1,256}");
@@ -66,7 +69,7 @@ public class IdentityVerificationService {
 			return new CallbackResult(false, null, "ERROR");
 		}
 		if (providerError != null && !providerError.isBlank()) {
-			IdentityVerificationStatus status = "access_denied".equals(providerError)
+			IdentityVerificationStatus status = PROVIDER_CANCELLATION_ERRORS.contains(providerError)
 					? IdentityVerificationStatus.CANCELLED : IdentityVerificationStatus.REJECTED;
 			persistence.completeFailure(attempt.attemptId(), status, IdentityMatchResult.NOT_EVALUATED,
 					providerError, sessionState);
@@ -155,7 +158,7 @@ public class IdentityVerificationService {
 
 	private static boolean isActiveFlowStatus(RevocationRequestStatus status) {
 		return switch (status) {
-			case NO_DIGITAL_CREDENTIALS_AVAILABLE, REVOCATION_SUCCEEDED, REVOCATION_FAILED,
+			case REVOCATION_SUCCEEDED, REVOCATION_FAILED,
 					REVOCATION_OUTCOME_UNKNOWN, COMPLETED, FAILED, OUTCOME_UNKNOWN,
 					RECEIPT_AVAILABLE, ABANDONED -> false;
 			default -> true;

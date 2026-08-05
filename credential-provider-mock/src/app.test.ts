@@ -66,7 +66,10 @@ describe("credential provider HTTP contracts", () => {
     expect(empty.json()).toEqual({ title: "Adapter Reniec", credentials: false });
 
     const onlyRevoked = await post("/api/v1/has-credentials", { dni: "00000028" });
-    expect(onlyRevoked.json().credentials).toBe(false);
+    expect(onlyRevoked.json()).toEqual({ title: "Adapter Reniec", credentials: true });
+
+    const unknownAvailability = await post("/api/v1/has-credentials", { dni: "99999999" });
+    expect(unknownAvailability.json()).toEqual({ title: "Adapter Reniec", credentials: false });
 
     const listing = await post("/api/v1/list-credentials", { dni: "00000001" });
     expect(listing.statusCode).toBe(200);

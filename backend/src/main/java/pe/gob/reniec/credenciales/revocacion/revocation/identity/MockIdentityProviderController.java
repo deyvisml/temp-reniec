@@ -26,7 +26,7 @@ public class MockIdentityProviderController {
 	public String authorize(@RequestParam String state) {
 		String scenario = properties.getMockScenario().toUpperCase();
 		String outcome = switch (scenario) {
-			case "CANCELLED" -> "<input type='hidden' name='error' value='access_denied'>";
+			case "CANCELLED" -> "<input type='hidden' name='error' value='user_cancelled'>";
 			case "REJECTED" -> "<input type='hidden' name='error' value='login_required'>";
 			default -> "<input type='hidden' name='code' value='mock-code'>";
 		};

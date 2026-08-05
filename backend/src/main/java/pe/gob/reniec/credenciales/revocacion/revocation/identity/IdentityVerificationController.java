@@ -43,12 +43,12 @@ public class IdentityVerificationController {
 
 	@PostMapping(path = "/api/v1/identity-verifications", produces = MediaType.APPLICATION_JSON_VALUE)
 	@Operation(operationId = "startIdentityVerification", summary = "Inicia la autenticación con ID Perú",
-			description = "Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
+			description = "Valida la continuidad temporal, reemplaza cualquier intento anterior cuyo state no haya sido consumido, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
 			security = @SecurityRequirement(name = "FlowSessionCookie"))
 	@ApiResponses({ @ApiResponse(responseCode = "200", description = "URL de autorización preparada"),
 		@ApiResponse(responseCode = "401", description = "Continuidad ausente o inválida",
 				content = @Content(schema = @Schema(implementation = ApiError.class))),
-		@ApiResponse(responseCode = "409", description = "La verificación no puede iniciarse en el estado actual",
+		@ApiResponse(responseCode = "409", description = "El callback de la verificación vigente ya se está procesando",
 				content = @Content(schema = @Schema(implementation = ApiError.class))),
 		@ApiResponse(responseCode = "503", description = "Integración no disponible",
 				content = @Content(schema = @Schema(implementation = ApiError.class))) })
@@ -90,19 +90,27 @@ public class IdentityVerificationController {
 						callbackOutcomes.clear().toString());
 			}
 			else {
-				response = failureRedirect(response, IdentityCallbackOutcome.fromStatus(result.status()));
+				response = outcomeRedirect(response, IdentityCallbackOutcome.fromStatus(result.status()));
 			}
 		}
 		catch (IdentityIntegrationException exception) {
 			LOGGER.warn("ID Peru callback rejected outcome={} technicalCode={} exceptionType={}",
 					exception.failure(), exception.technicalCode(), exception.getClass().getSimpleName());
-			response = failureRedirect(response, IdentityCallbackOutcome.fromFailure(exception.failure()));
+			response = outcomeRedirect(response, IdentityCallbackOutcome.fromFailure(exception.failure()));
 		}
 		catch (RuntimeException exception) {
 			LOGGER.error("Unexpected ID Peru callback failure type={}", exception.getClass().getSimpleName());
 			response = failureRedirect(response, IdentityCallbackOutcome.ERROR);
 		}
 		return response.build();
+	}
+
+	private ResponseEntity.BodyBuilder outcomeRedirect(ResponseEntity.BodyBuilder response,
+			IdentityCallbackOutcome outcome) {
+		if (outcome == IdentityCallbackOutcome.CANCELLED) {
+			return response.header(HttpHeaders.SET_COOKIE, callbackOutcomes.clear().toString());
+		}
+		return failureRedirect(response, outcome);
 	}
 
 	private ResponseEntity.BodyBuilder failureRedirect(ResponseEntity.BodyBuilder response,
@@ -121,12 +129,14 @@ public class IdentityVerificationController {
 	public ResponseEntity<CurrentIdentityResponse> current(HttpServletRequest request) {
 		IdentityVerificationService.CurrentIdentityStatus status = service.current(cookies.access(request).orElseThrow(() -> unauthorized()));
 		IdentityCallbackOutcome callbackOutcome = callbackOutcomes.read(request).orElse(null);
+		IdentityCallbackOutcome presentableOutcome = callbackOutcome == IdentityCallbackOutcome.CANCELLED
+				? null : callbackOutcome;
 		ResponseEntity.BodyBuilder response = ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore());
 		if (callbackOutcome != null) {
 			response.header(HttpHeaders.SET_COOKIE, callbackOutcomes.clear().toString());
 		}
 		return response.body(new CurrentIdentityResponse(status.status(), status.canContinue(), status.nextStep(),
-				callbackOutcome == null ? null : callbackOutcome.name()));
+				presentableOutcome == null ? null : presentableOutcome.name()));
 	}
 
 	private static pe.gob.reniec.credenciales.revocacion.revocation.session.FlowSessionException unauthorized() {
@@ -150,8 +160,8 @@ public class IdentityVerificationController {
 			@Schema(description = "Siguiente paso autorizado.", requiredMode = Schema.RequiredMode.REQUIRED,
 					allowableValues = { "IDENTITY_VERIFICATION", "DIGITAL_CREDENTIAL_SELECTION" })
 			String nextStep,
-			@Schema(description = "Resultado efímero del último callback, consumido una sola vez para presentación.",
-					nullable = true, allowableValues = { "CANCELLED", "REJECTED", "IDENTITY_MISMATCH",
+			@Schema(description = "Resultado efímero no neutral del último callback, consumido una sola vez para presentación.",
+					nullable = true, allowableValues = { "REJECTED", "IDENTITY_MISMATCH",
 							"EXPIRED", "TIMEOUT", "UNAVAILABLE", "ERROR" })
 			String callbackOutcome) { }
 }

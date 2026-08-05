@@ -55,14 +55,13 @@ describe("paso de verificación de identidad", () => {
   });
 
   it("normaliza únicamente resultados de callback permitidos", () => {
-    expect(asIdentityCallbackOutcome("CANCELLED")).toBe("CANCELLED");
+    expect(asIdentityCallbackOutcome("CANCELLED")).toBeUndefined();
     expect(asIdentityCallbackOutcome("IDENTITY_MISMATCH")).toBe("IDENTITY_MISMATCH");
     expect(asIdentityCallbackOutcome("VERIFIED")).toBeUndefined();
     expect(asIdentityCallbackOutcome("forced-step-2")).toBeUndefined();
   });
 
   it.each<IdentityCallbackOutcome>([
-    "CANCELLED",
     "REJECTED",
     "IDENTITY_MISMATCH",
     "EXPIRED",
@@ -111,8 +110,11 @@ describe("paso de verificación de identidad", () => {
     expect(source).toContain('disabled={view === "starting"}');
     expect(source).toContain("IdentityCallbackAlert");
     expect(flowSource).toContain('searchParams.get("identityOutcome")');
+    expect(flowSource).toContain('rawRedirectOutcome?.toUpperCase() === "CANCELLED"');
+    expect(flowSource).toContain("router.replace(flowRoute, { scroll: false })");
+    expect(flowSource).toContain("activeFlowRoute()");
     expect(flowSource).toContain("onCallbackOutcomeAcknowledged");
-    expect(flowSource).toContain('router.replace("/autorizacion", { scroll: false })');
+    expect(flowSource).not.toContain('router.replace("/autorizacion"');
     expect(source).not.toContain("Verificación completada");
     expect(source).not.toContain("function Stepper");
     expect(alertSource).not.toContain("shownOutcome");

@@ -77,6 +77,8 @@ No existe una tabla de resultados individuales: cada solicitud solo puede confir
 - Disponibilidad: `AVAILABLE`, `NO_LONGER_AVAILABLE`, `REVOCATION_PENDING`, `REVOKED`, `REVOCATION_FAILED` y `OUTCOME_UNKNOWN`.
 - Resultado de operación: `SUCCEEDED`, `FAILED` y `OUTCOME_UNKNOWN`.
 
+`NO_DIGITAL_CREDENTIALS_AVAILABLE` conserva el contexto de la etapa. Durante la consulta inicial impide crear una sesión porque el ciudadano no tiene credenciales registradas. Después de verificar la identidad y consultar el listado, mantiene la sesión en `DIGITAL_CREDENTIAL_SELECTION`: el frontend presenta el resultado vacío o el historial de credenciales revocadas, pero no permite continuar sin una credencial vigente.
+
 Los estados son enums del backend almacenados como `VARCHAR`; no existen tablas catálogo.
 
 ## Integridad, índices y concurrencia

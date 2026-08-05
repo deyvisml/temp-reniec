@@ -115,6 +115,23 @@ class IdPeruConfigurationTests {
 	}
 
 	@Test
+	void mockCancellationMatchesTheRealV1ProviderError() {
+		MockEnvironment environment = new MockEnvironment();
+		environment.setActiveProfiles("local");
+		ApplicationUrlProperties urls = new ApplicationUrlProperties();
+		urls.setFrontendBaseUrl(URI.create("http://localhost:3000"));
+		urls.setBackendBaseUrl(URI.create("http://localhost:8080"));
+		IdPeruProperties properties = new IdPeruProperties(environment, urls);
+		properties.setMode(IdPeruMode.MOCK);
+		properties.setMockScenario("CANCELLED");
+
+		String authorization = new MockIdentityProviderController(properties).authorize("safe-state");
+
+		assertThat(authorization).contains("name='error' value='user_cancelled'")
+				.doesNotContain("value='access_denied'");
+	}
+
+	@Test
 	void localRealModeAcceptsLocalApplicationUrlsAndKeepsProviderTransportSecure() {
 		MockEnvironment environment = new MockEnvironment();
 		environment.setActiveProfiles("local");

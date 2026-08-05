@@ -62,7 +62,10 @@ import pe.gob.reniec.credenciales.revocacion.revocation.session.FlowSessionServi
 import pe.gob.reniec.credenciales.revocacion.revocation.session.FlowSessionException;
 import pe.gob.reniec.credenciales.revocacion.revocation.identity.IdentityFailure;
 import pe.gob.reniec.credenciales.revocacion.revocation.identity.IdentityIntegrationException;
+import pe.gob.reniec.credenciales.revocacion.revocation.identity.IdentityPersistenceCoordinator;
+import pe.gob.reniec.credenciales.revocacion.revocation.identity.IdentitySecurityArtifacts;
 import pe.gob.reniec.credenciales.revocacion.revocation.identity.IdentityVerificationService;
+import pe.gob.reniec.credenciales.revocacion.revocation.digitalcredentials.DigitalCredentialListingService;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "debug=false")
@@ -80,7 +83,10 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 	@Autowired RevocationAuditEventRepository auditRepository;
 	@Autowired JdbcTemplate jdbcTemplate;
 	@Autowired IdentityVerificationService identityService;
+	@Autowired IdentityPersistenceCoordinator identityPersistence;
+	@Autowired IdentitySecurityArtifacts identitySecurity;
 	@Autowired FlowSessionService flowSessionService;
+	@Autowired DigitalCredentialListingService digitalCredentialListingService;
 	@Autowired RevocationFlowSessionRepository flowSessionRepository;
 	@Autowired RevocationRequestDigitalCredentialRepository digitalCredentialRepository;
 
@@ -188,6 +194,11 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(verification.getDniMatchResult()).isEqualTo(IdentityMatchResult.MATCH);
 		assertThat(verification.getVerifiedFirstName()).isEqualTo("PRUEBA");
 		assertThat(verification.getPkceVerifierProtected()).isNull();
+		assertThatThrownBy(() -> identityService.start(callback.accessToken().value(), "identity-already-verified"))
+				.isInstanceOfSatisfying(IdentityIntegrationException.class,
+						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.UNAUTHORIZED));
+		assertThat(identityRepository.findAll()).singleElement()
+				.extracting(IdentityVerificationEntity::getAttemptNumber).isEqualTo(1);
 		assertThatThrownBy(() -> identityService.callback("mock-code", state, "mock-session", null))
 				.isInstanceOf(IdentityIntegrationException.class);
 
@@ -232,20 +243,99 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 	}
 
 	@Test
-	void rejectsASecondIdentityStartWhileTheCurrentAttemptRemainsValid() {
+	void replacesAnUnconsumedIdentityAttemptAndRejectsItsLateCallback() {
 		DigitalCredentialRevocationRequestEntity request = new DigitalCredentialRevocationRequestEntity("00000001");
 		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
 				RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
 		request = requestRepository.saveAndFlush(request);
 
 		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
-		identityService.start(init.access().value(), "first-identity-start");
+		URI firstAuthorization = identityService.start(init.access().value(), "first-identity-start");
+		String firstState = stateFrom(firstAuthorization);
+		URI replacementAuthorization = identityService.start(init.access().value(), "replacement-identity-start");
+		String replacementState = stateFrom(replacementAuthorization);
 
-		assertThatThrownBy(() -> identityService.start(init.access().value(), "duplicate-identity-start"))
+		assertThat(replacementState).isNotEqualTo(firstState);
+		List<IdentityVerificationEntity> attempts = identityRepository.findAll().stream()
+				.sorted(java.util.Comparator.comparingInt(IdentityVerificationEntity::getAttemptNumber))
+				.toList();
+		assertThat(attempts).hasSize(2);
+		assertThat(attempts.get(0).getVerificationStatus()).isEqualTo(IdentityVerificationStatus.CANCELLED);
+		assertThat(attempts.get(0).getErrorOrRevocationCode()).isEqualTo("REPLACED_BY_NEW_ATTEMPT");
+		assertThat(attempts.get(0).getPkceVerifierProtected()).isNull();
+		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
+				.get().satisfies(latest -> {
+					assertThat(latest.getAttemptNumber()).isEqualTo(2);
+					assertThat(latest.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.STARTED);
+				});
+		assertThatThrownBy(() -> identityService.callback("mock-code", firstState, "mock-session", null))
+				.isInstanceOfSatisfying(IdentityIntegrationException.class,
+						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.STATE_EXPIRED));
+		assertThat(identityService.callback("mock-code", replacementState, "mock-session", null).verified()).isTrue();
+	}
+
+	@Test
+	void verifiedSessionRemainsAtCredentialSelectionWhenNoActiveCredentialsExist() {
+		DigitalCredentialRevocationRequestEntity request = new DigitalCredentialRevocationRequestEntity("00000020");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+		FlowSessionService.Tokens tokens = flowSessionService.establish(request.getId());
+		URI authorization = identityService.start(tokens.access().value(), "verified-empty-list");
+		IdentityVerificationService.CallbackResult callback = identityService.callback(
+				"mock-code", stateFrom(authorization), "mock-session", null);
+
+		var listed = digitalCredentialListingService.list(request.getId(), "verified-empty-list");
+		FlowSessionService.CurrentSession currentSession = flowSessionService.current(callback.accessToken().value());
+		IdentityVerificationService.CurrentIdentityStatus currentIdentity =
+				identityService.current(callback.accessToken().value());
+
+		assertThat(listed.requestStatus()).isEqualTo("NO_DIGITAL_CREDENTIALS_AVAILABLE");
+		assertThat(listed.digitalCredentials()).isEmpty();
+		assertThat(currentSession.sessionStatus()).isEqualTo("IDENTITY_VERIFIED");
+		assertThat(currentSession.requestStatus()).isEqualTo("NO_DIGITAL_CREDENTIALS_AVAILABLE");
+		assertThat(currentSession.nextStep()).isEqualTo("DIGITAL_CREDENTIAL_SELECTION");
+		assertThat(currentIdentity.status()).isEqualTo("VERIFIED");
+		assertThat(currentIdentity.canContinue()).isTrue();
+		assertThat(currentIdentity.nextStep()).isEqualTo("DIGITAL_CREDENTIAL_SELECTION");
+	}
+
+	@Test
+	void recordsAnExpiredAttemptBeforeStartingItsReplacement() {
+		DigitalCredentialRevocationRequestEntity request = new DigitalCredentialRevocationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		identityService.start(init.access().value(), "expiring-identity-start");
+		IdentityVerificationEntity first = identityRepository
+				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
+		jdbcTemplate.update("UPDATE identity_verification SET state_expires_at = ? WHERE id = ?",
+				java.sql.Timestamp.from(Instant.now().minusSeconds(1)), first.getId());
+
+		identityService.start(init.access().value(), "after-expiration-identity-start");
+
+		assertThat(identityRepository.findById(first.getId())).get().satisfies(expired -> {
+			assertThat(expired.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.EXPIRED);
+			assertThat(expired.getErrorOrRevocationCode()).isEqualTo("STATE_EXPIRED");
+			assertThat(expired.getPkceVerifierProtected()).isNull();
+		});
+	}
+
+	@Test
+	void rejectsReplacementAfterTheCallbackStateWasConsumed() {
+		DigitalCredentialRevocationRequestEntity request = new DigitalCredentialRevocationRequestEntity("00000001");
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		request = requestRepository.saveAndFlush(request);
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		URI authorization = identityService.start(init.access().value(), "reserved-identity-start");
+		identityPersistence.reserve(identitySecurity.sha256(stateFrom(authorization)), Instant.now());
+
+		assertThatThrownBy(() -> identityService.start(init.access().value(), "conflicting-identity-start"))
 				.isInstanceOfSatisfying(IdentityIntegrationException.class,
 						exception -> assertThat(exception.failure()).isEqualTo(IdentityFailure.IN_PROGRESS));
-		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
-				.get().extracting(IdentityVerificationEntity::getAttemptNumber).isEqualTo(1);
+		assertThat(identityRepository.findAll()).hasSize(1);
 	}
 
 	@Test
@@ -272,6 +362,93 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 		assertThat(verification.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.ERROR);
 		assertThat(verification.getErrorOrRevocationCode()).isEqualTo("INVALID_CALLBACK");
 		assertThat(verification.getProviderSessionState()).isNull();
+	}
+
+	@Test
+	void userCancellationReturnsSilentlyAndKeepsIdentityVerificationRetryable() throws Exception {
+		DigitalCredentialRevocationRequestEntity request = pendingIdentityRequest("00000001");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		String state = stateFrom(identityService.start(init.access().value(), "user-cancelled-it"));
+
+		HttpResponse<String> callback = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+						+ "/api/v1/idperu/callback?state="
+						+ java.net.URLEncoder.encode(state, StandardCharsets.UTF_8)
+						+ "&session_state=mock-session&error=user_cancelled"))
+						.GET().build(), HttpResponse.BodyHandlers.ofString());
+
+		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
+		assertThat(callback.headers().firstValue("Location")).hasValue("http://localhost:3000/revocacion");
+		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
+				.contains("idperu_callback_outcome=", "Max-Age=0", "HttpOnly", "SameSite=Lax")
+				.doesNotContain("CANCELLED"));
+		assertThat(callback.body()).isEmpty();
+
+		IdentityVerificationEntity cancelled = identityRepository
+				.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()).orElseThrow();
+		assertThat(cancelled.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.CANCELLED);
+		assertThat(cancelled.getDniMatchResult()).isEqualTo(IdentityMatchResult.NOT_EVALUATED);
+		assertThat(cancelled.getErrorOrRevocationCode()).isEqualTo("user_cancelled");
+		assertThat(cancelled.getPkceVerifierProtected()).isNull();
+		assertThat(requestRepository.findById(request.getId()).orElseThrow().getRequestStatus())
+				.isEqualTo(RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+
+		HttpResponse<String> current = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+				URI.create("http://localhost:" + port + "/api/v1/identity-verifications/current"))
+				.header("Cookie", "revocacion_access=" + init.access().value()
+						+ "; idperu_callback_outcome=CANCELLED")
+				.GET().build(), HttpResponse.BodyHandlers.ofString());
+		assertThat(current.statusCode()).isEqualTo(HttpStatus.OK.value());
+		assertThat(current.body()).contains("\"status\":\"CANCELLED\"", "\"canContinue\":false",
+				"\"nextStep\":\"IDENTITY_VERIFICATION\"", "\"callbackOutcome\":null");
+		assertThat(current.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
+				.contains("idperu_callback_outcome=", "Max-Age=0"));
+
+		String retryState = stateFrom(identityService.start(init.access().value(), "retry-after-cancel-it"));
+		assertThat(retryState).isNotEqualTo(state);
+		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
+				.get().extracting(IdentityVerificationEntity::getAttemptNumber).isEqualTo(2);
+	}
+
+	@Test
+	void accessDeniedRemainsCompatibleWithCancellation() {
+		DigitalCredentialRevocationRequestEntity request = pendingIdentityRequest("00000001");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		String state = stateFrom(identityService.start(init.access().value(), "access-denied-it"));
+
+		IdentityVerificationService.CallbackResult result = identityService.callback(
+				null, state, "mock-session", "access_denied");
+
+		assertThat(result.status()).isEqualTo("CANCELLED");
+		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
+				.get().satisfies(cancelled -> {
+					assertThat(cancelled.getVerificationStatus()).isEqualTo(IdentityVerificationStatus.CANCELLED);
+					assertThat(cancelled.getErrorOrRevocationCode()).isEqualTo("access_denied");
+					assertThat(cancelled.getPkceVerifierProtected()).isNull();
+				});
+	}
+
+	@Test
+	void providerRejectionStillProducesTheCitizenFacingOutcome() throws Exception {
+		DigitalCredentialRevocationRequestEntity request = pendingIdentityRequest("00000001");
+		FlowSessionService.Tokens init = flowSessionService.establish(request.getId());
+		String state = stateFrom(identityService.start(init.access().value(), "provider-rejected-it"));
+
+		HttpResponse<String> callback = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+				.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port
+						+ "/api/v1/idperu/callback?state="
+						+ java.net.URLEncoder.encode(state, StandardCharsets.UTF_8)
+						+ "&session_state=mock-session&error=login_required"))
+						.GET().build(), HttpResponse.BodyHandlers.ofString());
+
+		assertThat(callback.statusCode()).isEqualTo(HttpStatus.SEE_OTHER.value());
+		assertThat(callback.headers().firstValue("Location"))
+				.hasValue("http://localhost:3000/revocacion?identityOutcome=REJECTED");
+		assertThat(callback.headers().allValues("Set-Cookie")).anySatisfy(cookie -> assertThat(cookie)
+				.contains("idperu_callback_outcome=REJECTED", "HttpOnly", "SameSite=Lax"));
+		assertThat(identityRepository.findFirstByRequest_IdOrderByAttemptNumberDesc(request.getId()))
+				.get().extracting(IdentityVerificationEntity::getVerificationStatus)
+				.isEqualTo(IdentityVerificationStatus.REJECTED);
 	}
 
 	@Test
@@ -822,6 +999,20 @@ class RevocationRequestPersistenceIT extends MySqlContainerSupport {
 
 	private Integer digitalCredentialCount() {
 		return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM revocation_request_digital_credential", Integer.class);
+	}
+
+	private static String stateFrom(URI authorization) {
+		return java.util.Arrays.stream(authorization.getRawQuery().split("&"))
+				.filter(value -> value.startsWith("state="))
+				.map(value -> URLDecoder.decode(value.substring(6), StandardCharsets.UTF_8))
+				.findFirst().orElseThrow();
+	}
+
+	private DigitalCredentialRevocationRequestEntity pendingIdentityRequest(String dni) {
+		DigitalCredentialRevocationRequestEntity request = new DigitalCredentialRevocationRequestEntity(dni);
+		request.recordAvailability(CurrentAvailabilityResult.AVAILABLE,
+				RevocationRequestStatus.PENDING_IDENTITY_VERIFICATION);
+		return requestRepository.saveAndFlush(request);
 	}
 
 	private static String cookiePair(HttpResponse<?> response) {

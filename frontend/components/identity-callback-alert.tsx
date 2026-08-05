@@ -4,7 +4,6 @@ import { useEffect, useEffectEvent } from "react";
 import type { SweetAlertOptions } from "sweetalert2";
 
 export type IdentityCallbackOutcome =
-  | "CANCELLED"
   | "REJECTED"
   | "IDENTITY_MISMATCH"
   | "EXPIRED"
@@ -13,10 +12,6 @@ export type IdentityCallbackOutcome =
   | "ERROR";
 
 const presentations: Record<IdentityCallbackOutcome, { title: string; description: string }> = {
-  CANCELLED: {
-    title: "Verificación revocada",
-    description: "No se completó la verificación con ID Perú. Puedes intentarlo nuevamente cuando estés listo.",
-  },
   REJECTED: {
     title: "No pudimos verificar tu identidad",
     description: "ID Perú no confirmó la verificación. Revisa sus indicaciones e inténtalo nuevamente.",

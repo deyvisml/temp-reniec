@@ -20,7 +20,7 @@ describe("CredentialStore", () => {
     await rm(directory, { recursive: true, force: true });
   });
 
-  it("loads persisted revocations after creating a new store", async () => {
+  it("reports credentials after the last active credential is revoked and reloaded", async () => {
     const first = new CredentialStore(seedFile, dataFile);
     await first.initialize();
     await first.revoke("00000021", "44444444-4444-4444-8444-444444444444", 21);
@@ -31,7 +31,9 @@ describe("CredentialStore", () => {
     expect(restarted.listCredentials("00000021")[0]).toMatchObject({
       credentialStatus: 1,
     });
-    expect(restarted.hasActiveCredentials("00000021")).toBe(false);
+    expect(restarted.hasCredentials("00000021")).toBe(true);
+    expect(restarted.hasCredentials("00000020")).toBe(false);
+    expect(restarted.hasCredentials("99999999")).toBe(false);
   });
 
   it("serializes concurrent revocations and returns one effective mutation", async () => {

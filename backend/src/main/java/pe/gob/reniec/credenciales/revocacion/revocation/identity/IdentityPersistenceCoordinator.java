@@ -37,20 +37,27 @@ public class IdentityPersistenceCoordinator {
 			throw unauthorized("La solicitud no está habilitada para autenticación");
 		}
 		Instant now = Instant.now();
-		verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(requestId)
-				.filter(current -> current.getVerificationStatus() == IdentityVerificationStatus.STARTED)
-				.filter(current -> current.getStateExpiresAt() != null && !current.getStateExpiresAt().isBefore(now))
-				.ifPresent(current -> {
-					throw new IdentityIntegrationException(IdentityFailure.IN_PROGRESS,
-							"Ya existe una verificación de identidad en curso");
-				});
-		int attempt = verifications.findFirstByRequest_IdOrderByAttemptNumberDesc(requestId)
-				.map(current -> current.getAttemptNumber() + 1).orElse(1);
+		Optional<IdentityVerificationEntity> latest = verifications
+				.findTopByRequest_IdOrderByAttemptNumberDesc(requestId);
+		latest.filter(current -> current.getVerificationStatus() == IdentityVerificationStatus.STARTED)
+				.ifPresent(current -> replaceUnconsumedAttempt(current, now));
+		int attempt = latest.map(current -> current.getAttemptNumber() + 1).orElse(1);
 		IdentityVerificationEntity entity = new IdentityVerificationEntity(request, attempt, "ID_PERU",
 				mode, now, correlationId);
 		entity.prepareSecurityArtifacts(stateHash, stateExpiresAt, protectedVerifier);
 		entity = verifications.saveAndFlush(entity);
 		return new PreparedAttempt(entity.getId(), request.getId(), request.getDni());
+	}
+
+	private static void replaceUnconsumedAttempt(IdentityVerificationEntity current, Instant now) {
+		if (current.getStateConsumedAt() != null) {
+			throw new IdentityIntegrationException(IdentityFailure.IN_PROGRESS,
+					"La verificación de identidad está procesando el retorno");
+		}
+		boolean expired = current.getStateExpiresAt() == null || current.getStateExpiresAt().isBefore(now);
+		current.finish(expired ? IdentityVerificationStatus.EXPIRED : IdentityVerificationStatus.CANCELLED,
+				IdentityMatchResult.NOT_EVALUATED, now, null,
+				expired ? "STATE_EXPIRED" : "REPLACED_BY_NEW_ATTEMPT");
 	}
 
 	@Transactional

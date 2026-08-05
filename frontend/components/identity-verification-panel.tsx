@@ -19,12 +19,14 @@ export function IdentityVerificationPanel({
   callbackOutcome,
   identityVerified = false,
   onContinue,
+  onSessionStale,
   onCallbackOutcomeAcknowledged,
   identityAlertLoader,
 }: {
   callbackOutcome?: IdentityCallbackOutcome;
   identityVerified?: boolean;
   onContinue?: () => void;
+  onSessionStale?: () => void;
   onCallbackOutcomeAcknowledged?: () => void;
   identityAlertLoader?: IdentityAlertLoader;
 }) {
@@ -53,6 +55,10 @@ export function IdentityVerificationPanel({
     } catch (error) {
       inFlight.current = false;
       setView("ready");
+      if (isSessionSynchronizationRequired(error)) {
+        onSessionStale?.();
+        return;
+      }
       const mappedOutcome = mapStartError(error);
       setOutcome(mappedOutcome);
       setModalOutcome(mappedOutcome);
@@ -169,6 +175,11 @@ export function mapStartError(error: unknown): IdentityCallbackOutcome {
   if (error.code === "IDENTITY_PROVIDER_TIMEOUT") return "TIMEOUT";
   if (["IDENTITY_PROVIDER_UNAVAILABLE", "IDENTITY_NOT_CONFIGURED"].includes(error.code)) return "UNAVAILABLE";
   return "ERROR";
+}
+
+function isSessionSynchronizationRequired(error: unknown): boolean {
+  return error instanceof HttpClientError
+    && (error.status === 401 || error.code === "IDENTITY_CONTINUITY_REQUIRED");
 }
 
 function ScanCorner({ position }: { position: string }) {

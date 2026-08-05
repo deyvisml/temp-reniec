@@ -54,7 +54,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
 
   app.post<{ Body: DniBody }>("/api/v1/has-credentials", { schema: { body: dniBodySchema } }, async (request) => ({
     title: TITLE,
-    credentials: store.hasActiveCredentials(request.body.dni),
+    credentials: store.hasCredentials(request.body.dni),
   }));
 
   app.post<{ Body: DniBody }>("/api/v1/list-credentials", { schema: { body: dniBodySchema } }, async (request) => (

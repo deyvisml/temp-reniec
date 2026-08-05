@@ -57,9 +57,8 @@
       "CurrentIdentityResponse": {
         "properties": {
           "callbackOutcome": {
-            "description": "Resultado efímero del último callback, consumido una sola vez para presentación.",
+            "description": "Resultado efímero no neutral del último callback, consumido una sola vez para presentación.",
             "enum": [
-              "CANCELLED",
               "REJECTED",
               "IDENTITY_MISMATCH",
               "EXPIRED",
@@ -356,8 +355,8 @@
           "consentAccepted",
           "consentVersion",
           "digitalCredentialUuid",
-          "statusListIndex",
-          "reasonCode"
+          "reasonCode",
+          "statusListIndex"
         ],
         "type": "object"
       },
@@ -558,8 +557,8 @@
         },
         "required": [
           "digitalCredentialUuid",
-          "statusListIndex",
-          "reasonCode"
+          "reasonCode",
+          "statusListIndex"
         ],
         "type": "object"
       },
@@ -818,7 +817,7 @@
     },
     "/api/v1/identity-verifications": {
       "post": {
-        "description": "Valida la continuidad temporal, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
+        "description": "Valida la continuidad temporal, reemplaza cualquier intento anterior cuyo state no haya sido consumido, crea state y PKCE de un solo uso y devuelve la URL construida por el backend.",
         "operationId": "startIdentityVerification",
         "responses": {
           "200": {
@@ -849,7 +848,7 @@
                 }
               }
             },
-            "description": "La verificación no puede iniciarse en el estado actual"
+            "description": "El callback de la verificación vigente ya se está procesando"
           },
           "503": {
             "content": {
